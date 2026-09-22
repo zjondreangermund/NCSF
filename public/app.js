@@ -726,6 +726,74 @@ function formatEventDate(value){
   }
   window.exitNcsfLiveFullscreen=exitNcsfLiveFullscreen;
 
+  function ensureLiveScoreOverlay(stage){
+    if(!stage)return null;
+    let overlay=stage.querySelector('.live-match-overlay');
+    if(overlay)return overlay;
+    overlay=document.createElement('div');
+    overlay.className='live-match-overlay';
+    overlay.innerHTML=
+      '<div class="live-scorebar">'+
+        '<div class="live-score-team home"><span class="team-name">HOME</span><strong class="team-score">0</strong></div>'+
+        '<div class="live-score-frame"><small>WAITING FOR LINEUPS</small><strong>Match not started</strong><span></span></div>'+
+        '<div class="live-score-team away"><strong class="team-score">0</strong><span class="team-name">AWAY</span></div>'+
+      '</div>'+
+      '<div class="live-next-frame hidden"><span>NEXT</span><strong></strong></div>';
+    stage.appendChild(overlay);
+    return overlay;
+  }
+
+  function renderLiveMatchState(stage,match){
+    if(!stage||!match)return;
+    const overlay=ensureLiveScoreOverlay(stage);
+    const homeName=overlay.querySelector('.live-score-team.home .team-name');
+    const awayName=overlay.querySelector('.live-score-team.away .team-name');
+    const homeScore=overlay.querySelector('.live-score-team.home .team-score');
+    const awayScore=overlay.querySelector('.live-score-team.away .team-score');
+    const frame=overlay.querySelector('.live-score-frame');
+    const nextBox=overlay.querySelector('.live-next-frame');
+
+    homeName.textContent=match.homeTeamName||'HOME';
+    awayName.textContent=match.awayTeamName||'AWAY';
+    homeScore.textContent=String(match.homeScore||0);
+    awayScore.textContent=String(match.awayScore||0);
+
+    if(!match.lineupsReady){
+      frame.innerHTML='<small>WAITING FOR LINEUPS</small><strong>Teams still selecting players</strong><span>Live pairings will appear automatically</span>';
+      nextBox.classList.add('hidden');
+      overlay.classList.remove('is-final');
+      return;
+    }
+
+    if(match.final){
+      const result=Number(match.homeScore)>Number(match.awayScore)
+        ? (match.homeTeamName+' WIN')
+        : Number(match.awayScore)>Number(match.homeScore)
+          ? (match.awayTeamName+' WIN')
+          : 'DRAW';
+      frame.innerHTML='<small>FINAL • 25/25 FRAMES</small><strong>'+esc(result)+'</strong><span>Official scoresheet result</span>';
+      nextBox.classList.add('hidden');
+      overlay.classList.add('is-final');
+      return;
+    }
+
+    overlay.classList.remove('is-final');
+    const current=match.current;
+    if(current){
+      frame.innerHTML=
+        '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+'/25</small>'+
+        '<strong>'+esc(current.homePlayerName)+' <b>vs</b> '+esc(current.awayPlayerName)+'</strong>'+
+        '<span>Current frame</span>';
+    }
+
+    if(match.next){
+      nextBox.querySelector('strong').textContent=match.next.homePlayerName+' vs '+match.next.awayPlayerName;
+      nextBox.classList.remove('hidden');
+    }else{
+      nextBox.classList.add('hidden');
+    }
+  }
+
   function installLiveVideoControls(video,stage,{allowAudio=true}={}){
     if(!video||!stage||stage.querySelector('.ncsf-live-controls'))return;
     video.controls=false;
@@ -772,6 +840,7 @@ function formatEventDate(value){
     const video=$('#internalLiveVideo');
     const waiting=$('#liveWaiting');
     installLiveVideoControls(video,frame,{allowAudio:true});
+    ensureLiveScoreOverlay(frame);
     let socket=null,pc=null,retryTimer=null,offerTimer=null,ended=false,pendingIce=[];
 
     const closePeer=()=>{
@@ -800,6 +869,11 @@ function formatEventDate(value){
       socket.onmessage=async e=>{
         if(typeof e.data!=='string')return;
         let msg;try{msg=JSON.parse(e.data)}catch{return}
+
+        if(msg.type==='match-state'&&msg.match){
+          renderLiveMatchState(frame,msg.match);
+          return;
+        }
 
         if(msg.type==='viewer-ready'){
           waiting.textContent='Waiting for live video…';
@@ -1016,6 +1090,7 @@ function formatEventDate(value){
 
     viewerPreviewBtn?.addEventListener('click',toggleViewerPreview);
     installLiveVideoControls(preview,stage,{allowAudio:false});
+    ensureLiveScoreOverlay(stage);
 
     const updateMicButton=()=>{
       if(!micBtn)return;
@@ -1170,7 +1245,9 @@ function formatEventDate(value){
       if(typeof e.data!=='string')return;
       let msg;try{msg=JSON.parse(e.data)}catch{return}
 
-      if(msg.type==='viewerCount'){
+      if(msg.type==='match-state'&&msg.match){
+        renderLiveMatchState(stage,msg.match);
+      }else if(msg.type==='viewerCount'){
         if(viewerLabel)viewerLabel.textContent=msg.count+' viewer'+(msg.count===1?'':'s');
         if(Array.isArray(msg.viewers)){
           viewerNames.clear();
