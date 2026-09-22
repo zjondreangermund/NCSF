@@ -983,12 +983,165 @@ function formatEventDate(value){
     setUi(false);
   }
 
+  function formatChatTime(value){
+    try{
+      return new Date(value).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    }catch(_e){return ''}
+  }
+
+  function liveChatRoleLabel(role){
+    if(role==='NCSF_ADMIN')return 'NCSF';
+    if(role==='CLUB_ADMIN')return 'Club';
+    if(role==='TEAM_ADMIN')return 'Team';
+    return '';
+  }
+
+  function initLiveChat(fixtureId){
+    const drawer=$('#liveChatDrawer'),handle=$('#liveChatHandle'),closeBtn=$('#liveChatClose');
+    const messages=$('#liveChatMessages'),form=$('#liveChatForm'),input=$('#liveChatInput');
+    const signIn=$('#liveChatSignin'),badge=$('#liveChatBadge');
+    if(!drawer||!handle||!messages)return;
+
+    let open=false,unread=0,socket=null,retryTimer=null,chatOffline=false;
+    const seen=new Set();
+
+    const setOpen=value=>{
+      open=Boolean(value);
+      drawer.classList.toggle('open',open);
+      handle.setAttribute('aria-expanded',open?'true':'false');
+      const chevron=$('.live-chat-chevron',handle);
+      if(chevron)chevron.textContent=open?'⌄':'⌃';
+      if(open){
+        unread=0;
+        badge?.classList.add('hidden');
+        if(badge)badge.textContent='0';
+        requestAnimationFrame(()=>{messages.scrollTop=messages.scrollHeight});
+      }
+    };
+
+    const updateUnread=()=>{
+      if(open)return;
+      unread++;
+      if(badge){
+        badge.textContent=String(Math.min(unread,99));
+        badge.classList.remove('hidden');
+      }
+    };
+
+    const renderMessage=msg=>{
+      const id=String(msg.id||'');
+      if(id&&seen.has(id))return;
+      if(id)seen.add(id);
+      const mine=Boolean(state.user&&Number(msg.user_id)===Number(state.user.id));
+      const role=liveChatRoleLabel(msg.role);
+      const row=document.createElement('div');
+      row.className='live-chat-message'+(mine?' mine':'');
+      row.dataset.messageId=id;
+      row.innerHTML='<div class="live-chat-message-meta"><strong>'+esc(msg.display_name||'Viewer')+'</strong>'+
+        (role?'<span>'+esc(role)+'</span>':'')+'<time>'+esc(formatChatTime(msg.created_at))+'</time></div>'+
+        '<div class="live-chat-message-text">'+esc(msg.message||'')+'</div>';
+      messages.appendChild(row);
+      messages.scrollTop=messages.scrollHeight;
+    };
+
+    const loadHistory=async()=>{
+      try{
+        const data=await api('/api/live/'+fixtureId+'/chat');
+        messages.innerHTML='';
+        (data.messages||[]).forEach(renderMessage);
+        if(!(data.messages||[]).length)messages.innerHTML='<div class="live-chat-empty">No messages yet. Start the match chat.</div>';
+        messages.scrollTop=messages.scrollHeight;
+      }catch(err){
+        messages.innerHTML='<div class="live-chat-empty">'+esc(err.message)+'</div>';
+      }
+    };
+
+    const connectChat=()=>{
+      if(chatOffline)return;
+      clearTimeout(retryTimer);
+      socket=new WebSocket(liveSocketUrl({fixtureId:String(fixtureId),mode:'chat'}));
+      socket.onmessage=e=>{
+        if(typeof e.data!=='string')return;
+        let msg;try{msg=JSON.parse(e.data)}catch{return}
+        if(msg.type==='chat-message'&&msg.message){
+          const empty=$('.live-chat-empty',messages);
+          if(empty)empty.remove();
+          renderMessage(msg.message);
+          updateUnread();
+        }else if(msg.type==='chat-offline'){
+          chatOffline=true;
+        }
+      };
+      socket.onclose=()=>{
+        if(!chatOffline)retryTimer=setTimeout(connectChat,1800);
+      };
+    };
+
+    handle.addEventListener('click',()=>setOpen(!open));
+    closeBtn?.addEventListener('click',()=>setOpen(false));
+
+    let gestureStartX=0,gestureStartY=0,gestureActive=false;
+    handle.addEventListener('pointerdown',e=>{
+      gestureActive=true;
+      gestureStartX=e.clientX;
+      gestureStartY=e.clientY;
+      try{handle.setPointerCapture(e.pointerId)}catch(_e){}
+    });
+    handle.addEventListener('pointerup',e=>{
+      if(!gestureActive)return;
+      gestureActive=false;
+      const dx=e.clientX-gestureStartX;
+      const dy=e.clientY-gestureStartY;
+      const mobile=window.matchMedia('(max-width:760px)').matches;
+      if(mobile){
+        if(dy<-30)setOpen(true);
+        else if(dy>30)setOpen(false);
+      }else{
+        if(dx<-30)setOpen(true);
+        else if(dx>30)setOpen(false);
+      }
+    });
+    handle.addEventListener('pointercancel',()=>{gestureActive=false});
+
+    if(state.user){
+      form?.classList.remove('hidden');
+      signIn?.classList.add('hidden');
+      form?.addEventListener('submit',async e=>{
+        e.preventDefault();
+        const message=String(input?.value||'').trim();
+        if(!message)return;
+        const submit=form.querySelector('button[type="submit"]');
+        if(submit)submit.disabled=true;
+        try{
+          const data=await api('/api/live/'+fixtureId+'/chat',{method:'POST',body:{message}});
+          const empty=$('.live-chat-empty',messages);
+          if(empty)empty.remove();
+          renderMessage(data.message);
+          if(input)input.value='';
+          setOpen(true);
+        }catch(err){toast(err.message,true)}
+        finally{if(submit)submit.disabled=false}
+      });
+    }else{
+      form?.classList.add('hidden');
+      signIn?.classList.remove('hidden');
+      if(signIn){
+        signIn.innerHTML='Sign in to send messages. <a href="/?login=1">Sign in</a>';
+      }
+    }
+
+    loadHistory();
+    connectChat();
+    setOpen(false);
+  }
+
   async function initLivePage(){
     const id=Number(new URLSearchParams(location.search).get('id')||0);
     if(!id){$('#livePlayer').innerHTML='<div class="empty">No fixture selected.</div>';return}
     try{
       const data=await api('/api/live/'+id);
       renderLivePlayer(data.live);
+      initLiveChat(id);
     }catch(err){
       $('#livePlayer').innerHTML='<div class="empty">'+esc(err.message)+'</div>';
     }
