@@ -1197,7 +1197,7 @@ app.get("/api/public/teams", async (req, res) => {
     LEFT JOIN seasons s ON s.id=d.season_id
     LEFT JOIN players p ON p.team_id=t.id
     WHERE ${where.join(" AND ")}
-    GROUP BY t.id,c.name,d.name,s.name
+    GROUP BY t.id,c.name,d.id,d.name,d.sort_order,s.id,s.name
     ORDER BY COALESCE(d.sort_order,999),c.name,t.name
   `, args);
   res.json({ teams: rows });
