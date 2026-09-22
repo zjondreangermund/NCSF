@@ -657,7 +657,7 @@ function formatEventDate(value){
     box.innerHTML='<div class="video-frame internal-live"><video id="internalLiveVideo" controls autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
     const video=$('#internalLiveVideo');
     const waiting=$('#liveWaiting');
-    let socket=null,pc=null,retryTimer=null,ended=false,pendingIce=[];
+    let socket=null,pc=null,retryTimer=null,offerTimer=null,ended=false,pendingIce=[];
 
     const closePeer=()=>{
       try{pc?.close()}catch(_e){}
@@ -684,10 +684,18 @@ function formatEventDate(value){
 
         if(msg.type==='viewer-ready'){
           waiting.textContent='Waiting for live video…';
+          clearTimeout(offerTimer);
+          offerTimer=setTimeout(()=>{
+            if(!pc&&!ended&&socket?.readyState===WebSocket.OPEN){
+              waiting.textContent='Refreshing live connection…';
+              socket.close();
+            }
+          },5000);
           return;
         }
 
         if(msg.type==='webrtc-offer'&&msg.sdp){
+          clearTimeout(offerTimer);
           try{
             closePeer();
             pc=new RTCPeerConnection(LIVE_RTC_CONFIG);
@@ -756,6 +764,7 @@ function formatEventDate(value){
       };
 
       socket.onclose=()=>{
+        clearTimeout(offerTimer);
         closePeer();
         if(!ended){
           waiting.textContent='Reconnecting to live stream…';
