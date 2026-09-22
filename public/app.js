@@ -356,10 +356,10 @@
     $('#userTeamSelect').innerHTML=options(teams,'id',t=>t.name,null,'Select team');
     $('#playerCount').textContent=state.meta.players.length;
     $('#clubPlayers').innerHTML=state.meta.players.length?`<div class="table-wrap"><table><thead><tr><th>Player</th><th>NCSF #</th><th>Team</th><th>Status</th></tr></thead><tbody>${state.meta.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td><select class="player-team-change" data-player="${p.id}">${options(teams,'id',t=>t.name,p.team_id,'Unassigned')}</select></td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}<br><button class="btn small player-suspend" data-player="${p.id}" data-suspended="${p.suspended}">${p.suspended?'Reactivate':'Suspend'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No players registered.</div>';
-    $('.player-team-change').forEach(sel=>sel.addEventListener('change',async()=>{
+    $$('.player-team-change').forEach(sel=>sel.addEventListener('change',async()=>{
       try{await api('/api/admin/players/'+sel.dataset.player,{method:'PATCH',body:{teamId:sel.value||null}});toast('Player assignment updated');await reloadClub()}catch(err){toast(err.message,true)}
     }));
-    $('.player-suspend').forEach(btn=>btn.addEventListener('click',async()=>{
+    $$('.player-suspend').forEach(btn=>btn.addEventListener('click',async()=>{
       try{await api('/api/admin/players/'+btn.dataset.player,{method:'PATCH',body:{suspended:btn.dataset.suspended!=='true'}});toast('Player eligibility updated');await reloadClub()}catch(err){toast(err.message,true)}
     }));
     $('#clubTeams').innerHTML=teams.length?'<div class="card-list">'+teams.map(t=>{
@@ -402,7 +402,7 @@
       if($('#missingTeamAccess'))$('#missingTeamAccess').innerHTML=d.missingAccess.length
         ? '<div class="card-list">'+d.missingAccess.map(t=>`<div class="card-row"><span><strong>${esc(t.team_name)}</strong><small>${esc(t.club_name)}</small></span><button class="btn small goto-access">Create Login</button></div>`).join('')+'</div>'
         : '<div class="empty">Every team has an active login.</div>';
-      $('.goto-access').forEach(btn=>btn.addEventListener('click',()=>{
+      $$('.goto-access').forEach(btn=>btn.addEventListener('click',()=>{
         const tab=$('[data-admin-tab="access"]'); if(tab)tab.click();
       }));
       if($('#fixtureStatusSummary')){
@@ -430,7 +430,7 @@
         </td>
       </tr>`).join('')+'</tbody></table></div>';
 
-    $('.fixture-edit').forEach(btn=>btn.addEventListener('click',async()=>{
+    $$('.fixture-edit').forEach(btn=>btn.addEventListener('click',async()=>{
       const f=fixtures.find(x=>x.id===Number(btn.dataset.id)); if(!f)return;
       const roundNo=prompt('Round number',String(f.round_no)); if(roundNo===null)return;
       const currentDate=f.fixture_date?new Date(f.fixture_date).toISOString().slice(0,16):'';
@@ -441,14 +441,14 @@
         await reloadAdmin(); toast('Fixture updated');
       }catch(err){toast(err.message,true)}
     }));
-    $('.fixture-postpone').forEach(btn=>btn.addEventListener('click',async()=>{
+    $$('.fixture-postpone').forEach(btn=>btn.addEventListener('click',async()=>{
       if(!confirm('Postpone this fixture?'))return;
       try{await api('/api/admin/fixtures/'+btn.dataset.id+'/postpone',{method:'POST'});await reloadAdmin();toast('Fixture postponed')}catch(err){toast(err.message,true)}
     }));
-    $('.fixture-restore').forEach(btn=>btn.addEventListener('click',async()=>{
+    $$('.fixture-restore').forEach(btn=>btn.addEventListener('click',async()=>{
       try{await api('/api/admin/fixtures/'+btn.dataset.id+'/restore',{method:'POST'});await reloadAdmin();toast('Fixture restored')}catch(err){toast(err.message,true)}
     }));
-    $('.fixture-delete').forEach(btn=>btn.addEventListener('click',async()=>{
+    $$('.fixture-delete').forEach(btn=>btn.addEventListener('click',async()=>{
       if(!confirm('Delete this unplayed fixture? This cannot be undone.'))return;
       try{await api('/api/admin/fixtures/'+btn.dataset.id,{method:'DELETE'});await reloadAdmin();toast('Fixture deleted')}catch(err){toast(err.message,true)}
     }));
@@ -470,7 +470,7 @@
       try{await api('/api/admin/users/'+btn.dataset.id,{method:'PATCH',body:{active}});await reloadAdmin();toast('Login updated')}catch(err){toast(err.message,true)}
     }));
     $('#adminPlayers').innerHTML=m.players.length?'<div class="table-wrap"><table><thead><tr><th>Player</th><th>Club</th><th>Team</th><th>Frames</th><th>Status</th></tr></thead><tbody>'+m.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong><br><small class="muted">${esc(p.ncsf_number||'—')}</small></td><td>${esc(p.club_name)}</td><td>${esc(p.team_name||'Unassigned')}</td><td>—</td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}<br><button class="btn small admin-player-suspend" data-player="${p.id}" data-suspended="${p.suspended}">${p.suspended?'Reactivate':'Suspend'}</button></td></tr>`).join('')+'</tbody></table></div>':'<div class="empty">No players registered.</div>';
-    $('.admin-player-suspend').forEach(btn=>btn.addEventListener('click',async()=>{try{await api('/api/admin/players/'+btn.dataset.player,{method:'PATCH',body:{suspended:btn.dataset.suspended!=='true'}});toast('Player eligibility updated');await reloadAdmin()}catch(err){toast(err.message,true)}}));
+    $$('.admin-player-suspend').forEach(btn=>btn.addEventListener('click',async()=>{try{await api('/api/admin/players/'+btn.dataset.player,{method:'PATCH',body:{suspended:btn.dataset.suspended!=='true'}});toast('Player eligibility updated');await reloadAdmin()}catch(err){toast(err.message,true)}}));
   }
   function syncFixtureTeams(){
     const div=Number($('#fixtureDivision')?.value||0);
