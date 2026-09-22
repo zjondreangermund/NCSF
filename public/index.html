@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b223f">
+  <title>NCSF League Manager</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-page="home">
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <img class="js-logo" alt="NCSF logo">
+      <span><strong>Namibia Cue Sports Federation</strong><small>League Manager</small></span>
+    </a>
+    <nav class="nav">
+      <a href="/#home">Home</a>
+      <a href="/#fixtures">Fixtures</a>
+      <a href="/#standings">Team Rankings</a>
+      <a href="/#players">Individual Rankings</a>
+    </nav>
+    <div class="user-actions" id="userActions"></div>
+  </div>
+</header>
+<main class="page">
+  <section class="hero" id="home">
+    <div class="hero-card">
+      <div class="kicker">Official competition platform</div>
+      <h1>NCSF Pool League</h1>
+      <p>Fixtures, digital 5-a-side score sheets, verified results and automatic rankings for Namibia Cue Sports Federation league competitions.</p>
+      <div class="filters">
+        <select id="divisionSelect" aria-label="Division"></select>
+        <button class="btn primary" id="refreshPublic">Refresh</button>
+      </div>
+    </div>
+    <div class="hero-card logo-card"><img class="js-logo" alt="NCSF"></div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel" id="standings">
+      <div class="panel-head"><div><div class="kicker">Ranked by frames won</div><h2>Team Rankings</h2></div></div>
+      <div id="standingsTable" class="empty">No standings yet.</div>
+    </div>
+    <div class="panel" id="players">
+      <div class="panel-head"><div><div class="kicker">Ranked by frames won</div><h2>Individual Rankings</h2></div></div>
+      <div id="playerRankings" class="empty">No player results yet.</div>
+    </div>
+  </section>
+
+  <section class="panel" id="fixtures" style="margin-top:18px">
+    <div class="panel-head"><div><div class="kicker">Home & away</div><h2>Fixtures & Results</h2></div></div>
+    <div id="fixtureList" class="empty">No fixtures yet.</div>
+  </section>
+</main>
+<div class="footer">Namibia Cue Sports Federation • Digital League Manager</div>
+
+<div class="modal-backdrop hidden" id="authModal">
+  <div class="modal">
+    <button class="btn small" style="float:right" id="closeAuth">Close</button>
+    <div id="setupBlock" class="hidden">
+      <h2>Create first NCSF administrator</h2>
+      <p class="muted">This one-time setup is available only while the database has no users.</p>
+      <form id="setupForm" class="form-grid">
+        <label class="full">Full name<input name="displayName" required></label>
+        <label class="full">Email<input name="email" type="email" required></label>
+        <label class="full">Password<input name="password" type="password" minlength="8" required></label>
+        <button class="btn primary full" type="submit">Create NCSF Admin</button>
+      </form>
+    </div>
+    <div id="loginBlock">
+      <h2>Admin sign in</h2>
+      <form id="loginForm" class="form-grid">
+        <label class="full">Email<input name="email" type="email" required></label>
+        <label class="full">Password<input name="password" type="password" required></label>
+        <button class="btn primary full" type="submit">Sign in</button>
+      </form>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+</body></html>
