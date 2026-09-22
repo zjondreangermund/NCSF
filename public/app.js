@@ -487,6 +487,29 @@
     await load();
   }
 
+function formatEventDate(value){
+    if(!value)return '';
+    const d=new Date(value);
+    return d.toLocaleString([], {weekday:'short',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }
+  function renderPublicPosts(posts){
+    const events=posts.filter(p=>p.type==='EVENT' && (!p.event_date || new Date(p.event_date)>=new Date(Date.now()-86400000)));
+    const updates=posts.filter(p=>p.type!=='EVENT');
+    const eventsBox=$('#publicEvents');
+    const newsBox=$('#publicNews');
+    if(eventsBox)eventsBox.innerHTML=events.length
+      ? '<div class="timeline">'+events.map(p=>`<article class="timeline-item ${p.pinned?'pinned':''}"><div class="timeline-date">${esc(formatEventDate(p.event_date))}</div><div><span class="content-type EVENT">EVENT</span><h3>${esc(p.title)}</h3>${p.body?`<p>${esc(p.body)}</p>`:''}</div></article>`).join('')+'</div>'
+      : '<div class="empty">No upcoming events published.</div>';
+    if(newsBox)newsBox.innerHTML=updates.length
+      ? '<div class="news-feed">'+updates.map(p=>`<article class="news-card ${p.pinned?'pinned':''}"><div class="news-meta"><span class="content-type ${p.type}">${esc(p.type)}</span><span>${esc(new Date(p.created_at).toLocaleDateString())}</span></div><h3>${esc(p.title)}</h3>${p.body?`<p>${esc(p.body)}</p>`:''}</article>`).join('')+'</div>'
+      : '<div class="empty">No news or announcements published.</div>';
+  }
+  async function initNewsPage(){
+    try{
+      const data=await api('/api/public/posts');
+      renderPublicPosts(data.posts||[]);
+    }catch(err){toast(err.message,true)}
+  }
   async function initScoresheet(){
     const id=Number(new URLSearchParams(location.search).get('id'));
     if(!id){$('#scoreSheetRoot').innerHTML='<div class="empty">No fixture selected.</div>';return}
@@ -657,6 +680,21 @@
     }));
   }
 
+async function loadAdminPosts(){
+    const box=$('#adminPosts'); if(!box)return;
+    try{
+      const data=await api('/api/admin/posts');
+      const posts=data.posts||[];
+      box.innerHTML=posts.length?'<div class="card-list">'+posts.map(p=>`<div class="card-row content-admin-row"><span><span class="content-type ${p.type}">${esc(p.type)}</span><strong>${esc(p.title)}</strong><small>${p.type==='EVENT'&&p.event_date?esc(formatEventDate(p.event_date)):esc(new Date(p.created_at).toLocaleDateString())}${p.pinned?' • Pinned':''}${p.published?'':' • Draft'}</small></span><span><button class="btn small content-toggle" data-id="${p.id}" data-published="${p.published}">${p.published?'Unpublish':'Publish'}</button> <button class="btn small danger content-delete" data-id="${p.id}">Delete</button></span></div>`).join('')+'</div>':'<div class="empty">No posts yet.</div>';
+      $('.content-toggle').forEach(btn=>btn.addEventListener('click',async()=>{
+        try{await api('/api/admin/posts/'+btn.dataset.id,{method:'PATCH',body:{published:btn.dataset.published!=='true'}});await loadAdminPosts();toast('Post updated')}catch(err){toast(err.message,true)}
+      }));
+      $('.content-delete').forEach(btn=>btn.addEventListener('click',async()=>{
+        if(!confirm('Delete this public post?'))return;
+        try{await api('/api/admin/posts/'+btn.dataset.id,{method:'DELETE'});await loadAdminPosts();toast('Post deleted')}catch(err){toast(err.message,true)}
+      }));
+    }catch(err){box.innerHTML='<div class="empty">'+esc(err.message)+'</div>'}
+  }
   function renderAdminLists(){
     const m=state.meta;
     $('#adminClubList').innerHTML=m.clubs.length?'<div class="card-list">'+m.clubs.map(c=>`<div class="card-row"><span><strong>${esc(c.name)}</strong><small>${m.teams.filter(t=>t.club_id===c.id).map(t=>t.name).join(', ')||'No teams'}</small></span></div>`).join('')+'</div>':'<div class="empty">No clubs yet.</div>';
@@ -683,6 +721,19 @@
   }
   function bindAdminForms(){
     $('#fixtureDivision')?.addEventListener('change',syncFixtureTeams);
+    const contentType=$('#contentType'), contentDate=$('#contentEventDate');
+    const syncContentType=()=>{if(contentDate){const event=contentType?.value==='EVENT';contentDate.disabled=!event;contentDate.required=event;if(!event)contentDate.value=''}};
+    contentType?.addEventListener('change',syncContentType); syncContentType();
+    $('#contentPostForm')?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const form=e.currentTarget, submit=form.querySelector('[type="submit"]');
+      if(submit?.disabled)return;if(submit)submit.disabled=true;
+      try{
+        await api('/api/admin/posts',{method:'POST',body:formObject(form)});
+        form.reset();syncContentType();await loadAdminPosts();toast('Published');
+      }catch(err){toast(err.message,true)}
+      finally{if(submit)submit.disabled=false}
+    });
     const simple=[
       ['seasonForm','/api/admin/seasons','Season created'],
       ['divisionForm','/api/admin/divisions','Division created'],
@@ -725,6 +776,7 @@
     if(PAGE==='results-page')await initResultsPage();
     if(PAGE==='teams-page')await initTeamsPage();
     if(PAGE==='players-page')await initPlayersPage();
+    if(PAGE==='news-page')await initNewsPage();
     if(PAGE==='rankings-page')await initRankingsPage();
     if(PAGE==='scoresheet')await initScoresheet();
     if(PAGE==='team')await initTeam();
