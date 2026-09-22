@@ -283,8 +283,8 @@ async function seedOfficialCoastalRosters() {
       ]
     },
     {
-      club: "Coastal Warriors",
-      team: "Coastal Warriors",
+      club: "Atomic 5",
+      team: "Atomic 5",
       players: [
         ["Waquar", "Satar", null],
         ["Robert", "Erasmus", null],
@@ -511,7 +511,7 @@ async function setupCentralDivisionAndSchedule() {
   if (already.rowCount) return;
 
   const centralTeams = ["RPC","Pocket Kings NA","Precision 7","007 - Central","Ofifiya PC","Queen Cues","Namshooters","Tura Boys","Cue Crew","Cattle Country","Joga Bonita","YOPC 2","Rack Royalty","Blackball Bandits","YOPC 1","Pool Pirates"];
-  const coastalTeams = ["007-Coastal","Coastal Warriors","Coastal Suns","Coastal Waves","Celtic","West Coast","Sparta"];
+  const coastalTeams = ["007-Coastal","Atomic 5","Coastal Suns","Coastal Waves","Celtic","West Coast","Sparta"];
   const fixtures = [
     ["2026-09-26T10:30:00+02:00","Cattle Country","YOPC 1",1],
     ["2026-09-26T10:30:00+02:00","Namshooters","Blackball Bandits",1],
@@ -545,7 +545,7 @@ async function setupCentralDivisionAndSchedule() {
     ["NBBL League Semi Finals","Semi finals from the official NBBL league calendar.","2026-10-31T15:00:00+02:00",false],
     ["NCSF AGM","Annual General Meeting.","2026-11-14T08:00:00+02:00",true],
     ["NBBL League Finals","Finals from the official NBBL league calendar.","2026-11-14T15:00:00+02:00",true],
-    ["Namibia Champ of Champs","Namibia Champion of Champions event.","2026-11-27T09:00:00+02:00",true]
+    ["Namibia Champ of Champs","Namibia Champion of Champions event.","2026-11-27T08:00:00+02:00",true]
   ];
 
   const client = await pool.connect();
@@ -621,6 +621,151 @@ async function setupCentralDivisionAndSchedule() {
     await client.query("INSERT INTO app_migrations(key) VALUES($1)", [migrationKey]);
     await client.query("COMMIT");
     console.log("Configured Coastal/Central divisions and imported remaining Central fixtures/events.");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+
+async function correctAtomic5AndImportCoastalSchedule() {
+  const migrationKey = "coastal-atomic5-remaining-fixtures-2026-09-22-v1";
+  const already = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [migrationKey]);
+  if (already.rowCount) return;
+
+  const fixtures = [
+    ["2026-09-25T18:30:00+02:00","West Coast","Sparta",1],
+
+    ["2026-09-26T10:30:00+02:00","West Coast","Celtic",1],
+    ["2026-09-26T10:30:00+02:00","007-Coastal","Coastal Waves",1],
+    ["2026-09-26T10:30:00+02:00","Coastal Suns","Atomic 5",1],
+    ["2026-09-26T15:00:00+02:00","Coastal Waves","Celtic",1],
+    ["2026-09-26T15:00:00+02:00","007-Coastal","West Coast",1],
+
+    ["2026-10-09T18:30:00+02:00","Sparta","Celtic",2],
+
+    ["2026-10-10T10:30:00+02:00","Coastal Suns","Celtic",2],
+    ["2026-10-10T10:30:00+02:00","Sparta","Coastal Waves",2],
+    ["2026-10-10T10:30:00+02:00","Atomic 5","007-Coastal",2],
+    ["2026-10-10T15:00:00+02:00","Coastal Suns","West Coast",2],
+    ["2026-10-10T15:00:00+02:00","Atomic 5","Coastal Waves",2],
+    ["2026-10-10T15:00:00+02:00","Sparta","007-Coastal",2]
+  ];
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const seasonResult = await client.query(
+      "SELECT id FROM seasons ORDER BY active DESC, start_date DESC NULLS LAST, id DESC LIMIT 1"
+    );
+    if (!seasonResult.rowCount) throw new Error("Create a season before importing Coastal fixtures.");
+    const seasonId = seasonResult.rows[0].id;
+
+    let divisionResult = await client.query(
+      "SELECT id FROM divisions WHERE season_id=$1 AND LOWER(name)='coastal' LIMIT 1",
+      [seasonId]
+    );
+    if (!divisionResult.rowCount) {
+      divisionResult = await client.query(
+        "INSERT INTO divisions(season_id,name,sort_order,active) VALUES($1,'Coastal',1,TRUE) RETURNING id",
+        [seasonId]
+      );
+    }
+    const coastalDivisionId = divisionResult.rows[0].id;
+
+    let atomicClub = await client.query("SELECT id FROM clubs WHERE name='Atomic 5' LIMIT 1");
+    let atomicClubId;
+    if (atomicClub.rowCount) {
+      atomicClubId = atomicClub.rows[0].id;
+    } else {
+      atomicClub = await client.query(
+        "INSERT INTO clubs(name,short_name,active) VALUES('Atomic 5','Atomic 5',TRUE) RETURNING id"
+      );
+      atomicClubId = atomicClub.rows[0].id;
+    }
+
+    const oldAtomicTeam = await client.query(
+      "SELECT id FROM teams WHERE name='Coastal Warriors' LIMIT 1"
+    );
+    if (oldAtomicTeam.rowCount) {
+      const teamId = oldAtomicTeam.rows[0].id;
+      await client.query(
+        "UPDATE teams SET name='Atomic 5',short_name='Atomic 5',club_id=$2,division_id=$3,active=TRUE WHERE id=$1",
+        [teamId, atomicClubId, coastalDivisionId]
+      );
+      await client.query(
+        "UPDATE players SET club_id=$2 WHERE team_id=$1",
+        [teamId, atomicClubId]
+      );
+      await client.query(
+        "UPDATE users SET club_id=$2 WHERE team_id=$1",
+        [teamId, atomicClubId]
+      );
+    }
+
+    const atomicTeam = await client.query(
+      "SELECT id FROM teams WHERE name='Atomic 5' LIMIT 1"
+    );
+    if (!atomicTeam.rowCount) throw new Error("Atomic 5 team could not be resolved.");
+    await client.query(
+      "UPDATE teams SET club_id=$2,division_id=$3,active=TRUE WHERE id=$1",
+      [atomicTeam.rows[0].id, atomicClubId, coastalDivisionId]
+    );
+    await client.query(
+      "UPDATE players SET club_id=$2 WHERE team_id=$1",
+      [atomicTeam.rows[0].id, atomicClubId]
+    );
+
+    const teamNames = ["007-Coastal","Atomic 5","Coastal Suns","Coastal Waves","Celtic","West Coast","Sparta"];
+    await client.query(
+      "UPDATE teams SET division_id=$1 WHERE name=ANY($2::text[])",
+      [coastalDivisionId, teamNames]
+    );
+
+    const teamRows = await client.query(
+      "SELECT id,name FROM teams WHERE name=ANY($1::text[])",
+      [teamNames]
+    );
+    const teamIds = new Map(teamRows.rows.map(r => [r.name, r.id]));
+    for (const name of teamNames) {
+      if (!teamIds.get(name)) throw new Error("Missing Coastal team: " + name);
+    }
+
+    for (const item of fixtures) {
+      const date=item[0], homeName=item[1], awayName=item[2], roundNo=item[3];
+      const homeId=teamIds.get(homeName), awayId=teamIds.get(awayName);
+      const existing = await client.query(
+        "SELECT id FROM fixtures WHERE division_id=$1 AND home_team_id=$2 AND away_team_id=$3 AND fixture_date=$4::timestamptz LIMIT 1",
+        [coastalDivisionId,homeId,awayId,date]
+      );
+      if (!existing.rowCount) {
+        await client.query(
+          "INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id,status) VALUES($1,$2,$3::timestamptz,$4,$5,'SCHEDULED')",
+          [coastalDivisionId,roundNo,date,homeId,awayId]
+        );
+      }
+    }
+
+    // The Coastal schedule shows the national Champ of Champs at 08:00.
+    await client.query(
+      "UPDATE content_posts SET event_date='2026-11-27T08:00:00+02:00'::timestamptz,updated_at=NOW() WHERE type='EVENT' AND title='Namibia Champ of Champs'"
+    );
+
+    const note = await client.query(
+      "SELECT id FROM content_posts WHERE type='ANNOUNCEMENT' AND title='Coastal Division remaining fixtures published' LIMIT 1"
+    );
+    if (!note.rowCount) {
+      await client.query(
+        "INSERT INTO content_posts(type,title,body,published,pinned) VALUES('ANNOUNCEMENT','Coastal Division remaining fixtures published','The remaining Coastal Division fixtures for 25–26 September and 9–10 October 2026 are now available in the NCSF League Manager.',TRUE,TRUE)"
+      );
+    }
+
+    await client.query("INSERT INTO app_migrations(key) VALUES($1)", [migrationKey]);
+    await client.query("COMMIT");
+    console.log("Corrected Atomic 5 roster and imported remaining Coastal fixtures.");
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -1869,6 +2014,7 @@ initDatabase()
   .then(seedOfficialCoastalRosters)
   .then(assignOfficialNcsfNumbers)
   .then(setupCentralDivisionAndSchedule)
+  .then(correctAtomic5AndImportCoastalSchedule)
   .then(() => app.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);
