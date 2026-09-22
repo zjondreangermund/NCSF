@@ -96,7 +96,7 @@
         <div><div class="team-name">${esc(f.home_team_name)}</div><div class="match-meta">${esc(fmtDate(f.fixture_date))}</div></div>
         <div class="match-score">${Number(f.home_frames||0)} &ndash; ${Number(f.away_frames||0)}</div>
         <div class="away"><div class="team-name">${esc(f.away_team_name)}</div><div class="match-meta">Round ${esc(f.round_no)} • ${statusPill(f.status)}</div></div>
-        <div class="open-cell">${allowOpen && (PAGE!=='home' || f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet.html?id=${f.id}">Open scoresheet</a>`:''}</div>
+        <div class="open-cell">${allowOpen && (f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet.html?id=${f.id}">Open scoresheet</a>`:''}</div>
       </div>`).join('');
   }
   async function initHome(){
