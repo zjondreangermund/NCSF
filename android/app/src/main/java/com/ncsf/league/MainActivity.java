@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.pm.ActivityInfo;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -33,6 +34,9 @@ public class MainActivity extends Activity {
     private static final String HOME_URL = "https://ncsf-production.up.railway.app/";
     private static final int FILE_CHOOSER_REQUEST = 501;
     private static final int MEDIA_PERMISSION_REQUEST = 502;
+    private static final String PREFS_NAME = "ncsf_permissions";
+    private static final String PREF_CAMERA_ASKED = "camera_asked";
+    private static final String PREF_MIC_ASKED = "mic_asked";
 
     private WebView webView;
     private FrameLayout root;
@@ -66,7 +70,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.10");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.11");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -250,15 +254,52 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void requestBroadcastPermissions() {
             runOnUiThread(() -> {
-                java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
-                if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    permissions.add(Manifest.permission.CAMERA);
-                }
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    permissions.add(Manifest.permission.RECORD_AUDIO);
+                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                boolean cameraMissing =
+                        checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED;
+                boolean micMissing =
+                        checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED;
+
+                boolean cameraPreviouslyAsked = prefs.getBoolean(PREF_CAMERA_ASKED, false);
+                boolean micPreviouslyAsked = prefs.getBoolean(PREF_MIC_ASKED, false);
+
+                boolean cameraBlocked = cameraMissing
+                        && cameraPreviouslyAsked
+                        && !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA);
+                boolean micBlocked = micMissing
+                        && micPreviouslyAsked
+                        && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO);
+
+                if (cameraBlocked) {
+                    Toast.makeText(
+                            MainActivity.this,
+                            "Camera permission is blocked. Enable Camera for NCSF in App permissions.",
+                            Toast.LENGTH_LONG).show();
+                    openPermissionSettingsNative();
+                    notifyWebMediaPermissionResult();
+                    return;
                 }
 
+                java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
+                SharedPreferences.Editor editor = prefs.edit();
+
+                if (cameraMissing) {
+                    permissions.add(Manifest.permission.CAMERA);
+                    editor.putBoolean(PREF_CAMERA_ASKED, true);
+                }
+                if (micMissing && !micBlocked) {
+                    permissions.add(Manifest.permission.RECORD_AUDIO);
+                    editor.putBoolean(PREF_MIC_ASKED, true);
+                }
+                editor.apply();
+
                 if (permissions.isEmpty()) {
+                    if (micBlocked) {
+                        Toast.makeText(
+                                MainActivity.this,
+                                "Microphone permission is blocked. You can enable it in App permissions.",
+                                Toast.LENGTH_LONG).show();
+                    }
                     notifyWebMediaPermissionResult();
                 } else {
                     requestPermissions(permissions.toArray(new String[0]), MEDIA_PERMISSION_REQUEST);
@@ -268,15 +309,20 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void openAppPermissionSettings() {
-            runOnUiThread(() -> {
-                try {
-                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                    intent.setData(Uri.parse("package:" + getPackageName()));
-                    startActivity(intent);
-                } catch (Exception ex) {
-                    Toast.makeText(MainActivity.this, "Open Settings and allow Camera and Microphone for NCSF.", Toast.LENGTH_LONG).show();
-                }
-            });
+            runOnUiThread(() -> openPermissionSettingsNative());
+        }
+    }
+
+    private void openPermissionSettingsNative() {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+        } catch (Exception ex) {
+            Toast.makeText(
+                    MainActivity.this,
+                    "Open Settings > Apps > NCSF > Permissions and allow Camera and Microphone.",
+                    Toast.LENGTH_LONG).show();
         }
     }
 
@@ -297,6 +343,14 @@ public class MainActivity extends Activity {
         liveFullscreen = false;
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) {
+            webView.postDelayed(() -> notifyWebMediaPermissionResult(), 250);
+        }
     }
 
     @Override
@@ -327,6 +381,21 @@ public class MainActivity extends Activity {
                     pendingMediaPermission.deny();
                 }
                 pendingMediaPermission = null;
+            }
+            boolean cameraGranted =
+                    checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+            if (!cameraGranted) {
+                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                boolean askedBefore = prefs.getBoolean(PREF_CAMERA_ASKED, false);
+                boolean blocked = askedBefore
+                        && !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA);
+                if (blocked) {
+                    Toast.makeText(
+                            MainActivity.this,
+                            "Camera permission is blocked. Enable Camera for NCSF in App permissions.",
+                            Toast.LENGTH_LONG).show();
+                    openPermissionSettingsNative();
+                }
             }
             notifyWebMediaPermissionResult();
         }
