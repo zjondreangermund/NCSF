@@ -2412,7 +2412,11 @@ function sendLiveControl(ws, payload) {
 }
 
 function updatePublisherViewerCount(state) {
-  sendLiveControl(state.publisher, { type: "viewerCount", count: state.viewers.size });
+  const viewers = [...state.viewers.entries()].map(([id, viewer]) => ({
+    id,
+    name: String(viewer.viewerName || "Viewer")
+  }));
+  sendLiveControl(state.publisher, { type: "viewerCount", count: viewers.length, viewers });
 }
 
 function relayToViewer(state, viewerId, payload) {
@@ -2477,7 +2481,7 @@ liveWss.on("connection", async (ws, req) => {
       sendLiveControl(ws, { type: "ready", fixtureId, viewerCount: state.viewers.size });
       for (const [viewerId, viewer] of state.viewers) {
         sendLiveControl(viewer, { type: "waiting" });
-        sendLiveControl(ws, { type: "viewer-joined", viewerId });
+        sendLiveControl(ws, { type: "viewer-joined", viewerId, viewerName: viewer.viewerName || "Viewer" });
       }
       updatePublisherViewerCount(state);
 
@@ -2520,10 +2524,15 @@ liveWss.on("connection", async (ws, req) => {
     }
 
     const viewerId = crypto.randomBytes(10).toString("hex");
+    const viewerName = String(u.searchParams.get("viewerName") || "Guest viewer")
+      .replace(/[<>]/g, "")
+      .trim()
+      .slice(0, 60) || "Guest viewer";
     ws.viewerId = viewerId;
+    ws.viewerName = viewerName;
     state.viewers.set(viewerId, ws);
     sendLiveControl(ws, { type: "viewer-ready", viewerId, startedAt: state.startedAt });
-    sendLiveControl(state.publisher, { type: "viewer-joined", viewerId });
+    sendLiveControl(state.publisher, { type: "viewer-joined", viewerId, viewerName });
     updatePublisherViewerCount(state);
 
     ws.on("message", (data, isBinary) => {
@@ -2540,7 +2549,7 @@ liveWss.on("connection", async (ws, req) => {
 
     ws.on("close", () => {
       state.viewers.delete(viewerId);
-      sendLiveControl(state.publisher, { type: "viewer-left", viewerId });
+      sendLiveControl(state.publisher, { type: "viewer-left", viewerId, viewerName: ws.viewerName || "Viewer" });
       updatePublisherViewerCount(state);
     });
   } catch (error) {
