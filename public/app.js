@@ -483,18 +483,48 @@
   async function initFixturesPage(){
     const select=await loadPublicMetaIntoSelect();
     if(!select)return;
+
+    const loadActive=async()=>{
+      const box=$('#activeFixtures');
+      if(!box)return;
+      try{
+        const d=await api('/api/fixtures?status='+encodeURIComponent('SCHEDULED,IN_PROGRESS'));
+        const active=(d.fixtures||[])
+          .filter(f=>Boolean(f.stream_active)||f.status==='IN_PROGRESS')
+          .sort((x,y)=>{
+            const liveDiff=Number(Boolean(y.stream_active))-Number(Boolean(x.stream_active));
+            if(liveDiff)return liveDiff;
+            const statusDiff=Number(y.status==='IN_PROGRESS')-Number(x.status==='IN_PROGRESS');
+            if(statusDiff)return statusDiff;
+            return new Date(x.fixture_date||0)-new Date(y.fixture_date||0);
+          });
+        box.innerHTML=active.length
+          ? fixtureCards(active,true)
+          : '<div class="empty">No matches are live or in progress right now.</div>';
+      }catch(err){
+        box.innerHTML='<div class="empty">Could not load current matches.</div>';
+      }
+    };
+
     const load=async()=>{
       const id=Number(select.value||0);
       if(!id){$('#publicFixtures').innerHTML='<div class="empty">No division configured yet.</div>';return}
-      const status=$('#fixtureStatusFilter')?.value||'SCHEDULED,POSTPONED';
+      const status=$('#fixtureStatusFilter')?.value||'IN_PROGRESS,SCHEDULED,POSTPONED';
       try{
         const d=await api('/api/fixtures?divisionId='+id+'&status='+encodeURIComponent(status));
-        $('#publicFixtures').innerHTML=fixtureCards(d.fixtures,true);
+        const fixtures=(d.fixtures||[]).sort((x,y)=>{
+          const liveDiff=Number(Boolean(y.stream_active))-Number(Boolean(x.stream_active));
+          if(liveDiff)return liveDiff;
+          const statusDiff=Number(y.status==='IN_PROGRESS')-Number(x.status==='IN_PROGRESS');
+          if(statusDiff)return statusDiff;
+          return new Date(x.fixture_date||0)-new Date(y.fixture_date||0);
+        });
+        $('#publicFixtures').innerHTML=fixtureCards(fixtures,true);
       }catch(err){toast(err.message,true)}
     };
     select.addEventListener('change',load);
     $('#fixtureStatusFilter')?.addEventListener('change',load);
-    await load();
+    await Promise.all([loadActive(),load()]);
   }
 
   async function initResultsPage(){
