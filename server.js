@@ -220,6 +220,214 @@ async function initDatabase() {
   `);
 }
 
+
+async function seedOfficialCoastalRosters() {
+  const migrationKey = "official-coastal-rosters-2026-09-22-v1";
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_migrations (
+      key TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  const already = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [migrationKey]);
+  if (already.rowCount) return;
+
+  const rosters = [
+    {
+      club: "007-Coastal",
+      team: "007-Coastal",
+      players: [
+        ["Bertram", "", "0401-0420"],
+        ["Aschlin", "", "0441-0460"],
+        ["Omar", "", "0461-0480"],
+        ["Shaun", "", "0481-0500"],
+        ["Ethan", "", "0501-0520"],
+        ["Justin", "", "0421-0440"],
+        ["Jaques", "", "0521-0540"],
+        ["Phillip", "", "0541-0560"],
+        ["Bernardus", "", "0561-0580"]
+      ]
+    },
+    {
+      club: "Coastal Warriors",
+      team: "Coastal Warriors",
+      players: [
+        ["Waquar", "Satar", null],
+        ["Robert", "Erasmus", null],
+        ["Warren", "Smith", null],
+        ["Brian", "Anderson", null],
+        ["Lee-Heino", "van Rooi", null],
+        ["Daniel", "Jacobs", null],
+        ["Abisai", "Kuutondokwa", null],
+        ["Silence", "Chiradza", null]
+      ]
+    },
+    {
+      club: "Coastal Warriors",
+      team: "Coastal Suns",
+      players: [
+        ["Connery", "Pienaar", null],
+        ["Jaden", "Jeffery", null],
+        ["Reginald", "van Wyk", null],
+        ["D’Lano", "van Wyk", null],
+        ["Matheus", "Onesmus", null],
+        ["Leon", "Beukes", null],
+        ["Rudolf", "Koopman", null],
+        ["Ronaldo", "Koopman", null],
+        ["Thisbe", "Murorua", null],
+        ["Thimoteus", "Heelu", null],
+        ["Tangeni", "Johannes", null]
+      ]
+    },
+    {
+      club: "Coastal Warriors",
+      team: "Coastal Waves",
+      players: [
+        ["Clavin", "Mbawa", null],
+        ["Fillipus", "Wakanbalala", null],
+        ["Jason", "Shimbango", null],
+        ["Likeus", "Nauyoma", null],
+        ["Wilhelm", "Katana", null],
+        ["Augustineus", "Endjala", null],
+        ["Pombili", "Kahenge", null],
+        ["Joey", "Rickets", null],
+        ["Nikanor", "Shiteni", null],
+        ["Reinhold", "Ipinge", null],
+        ["Johannes", "Shipundi", null],
+        ["Kennedy", "Kasenda", null]
+      ]
+    },
+    {
+      club: "Celtic",
+      team: "Celtic",
+      players: [
+        ["Anton", "Strauss", null],
+        ["Cyril", "Möller", null],
+        ["Collin", "Bougardt", null],
+        ["Afrika", "Kuhatunwa", null],
+        ["Leon", "Kolz", null],
+        ["Andreas", "Hauwanga", null],
+        ["Kennedy", "Enkali", null],
+        ["Cyril", "Möller (Jnr)", null],
+        ["Ruzaan", "Möller", null],
+        ["Jean-Piere", "Pietersen", null],
+        ["Justin", "Kolz", null],
+        ["Izaan", "Möller", null]
+      ]
+    },
+    {
+      club: "West Coast",
+      team: "West Coast",
+      players: [
+        ["Aldo", "Loxton", null],
+        ["Juandro", "van Rooi", null],
+        ["Elrizza", "Koopman", null],
+        ["Vivian", "Koopman", null],
+        ["Ashwan", "Loxton", null],
+        ["Christeline", "de Klerk", null],
+        ["Franklin", "Visagie", null],
+        ["Lemar", "van Rooyen", null]
+      ]
+    },
+    {
+      club: "Sparta",
+      team: "Sparta",
+      players: [
+        ["Romario", "Schwartz", null],
+        ["John", "Claasen", null],
+        ["Tyrone", "Vogel", null],
+        ["Dudley", "Smith", null],
+        ["David", "van Neel", null],
+        ["Daniel", "Clark", null],
+        ["Iwanne", "Isaacs", null],
+        ["Bernward", "Diergaardt", null]
+      ]
+    }
+  ];
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query("DELETE FROM users WHERE role <> 'NCSF_ADMIN'");
+    await client.query("DELETE FROM fixtures");
+    await client.query("DELETE FROM players");
+    await client.query("DELETE FROM teams");
+    await client.query("DELETE FROM clubs");
+
+    let divisionId = null;
+    const existingDivision = await client.query(`
+      SELECT id FROM divisions
+      WHERE active=TRUE
+      ORDER BY sort_order, id
+      LIMIT 1
+    `);
+    if (existingDivision.rowCount) {
+      divisionId = existingDivision.rows[0].id;
+    } else {
+      let seasonId = null;
+      const existingSeason = await client.query(`
+        SELECT id FROM seasons
+        ORDER BY active DESC, id
+        LIMIT 1
+      `);
+      if (existingSeason.rowCount) {
+        seasonId = existingSeason.rows[0].id;
+      } else {
+        const season = await client.query(`
+          INSERT INTO seasons(name,start_date,active)
+          VALUES ('2026 NCSF Season', CURRENT_DATE, TRUE)
+          RETURNING id
+        `);
+        seasonId = season.rows[0].id;
+      }
+      const division = await client.query(`
+        INSERT INTO divisions(season_id,name,sort_order,active)
+        VALUES ($1,'League Division',1,TRUE)
+        RETURNING id
+      `, [seasonId]);
+      divisionId = division.rows[0].id;
+    }
+
+    const clubIds = new Map();
+    for (const roster of rosters) {
+      let clubId = clubIds.get(roster.club);
+      if (!clubId) {
+        const club = await client.query(
+          "INSERT INTO clubs(name,short_name,active) VALUES ($1,$2,TRUE) RETURNING id",
+          [roster.club, roster.club]
+        );
+        clubId = club.rows[0].id;
+        clubIds.set(roster.club, clubId);
+      }
+
+      const team = await client.query(
+        "INSERT INTO teams(club_id,division_id,name,short_name,active) VALUES ($1,$2,$3,$4,TRUE) RETURNING id",
+        [clubId, divisionId, roster.team, roster.team]
+      );
+      const teamId = team.rows[0].id;
+
+      for (const [firstName, lastName, ncsfNumber] of roster.players) {
+        await client.query(`
+          INSERT INTO players(club_id,team_id,ncsf_number,first_name,last_name,active,suspended)
+          VALUES ($1,$2,$3,$4,$5,TRUE,FALSE)
+        `, [clubId, teamId, ncsfNumber, firstName, lastName]);
+      }
+    }
+
+    await client.query("INSERT INTO app_migrations(key) VALUES ($1)", [migrationKey]);
+    await client.query("COMMIT");
+    console.log("Applied official Coastal league club/team/player roster import.");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 function cleanEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -1344,6 +1552,7 @@ app.use((err, _req, res, _next) => {
 });
 
 initDatabase()
+  .then(seedOfficialCoastalRosters)
   .then(() => app.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);
