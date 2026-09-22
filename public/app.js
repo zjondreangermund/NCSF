@@ -98,7 +98,10 @@
         <div><div class="team-name">${esc(f.home_team_name)}</div><div class="match-meta">${esc(fmtDate(f.fixture_date))}</div></div>
         <div class="match-score">${Number(f.home_frames||0)} &ndash; ${Number(f.away_frames||0)}</div>
         <div class="away"><div class="team-name">${esc(f.away_team_name)}</div><div class="match-meta">Round ${esc(f.round_no)} • ${statusPill(f.status)}</div></div>
-        <div class="open-cell">${allowOpen && (f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet?id=${f.id}">Open scoresheet</a>`:''}</div>
+        <div class="open-cell">
+          ${f.stream_active&&f.stream_url?`<a class="btn small live-btn" href="/live?id=${f.id}"><span class="live-dot"></span>LIVE</a>`:''}
+          ${allowOpen && (f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet?id=${f.id}">Open scoresheet</a>`:''}
+        </div>
       </div>`).join('');
   }
   async function initHome(){
@@ -589,6 +592,49 @@ function formatEventDate(value){
       ? '<div class="news-feed">'+updates.map(p=>`<article class="news-card ${p.pinned?'pinned':''}"><div class="news-meta"><span class="content-type ${p.type}">${esc(p.type)}</span><span>${esc(new Date(p.created_at).toLocaleDateString())}</span></div><h3>${esc(p.title)}</h3>${p.body?`<p>${esc(p.body)}</p>`:''}</article>`).join('')+'</div>'
       : '<div class="empty">No news or announcements published.</div>';
   }
+  function youtubeEmbedUrl(url){
+    try{
+      const u=new URL(url,location.origin);
+      if(u.hostname.includes('youtu.be'))return 'https://www.youtube.com/embed/'+u.pathname.replace(/^\//,'');
+      if(u.hostname.includes('youtube.com')){
+        if(u.pathname.startsWith('/embed/'))return u.href;
+        const id=u.searchParams.get('v');
+        if(id)return 'https://www.youtube.com/embed/'+id;
+        const parts=u.pathname.split('/').filter(Boolean);
+        if(parts[0]==='live'&&parts[1])return 'https://www.youtube.com/embed/'+parts[1];
+      }
+    }catch(_e){}
+    return null;
+  }
+  function renderLivePlayer(live){
+    const box=$('#livePlayer');
+    const title=$('#liveTitle');
+    const meta=$('#liveMeta');
+    if(title)title.textContent=live.title||'Live Match';
+    if(meta)meta.textContent=(live.homeTeamName+' vs '+live.awayTeamName)+(live.venue?' • '+live.venue:'');
+    if(!box)return;
+    const yt=youtubeEmbedUrl(live.streamUrl);
+    if(yt){
+      box.innerHTML='<div class="video-frame"><iframe src="'+esc(yt)+'?autoplay=1" title="'+esc(live.title||'NCSF Live')+'" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
+      return;
+    }
+    if(/\.(m3u8|mp4)(\?|#|$)/i.test(live.streamUrl)){
+      box.innerHTML='<div class="video-frame"><video controls autoplay playsinline src="'+esc(live.streamUrl)+'"></video></div><p class="live-help">If this device cannot play the stream format, use Open Stream.</p><a class="btn secondary" target="_blank" rel="noopener" href="'+esc(live.streamUrl)+'">Open Stream</a>';
+      return;
+    }
+    box.innerHTML='<div class="live-external"><p>This stream opens from its provider.</p><a class="btn primary" target="_blank" rel="noopener" href="'+esc(live.streamUrl)+'">Open Live Stream</a></div>';
+  }
+  async function initLivePage(){
+    const id=Number(new URLSearchParams(location.search).get('id')||0);
+    if(!id){$('#livePlayer').innerHTML='<div class="empty">No fixture selected.</div>';return}
+    try{
+      const data=await api('/api/live/'+id);
+      renderLivePlayer(data.live);
+    }catch(err){
+      $('#livePlayer').innerHTML='<div class="empty">'+esc(err.message)+'</div>';
+    }
+  }
+
   async function initNewsPage(){
     try{
       const data=await api('/api/public/posts');
@@ -748,6 +794,7 @@ function formatEventDate(value){
         <td>${statusPill(f.status)}</td>
         <td>
           <a class="btn small secondary" href="/scoresheet?id=${f.id}">Open</a>
+          ${f.stream_active&&f.stream_url?`<a class="btn small live-btn" href="/live?id=${f.id}"><span class="live-dot"></span>LIVE</a>`:''}
           <button class="btn small fixture-edit" data-id="${f.id}">Edit</button>
           ${f.status==='POSTPONED'?`<button class="btn small fixture-restore" data-id="${f.id}">Restore</button>`:(!['APPROVED','FORFEIT'].includes(f.status)?`<button class="btn small fixture-postpone" data-id="${f.id}">Postpone</button>`:'')}
           ${['SCHEDULED','POSTPONED'].includes(f.status)?`<button class="btn small danger fixture-delete" data-id="${f.id}">Delete</button>`:''}
@@ -760,9 +807,12 @@ function formatEventDate(value){
       const currentDate=f.fixture_date?new Date(f.fixture_date).toISOString().slice(0,16):'';
       const fixtureDate=prompt('Match date/time (YYYY-MM-DDTHH:MM). Leave blank for TBA.',currentDate); if(fixtureDate===null)return;
       const venue=prompt('Venue',f.venue||''); if(venue===null)return;
+      const streamUrl=prompt('Live stream URL (HLS .m3u8, MP4 or YouTube). Leave blank for no stream.',f.stream_url||''); if(streamUrl===null)return;
+      const streamTitle=streamUrl?prompt('Stream title',f.stream_title||(f.home_team_name+' vs '+f.away_team_name)):''; if(streamUrl&&streamTitle===null)return;
+      const streamActive=Boolean(streamUrl)&&confirm('Make this stream LIVE now? Press Cancel to save it without showing LIVE.');
       try{
-        await api('/api/admin/fixtures/'+f.id,{method:'PATCH',body:{roundNo:Number(roundNo),fixtureDate:fixtureDate||null,venue}});
-        await reloadAdmin(); toast('Fixture updated');
+        await api('/api/admin/fixtures/'+f.id,{method:'PATCH',body:{roundNo:Number(roundNo),fixtureDate:fixtureDate||null,venue,streamUrl:streamUrl||null,streamTitle:streamTitle||null,streamActive}});
+        await reloadAdmin(); toast(streamActive?'Fixture updated and LIVE':'Fixture updated');
       }catch(err){toast(err.message,true)}
     }));
     $$('.fixture-postpone').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -874,6 +924,7 @@ async function loadAdminPosts(){
     if(PAGE==='results-page')await initResultsPage();
     if(PAGE==='teams-page')await initTeamsPage();
     if(PAGE==='players-page')await initPlayersPage();
+    if(PAGE==='live-page')await initLivePage();
     if(PAGE==='news-page')await initNewsPage();
     if(PAGE==='rankings-page')await initRankingsPage();
     if(PAGE==='scoresheet')await initScoresheet();
