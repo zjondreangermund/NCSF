@@ -1850,3 +1850,19 @@ body.ncsf-live-fullscreen-active{
   top:12px!important;
   right:12px!important;
 }
+
+
+/* Live audio cues */
+.ncsf-sound-hint{
+  color:#fff;
+  font-size:10px;
+  font-weight:700;
+  opacity:.9;
+  text-shadow:0 1px 3px rgba(0,0,0,.8);
+  white-space:nowrap;
+}
+#broadcastMic.success{
+  background:#16784a!important;
+  border-color:#16784a!important;
+  color:#fff!important;
+}
