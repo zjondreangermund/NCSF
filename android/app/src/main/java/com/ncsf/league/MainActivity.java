@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.11");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.12");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -315,9 +315,18 @@ public class MainActivity extends Activity {
 
     private void openPermissionSettingsNative() {
         try {
-            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-            intent.setData(Uri.parse("package:" + getPackageName()));
-            startActivity(intent);
+            Intent permissionIntent = new Intent("android.settings.APP_PERMISSION_SETTINGS");
+            permissionIntent.setData(Uri.parse("package:" + getPackageName()));
+            permissionIntent.putExtra("android.intent.extra.PACKAGE_NAME", getPackageName());
+            startActivity(permissionIntent);
+            return;
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Intent detailsIntent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            detailsIntent.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(detailsIntent);
         } catch (Exception ex) {
             Toast.makeText(
                     MainActivity.this,
