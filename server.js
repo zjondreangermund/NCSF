@@ -3,6 +3,8 @@ require("express-async-errors");
 
 const path = require("path");
 const fs = require("fs");
+const http = require("http");
+const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
@@ -12,6 +14,8 @@ const multer = require("multer");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
+const PDFDocument = require("pdfkit");
+const { WebSocketServer, WebSocket } = require("ws");
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is required.");
@@ -70,6 +74,34 @@ const ROLE = {
   CLUB: "CLUB_ADMIN",
   TEAM: "TEAM_ADMIN"
 };
+
+const broadcastTokens = new Map();
+const liveStreams = new Map();
+
+function issueBroadcastToken(fixtureId, userId) {
+  const token = crypto.randomBytes(32).toString("hex");
+  broadcastTokens.set(token, {
+    fixtureId: Number(fixtureId),
+    userId: Number(userId),
+    expiresAt: Date.now() + 15 * 60 * 1000
+  });
+  return token;
+}
+
+function consumeBroadcastToken(token, fixtureId) {
+  const entry = broadcastTokens.get(String(token || ""));
+  if (!entry) return null;
+  broadcastTokens.delete(String(token || ""));
+  if (entry.expiresAt < Date.now() || entry.fixtureId !== Number(fixtureId)) return null;
+  return entry;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, entry] of broadcastTokens) {
+    if (entry.expiresAt < now) broadcastTokens.delete(token);
+  }
+}, 60 * 1000).unref();
 
 async function initDatabase() {
   await pool.query(`
