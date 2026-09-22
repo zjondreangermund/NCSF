@@ -1,26 +1,35 @@
 package com.ncsf.league;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.SweepGradient;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.view.animation.LinearInterpolator;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ProgressBar;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
     private static final String HOME_URL = "https://ncsf-production.up.railway.app/";
     private static final int FILE_CHOOSER_REQUEST = 501;
+
     private WebView webView;
-    private ProgressBar progressBar;
+    private LoadingEdgeView loadingEdge;
     private ValueCallback<Uri[]> fileCallback;
 
     @Override
@@ -31,17 +40,17 @@ public class MainActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
         webView = new WebView(this);
-        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        progressBar.setMax(100);
+        loadingEdge = new LoadingEdgeView(this);
 
         root.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        FrameLayout.LayoutParams progressParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 8);
-        progressParams.gravity = android.view.Gravity.TOP;
-        root.addView(progressBar, progressParams);
+        FrameLayout.LayoutParams edgeParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        root.addView(loadingEdge, edgeParams);
+        loadingEdge.setElevation(dp(40));
         setContentView(root);
 
         WebSettings settings = webView.getSettings();
@@ -53,14 +62,14 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.1");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, android.webkit.WebResourceRequest request) {
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String host = uri.getHost();
                 if (host != null && host.endsWith("railway.app")) {
@@ -71,8 +80,14 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                loadingEdge.start();
+                super.onPageStarted(view, url, favicon);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
-                progressBar.setVisibility(View.GONE);
+                loadingEdge.stop();
                 super.onPageFinished(view, url);
             }
         });
@@ -80,8 +95,11 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
-                progressBar.setVisibility(newProgress < 100 ? View.VISIBLE : View.GONE);
-                progressBar.setProgress(newProgress);
+                if (newProgress < 100) {
+                    loadingEdge.start();
+                } else {
+                    loadingEdge.stop();
+                }
             }
 
             @Override
@@ -101,11 +119,16 @@ public class MainActivity extends Activity {
             }
         });
 
+        loadingEdge.start();
         if (savedInstanceState == null) {
             webView.loadUrl(HOME_URL);
         } else {
             webView.restoreState(savedInstanceState);
         }
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     @Override
@@ -122,7 +145,9 @@ public class MainActivity extends Activity {
                 if (data.getClipData() != null) {
                     int count = data.getClipData().getItemCount();
                     results = new Uri[count];
-                    for (int i = 0; i < count; i++) results[i] = data.getClipData().getItemAt(i).getUri();
+                    for (int i = 0; i < count; i++) {
+                        results[i] = data.getClipData().getItemAt(i).getUri();
+                    }
                 } else if (data.getData() != null) {
                     results = new Uri[]{data.getData()};
                 }
@@ -142,6 +167,89 @@ public class MainActivity extends Activity {
             webView.goBack();
         } else {
             super.onBackPressed();
+        }
+    }
+
+    static class LoadingEdgeView extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF rect = new RectF();
+        private final Matrix gradientMatrix = new Matrix();
+        private final float stroke;
+        private final float radius;
+        private SweepGradient gradient;
+        private ValueAnimator animator;
+        private float rotation;
+
+        LoadingEdgeView(Context context) {
+            super(context);
+            stroke = dp(context, 4.5f);
+            radius = dp(context, 24f);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(stroke);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setShadowLayer(dp(context, 9f), 0, 0, Color.argb(150, 255, 255, 255));
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+            setClickable(false);
+            setFocusable(false);
+            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            setVisibility(GONE);
+        }
+
+        private static float dp(Context context, float value) {
+            return value * context.getResources().getDisplayMetrics().density;
+        }
+
+        @Override
+        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            gradient = new SweepGradient(
+                    w / 2f,
+                    h / 2f,
+                    new int[]{
+                            Color.rgb(0, 53, 128),
+                            Color.WHITE,
+                            Color.rgb(210, 16, 52),
+                            Color.rgb(255, 215, 0),
+                            Color.rgb(0, 149, 67),
+                            Color.WHITE,
+                            Color.rgb(0, 53, 128)
+                    },
+                    new float[]{0f, .16f, .31f, .43f, .62f, .81f, 1f}
+            );
+            paint.setShader(gradient);
+        }
+
+        void start() {
+            if (getVisibility() != VISIBLE) setVisibility(VISIBLE);
+            if (animator != null && animator.isRunning()) return;
+            animator = ValueAnimator.ofFloat(0f, 360f);
+            animator.setDuration(1700);
+            animator.setRepeatCount(ValueAnimator.INFINITE);
+            animator.setInterpolator(new LinearInterpolator());
+            animator.addUpdateListener(animation -> {
+                rotation = (float) animation.getAnimatedValue();
+                invalidate();
+            });
+            animator.start();
+        }
+
+        void stop() {
+            if (animator != null) {
+                animator.cancel();
+                animator = null;
+            }
+            setVisibility(GONE);
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            if (gradient == null) return;
+            gradientMatrix.setRotate(rotation, getWidth() / 2f, getHeight() / 2f);
+            gradient.setLocalMatrix(gradientMatrix);
+            float inset = stroke / 2f + dp(getContext(), 2f);
+            rect.set(inset, inset, getWidth() - inset, getHeight() - inset);
+            canvas.drawRoundRect(rect, radius, radius, paint);
         }
     }
 }
