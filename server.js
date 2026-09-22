@@ -1318,6 +1318,21 @@ app.get("/api/fixtures/:id/audit", requireRoles(ROLE.NCSF, ROLE.CLUB), async (re
   res.json({ audit: rows });
 });
 
+const pageRoutes = {
+  "/fixtures": "fixtures.html",
+  "/results": "results.html",
+  "/teams": "teams.html",
+  "/players": "players.html",
+  "/rankings": "rankings.html",
+  "/admin": "admin.html",
+  "/club-admin": "club-admin.html",
+  "/team": "team.html",
+  "/scoresheet": "scoresheet.html"
+};
+for (const [route, file] of Object.entries(pageRoutes)) {
+  app.get(route, (_req, res) => res.sendFile(path.join(__dirname, "public", file)));
+}
+
 app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
 
 app.use((err, _req, res, _next) => {
