@@ -1,0 +1,55 @@
+name: NCSF CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ncsf
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ncsf"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/ncsf
+      SESSION_SECRET: ci-session-secret
+      PORT: 3000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: node --check server.js
+      - run: node --check public/app.js
+      - name: Start app
+        run: |
+          npm start > /tmp/ncsf.log 2>&1 &
+          echo $! > /tmp/ncsf.pid
+      - name: Smoke test API
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:3000/api/health
+          curl --fail --silent http://127.0.0.1:3000/api/setup/status
+      - name: Print server log on failure
+        if: failure()
+        run: cat /tmp/ncsf.log || true
