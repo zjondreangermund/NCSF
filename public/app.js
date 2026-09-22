@@ -654,9 +654,21 @@ function formatEventDate(value){
       return;
     }
 
-    box.innerHTML='<div class="video-frame internal-live"><video id="internalLiveVideo" controls autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
+    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" controls autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div><button class="live-fullscreen-btn" id="liveFullscreenBtn" type="button" aria-label="Full screen">⛶</button></div>';
     const video=$('#internalLiveVideo');
     const waiting=$('#liveWaiting');
+    const fullscreenBtn=$('#liveFullscreenBtn');
+    const enterFullscreen=async()=>{
+      try{
+        if(video.requestFullscreen)await video.requestFullscreen();
+        else if(video.webkitRequestFullscreen)video.webkitRequestFullscreen();
+        else if(video.webkitEnterFullscreen)video.webkitEnterFullscreen();
+        if(screen.orientation?.lock)await screen.orientation.lock('landscape').catch(()=>{});
+      }catch(_e){
+        try{video.webkitEnterFullscreen?.()}catch(_ignored){}
+      }
+    };
+    fullscreenBtn?.addEventListener('click',enterFullscreen);
     let socket=null,pc=null,retryTimer=null,offerTimer=null,ended=false,pendingIce=[];
 
     const closePeer=()=>{
@@ -672,7 +684,11 @@ function formatEventDate(value){
     const connect=()=>{
       if(ended)return;
       closePeer();
-      socket=new WebSocket(liveSocketUrl({fixtureId:String(fixtureId),mode:'viewer'}));
+      socket=new WebSocket(liveSocketUrl({
+        fixtureId:String(fixtureId),
+        mode:'viewer',
+        viewerName:state.user?.displayName||'Guest viewer'
+      }));
 
       socket.onopen=()=>{
         waiting.textContent='Connected. Waiting for camera…';
@@ -801,13 +817,52 @@ function formatEventDate(value){
 
     $('#broadcastTitle').textContent=fixture.homeTeamName+' vs '+fixture.awayTeamName;
     $('#broadcastMeta').textContent=(fixture.divisionName||'')+(fixture.venue?' • '+fixture.venue:'');
-    $('#watchBroadcast').href='/live?id='+id;
-
-    const preview=$('#broadcastPreview'),startBtn=$('#startBroadcast'),stopBtn=$('#stopBroadcast'),switchBtn=$('#switchCamera');
-    const stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
-    let facing='environment',stream=null,socket=null,starting=false,withAudio=true;
+    const preview=$('#broadcastPreview'),viewerPreview=$('#broadcastViewerPreview');
+    const startBtn=$('#startBroadcast'),stopBtn=$('#stopBroadcast'),switchBtn=$('#switchCamera');
+    const viewerPreviewBtn=$('#viewerPreviewBtn'),fullscreenBtn=$('#broadcastFullscreen');
+    const stage=$('#broadcastStage'),stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
+    const viewerList=$('#broadcastViewerList');
+    let facing='environment',stream=null,socket=null,starting=false,withAudio=true,chatStarted=false,viewerPreviewOn=false;
     const peers=new Map();
     const pendingIce=new Map();
+    const viewerNames=new Map();
+
+    const renderViewerList=()=>{
+      if(!viewerList)return;
+      const names=[...viewerNames.values()];
+      viewerList.innerHTML=names.length
+        ? '<strong>Watching now</strong>'+names.map(name=>'<span>'+esc(name)+'</span>').join('')
+        : '<span>No viewers yet</span>';
+    };
+
+    viewerLabel?.addEventListener('click',()=>viewerList?.classList.toggle('hidden'));
+    document.addEventListener('click',e=>{
+      if(viewerList&&!viewerList.classList.contains('hidden')&&!viewerList.contains(e.target)&&e.target!==viewerLabel){
+        viewerList.classList.add('hidden');
+      }
+    });
+
+    const toggleViewerPreview=()=>{
+      viewerPreviewOn=!viewerPreviewOn;
+      viewerPreview?.classList.toggle('hidden',!viewerPreviewOn);
+      preview?.classList.toggle('broadcast-camera-dimmed',viewerPreviewOn);
+      if(viewerPreview){
+        viewerPreview.srcObject=viewerPreviewOn?stream:null;
+        if(viewerPreviewOn)viewerPreview.play().catch(()=>{});
+      }
+      if(viewerPreviewBtn)viewerPreviewBtn.textContent=viewerPreviewOn?'Camera View':'Viewer View';
+    };
+
+    const enterBroadcastFullscreen=async()=>{
+      try{
+        if(stage?.requestFullscreen)await stage.requestFullscreen();
+        else if(stage?.webkitRequestFullscreen)stage.webkitRequestFullscreen();
+        if(screen.orientation?.lock)await screen.orientation.lock('landscape').catch(()=>{});
+      }catch(_e){}
+    };
+
+    viewerPreviewBtn?.addEventListener('click',toggleViewerPreview);
+    fullscreenBtn?.addEventListener('click',enterBroadcastFullscreen);
 
     const closePeer=viewerId=>{
       const pc=peers.get(viewerId);
@@ -838,7 +893,10 @@ function formatEventDate(value){
       socket=null;
       stopTracks();
       setUi(false);
-      viewerLabel.textContent='0 viewers';
+      viewerNames.clear();
+      renderViewerList();
+      if(viewerLabel)viewerLabel.textContent='0 viewers';
+      if(viewerPreviewOn)toggleViewerPreview();
     };
 
     const createPeerForViewer=async viewerId=>{
@@ -921,10 +979,19 @@ function formatEventDate(value){
           let msg;try{msg=JSON.parse(e.data)}catch{return}
 
           if(msg.type==='viewerCount'){
-            viewerLabel.textContent=msg.count+' viewer'+(msg.count===1?'':'s');
+            if(viewerLabel)viewerLabel.textContent=msg.count+' viewer'+(msg.count===1?'':'s');
+            if(Array.isArray(msg.viewers)){
+              viewerNames.clear();
+              msg.viewers.forEach(v=>viewerNames.set(String(v.id),v.name||'Viewer'));
+              renderViewerList();
+            }
           }else if(msg.type==='viewer-joined'&&msg.viewerId){
+            viewerNames.set(String(msg.viewerId),msg.viewerName||'Viewer');
+            renderViewerList();
             await createPeerForViewer(msg.viewerId);
           }else if(msg.type==='viewer-left'&&msg.viewerId){
+            viewerNames.delete(String(msg.viewerId));
+            renderViewerList();
             closePeer(msg.viewerId);
           }else if(msg.type==='webrtc-answer'&&msg.viewerId&&msg.sdp){
             const pc=peers.get(msg.viewerId);
@@ -958,6 +1025,14 @@ function formatEventDate(value){
         };
 
         setUi(true);
+        if(!chatStarted){
+          initLiveChat(id);
+          chatStarted=true;
+        }
+        if(viewerPreviewOn&&viewerPreview){
+          viewerPreview.srcObject=stream;
+          viewerPreview.play().catch(()=>{});
+        }
         toast(withAudio?'You are live':'You are live — video only');
       }catch(err){
         stop();
@@ -973,7 +1048,9 @@ function formatEventDate(value){
     switchBtn.addEventListener('click',async()=>{
       facing=facing==='environment'?'user':'environment';
       if(stream){
+        const wasChatStarted=chatStarted;
         stop();
+        chatStarted=wasChatStarted;
         await start();
       }else{
         toast('Camera set to '+(facing==='environment'?'rear':'front'));
