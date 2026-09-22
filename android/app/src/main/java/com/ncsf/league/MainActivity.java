@@ -1,8 +1,11 @@
 package com.ncsf.league;
 
+import android.Manifest;
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.DownloadManager;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -12,11 +15,13 @@ import android.graphics.RectF;
 import android.graphics.SweepGradient;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 import android.webkit.CookieManager;
+import android.webkit.PermissionRequest;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -24,16 +29,19 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.URLUtil;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
     private static final String HOME_URL = "https://ncsf-production.up.railway.app/";
     private static final int FILE_CHOOSER_REQUEST = 501;
+    private static final int MEDIA_PERMISSION_REQUEST = 502;
 
     private WebView webView;
     private LoadingEdgeView loadingEdge;
     private ValueCallback<Uri[]> fileCallback;
+    private PermissionRequest pendingMediaPermission;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,7 +73,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.2");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.3");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -103,6 +111,28 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                runOnUiThread(() -> {
+                    boolean cameraGranted = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+                    boolean audioGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+                    if (cameraGranted && audioGranted) {
+                        request.grant(request.getResources());
+                    } else {
+                        pendingMediaPermission = request;
+                        requestPermissions(
+                                new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO},
+                                MEDIA_PERMISSION_REQUEST
+                        );
+                    }
+                });
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (pendingMediaPermission == request) pendingMediaPermission = null;
+            }
+
+            @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
@@ -116,6 +146,26 @@ public class MainActivity extends Activity {
                     Toast.makeText(MainActivity.this, "No file picker available.", Toast.LENGTH_SHORT).show();
                     return false;
                 }
+            }
+        });
+
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+            try {
+                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                String cookies = CookieManager.getInstance().getCookie(url);
+                if (cookies != null) request.addRequestHeader("Cookie", cookies);
+                request.addRequestHeader("User-Agent", userAgent);
+                request.setMimeType(mimeType);
+                String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
+                request.setTitle(fileName);
+                request.setDescription("NCSF document");
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                request.setDestinationInExternalFilesDir(MainActivity.this, Environment.DIRECTORY_DOWNLOADS, fileName);
+                DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                manager.enqueue(request);
+                Toast.makeText(MainActivity.this, "Downloading " + fileName, Toast.LENGTH_SHORT).show();
+            } catch (Exception ex) {
+                Toast.makeText(MainActivity.this, "Unable to download this file.", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -150,6 +200,18 @@ public class MainActivity extends Activity {
     protected void onSaveInstanceState(Bundle outState) {
         webView.saveState(outState);
         super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == MEDIA_PERMISSION_REQUEST && pendingMediaPermission != null) {
+            boolean granted = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                    && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+            if (granted) pendingMediaPermission.grant(pendingMediaPermission.getResources());
+            else pendingMediaPermission.deny();
+            pendingMediaPermission = null;
+        }
     }
 
     @Override
