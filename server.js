@@ -786,7 +786,9 @@ app.patch("/api/admin/players/:id", requireRoles(ROLE.NCSF, ROLE.CLUB), async (r
   if (!existing) return res.status(404).json({ error: "Player not found." });
   if (req.user.role === ROLE.CLUB && existing.club_id !== req.user.club_id) return res.status(403).json({ error: "Not your club." });
 
-  const teamId = req.body.teamId === null || req.body.teamId === "" ? null : Number(req.body.teamId);
+  const teamId = req.body.teamId === undefined
+    ? existing.team_id
+    : (req.body.teamId === null || req.body.teamId === "" ? null : Number(req.body.teamId));
   if (teamId && !(await teamBelongsToClub(teamId, existing.club_id))) return res.status(400).json({ error: "Team must belong to the player's club." });
 
   const { rows } = await pool.query(`
