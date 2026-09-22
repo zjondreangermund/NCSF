@@ -839,6 +839,10 @@ function formatEventDate(value){
           closePeer();
           waiting.textContent='Live broadcast ended';
           waiting.classList.remove('is-live');
+        }else if(msg.type==='reconnecting'){
+          waiting.textContent='Live camera reconnecting…';
+          waiting.classList.remove('is-live');
+          closePeer();
         }else if(msg.type==='waiting'){
           waiting.textContent='Camera connected. Starting video…';
         }else if(msg.type==='offline'){
@@ -890,6 +894,7 @@ function formatEventDate(value){
     const stage=$('#broadcastStage'),stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
     const viewerList=$('#broadcastViewerList');
     let facing='environment',stream=null,socket=null,starting=false,withAudio=true,chatStarted=false,viewerPreviewOn=false;
+    let manualStop=false,reconnectTimer=null,reconnectAttempt=0,connectingPublisher=false;
     const peers=new Map();
     const pendingIce=new Map();
     const viewerNames=new Map();
@@ -992,6 +997,22 @@ function formatEventDate(value){
       for(const viewerId of [...peers.keys()])closePeer(viewerId);
     };
 
+    const setBroadcastAwake=async active=>{
+      try{
+        if(window.NCSFApp&&typeof window.NCSFApp.setBroadcastActive==='function'){
+          window.NCSFApp.setBroadcastActive(Boolean(active));
+        }
+      }catch(_e){}
+      try{
+        if(active&&navigator.wakeLock?.request){
+          window.__ncsfWakeLock=await navigator.wakeLock.request('screen');
+        }else if(!active&&window.__ncsfWakeLock){
+          await window.__ncsfWakeLock.release().catch(()=>{});
+          window.__ncsfWakeLock=null;
+        }
+      }catch(_e){}
+    };
+
     const setUi=live=>{
       startBtn.classList.toggle('hidden',live);
       stopBtn.classList.toggle('hidden',!live);
@@ -1005,10 +1026,15 @@ function formatEventDate(value){
     };
 
     const stop=()=>{
+      manualStop=true;
+      clearTimeout(reconnectTimer);
+      reconnectTimer=null;
       closeAllPeers();
-      try{if(socket&&socket.readyState<=1)socket.close()}catch(_e){}
+      const oldSocket=socket;
       socket=null;
+      try{if(oldSocket&&oldSocket.readyState<=1)oldSocket.close()}catch(_e){}
       stopTracks();
+      setBroadcastAwake(false);
       setUi(false);
       viewerNames.clear();
       renderViewerList();
@@ -1046,9 +1072,106 @@ function formatEventDate(value){
       }
     };
 
+    const handlePublisherMessage=async e=>{
+      if(typeof e.data!=='string')return;
+      let msg;try{msg=JSON.parse(e.data)}catch{return}
+
+      if(msg.type==='viewerCount'){
+        if(viewerLabel)viewerLabel.textContent=msg.count+' viewer'+(msg.count===1?'':'s');
+        if(Array.isArray(msg.viewers)){
+          viewerNames.clear();
+          msg.viewers.forEach(v=>viewerNames.set(String(v.id),v.name||'Viewer'));
+          renderViewerList();
+        }
+      }else if(msg.type==='viewer-joined'&&msg.viewerId){
+        viewerNames.set(String(msg.viewerId),msg.viewerName||'Viewer');
+        renderViewerList();
+        await createPeerForViewer(msg.viewerId);
+      }else if(msg.type==='viewer-left'&&msg.viewerId){
+        viewerNames.delete(String(msg.viewerId));
+        renderViewerList();
+        closePeer(msg.viewerId);
+      }else if(msg.type==='webrtc-answer'&&msg.viewerId&&msg.sdp){
+        const pc=peers.get(msg.viewerId);
+        if(pc){
+          try{
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+            const queued=pendingIce.get(msg.viewerId)||[];
+            pendingIce.set(msg.viewerId,[]);
+            for(const candidate of queued){
+              try{await pc.addIceCandidate(candidate)}catch(_e){}
+            }
+          }catch(err){console.error('Answer error',err)}
+        }
+      }else if(msg.type==='webrtc-ice'&&msg.viewerId&&msg.candidate){
+        const pc=peers.get(msg.viewerId);
+        if(pc?.remoteDescription){
+          try{await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))}catch(_e){}
+        }else{
+          const queue=pendingIce.get(msg.viewerId)||[];
+          queue.push(new RTCIceCandidate(msg.candidate));
+          pendingIce.set(msg.viewerId,queue);
+        }
+      }
+    };
+
+    const schedulePublisherReconnect=()=>{
+      if(manualStop||!stream||reconnectTimer)return;
+      closeAllPeers();
+      const delay=Math.min(10000,1000*Math.pow(2,Math.min(reconnectAttempt,3)));
+      reconnectAttempt++;
+      stateLabel.textContent='RECONNECTING…';
+      stateLabel.classList.add('is-live');
+      reconnectTimer=setTimeout(()=>{
+        reconnectTimer=null;
+        connectPublisher().catch(()=>{});
+      },delay);
+    };
+
+    const connectPublisher=async()=>{
+      if(manualStop||!stream||connectingPublisher)return false;
+      connectingPublisher=true;
+      let ws=null;
+      try{
+        const tokenData=await api('/api/fixtures/'+id+'/broadcast-token',{method:'POST'});
+        ws=new WebSocket(liveSocketUrl({fixtureId:String(id),mode:'publisher',token:tokenData.token}));
+        await new Promise((resolve,reject)=>{
+          const timer=setTimeout(()=>reject(new Error('Live server connection timed out.')),10000);
+          ws.onopen=()=>{clearTimeout(timer);resolve()};
+          ws.onerror=()=>{clearTimeout(timer);reject(new Error('Could not connect to the NCSF live server.'))};
+        });
+
+        if(manualStop||!stream){
+          try{ws.close()}catch(_e){}
+          return false;
+        }
+
+        socket=ws;
+        reconnectAttempt=0;
+        ws.onmessage=handlePublisherMessage;
+        ws.onclose=e=>{
+          if(socket===ws)socket=null;
+          if(manualStop||!stream)return;
+          schedulePublisherReconnect();
+        };
+        ws.onerror=()=>{};
+        setUi(true);
+        return true;
+      }catch(err){
+        if(ws){try{ws.close()}catch(_e){}}
+        if(!manualStop&&stream)schedulePublisherReconnect();
+        return false;
+      }finally{
+        connectingPublisher=false;
+      }
+    };
+
     const start=async()=>{
       if(starting||stream)return;
       starting=true;
+      manualStop=false;
+      clearTimeout(reconnectTimer);
+      reconnectTimer=null;
       startBtn.disabled=true;
 
       try{
@@ -1056,7 +1179,6 @@ function formatEventDate(value){
           throw new Error('Live camera streaming is not supported on this device.');
         }
 
-        const tokenData=await api('/api/fixtures/'+id+'/broadcast-token',{method:'POST'});
         const videoConstraints={
           facingMode:{ideal:facing},
           width:{ideal:1280},
@@ -1086,65 +1208,14 @@ function formatEventDate(value){
         await preview.play().catch(()=>{});
         stateLabel.textContent=withAudio?'CONNECTING':'CONNECTING • VIDEO ONLY';
 
-        socket=new WebSocket(liveSocketUrl({fixtureId:String(id),mode:'publisher',token:tokenData.token}));
-
-        await new Promise((resolve,reject)=>{
-          const timer=setTimeout(()=>reject(new Error('Live server connection timed out.')),10000);
-          socket.onopen=()=>{clearTimeout(timer);resolve()};
-          socket.onerror=()=>{clearTimeout(timer);reject(new Error('Could not connect to the NCSF live server.'))};
-        });
-
-        socket.onmessage=async e=>{
-          if(typeof e.data!=='string')return;
-          let msg;try{msg=JSON.parse(e.data)}catch{return}
-
-          if(msg.type==='viewerCount'){
-            if(viewerLabel)viewerLabel.textContent=msg.count+' viewer'+(msg.count===1?'':'s');
-            if(Array.isArray(msg.viewers)){
-              viewerNames.clear();
-              msg.viewers.forEach(v=>viewerNames.set(String(v.id),v.name||'Viewer'));
-              renderViewerList();
-            }
-          }else if(msg.type==='viewer-joined'&&msg.viewerId){
-            viewerNames.set(String(msg.viewerId),msg.viewerName||'Viewer');
-            renderViewerList();
-            await createPeerForViewer(msg.viewerId);
-          }else if(msg.type==='viewer-left'&&msg.viewerId){
-            viewerNames.delete(String(msg.viewerId));
-            renderViewerList();
-            closePeer(msg.viewerId);
-          }else if(msg.type==='webrtc-answer'&&msg.viewerId&&msg.sdp){
-            const pc=peers.get(msg.viewerId);
-            if(pc){
-              try{
-                await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-                const queued=pendingIce.get(msg.viewerId)||[];
-                pendingIce.set(msg.viewerId,[]);
-                for(const candidate of queued){
-                  try{await pc.addIceCandidate(candidate)}catch(_e){}
-                }
-              }catch(err){console.error('Answer error',err)}
-            }
-          }else if(msg.type==='webrtc-ice'&&msg.viewerId&&msg.candidate){
-            const pc=peers.get(msg.viewerId);
-            if(pc?.remoteDescription){
-              try{await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))}catch(_e){}
-            }else{
-              const queue=pendingIce.get(msg.viewerId)||[];
-              queue.push(new RTCIceCandidate(msg.candidate));
-              pendingIce.set(msg.viewerId,queue);
-            }
-          }
-        };
-
-        socket.onclose=e=>{
-          if(stream){
-            toast(e.reason||'Live connection ended',true);
-            stop();
-          }
-        };
-
-        setUi(true);
+        manualStop=false;
+        reconnectAttempt=0;
+        await setBroadcastAwake(true);
+        const connected=await connectPublisher();
+        if(!connected){
+          stateLabel.textContent='RECONNECTING…';
+          stateLabel.classList.add('is-live');
+        }
         if(!chatStarted){
           initLiveChat(id);
           chatStarted=true;
