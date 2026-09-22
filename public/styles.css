@@ -366,3 +366,6 @@ body[data-page="scoresheet"] .page{max-width:1120px}
 .app-download-card{margin-top:18px;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#f8fafc,#edf3f8);border:1px solid #dbe3ec;display:flex;align-items:center;justify-content:space-between;gap:14px}
 .app-download-card strong,.app-download-card small{display:block}.app-download-card strong{color:var(--navy)}.app-download-card small{color:var(--muted);margin-top:3px}
 @media(max-width:620px){.app-download-card{align-items:stretch;flex-direction:column}.app-download-card .btn{text-align:center}}
+
+
+.sheet-toolbar-title{display:grid;gap:2px}.sheet-toolbar-title strong{color:#fff}.sheet-toolbar-title small{font-size:10px;color:#aebfd0;font-weight:700}
