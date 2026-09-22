@@ -914,3 +914,59 @@ body[data-page="scoresheet"] .page{max-width:1120px}
   .print-signatures i{height:3.5mm!important}
   .print-signatures small{font-size:4.6pt!important}
 }
+
+
+/* Live match viewer */
+.live-btn{
+  background:linear-gradient(135deg,#a50f20,#d62032)!important;
+  color:#fff!important;
+  border-color:#d62032!important;
+  display:inline-flex!important;
+  align-items:center;
+  gap:6px;
+  box-shadow:0 7px 18px rgba(182,20,38,.22);
+}
+.live-dot,.live-badge i{
+  width:8px;height:8px;border-radius:50%;background:#fff;display:inline-block;
+  box-shadow:0 0 0 0 rgba(255,255,255,.8);
+  animation:ncsfLivePulse 1.3s infinite;
+}
+@keyframes ncsfLivePulse{
+  0%{box-shadow:0 0 0 0 rgba(255,255,255,.75)}
+  70%{box-shadow:0 0 0 7px rgba(255,255,255,0)}
+  100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}
+}
+.open-cell{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.live-page{max-width:1180px}
+.live-hero{
+  margin:8px 0 18px;
+  border-radius:20px;
+  padding:24px 26px;
+  background:linear-gradient(135deg,#07182c,#0d2e50);
+  color:#fff;
+  box-shadow:var(--shadow-lg);
+}
+.live-hero h1{margin:8px 0 5px;color:#fff;font-size:clamp(26px,5vw,42px);letter-spacing:-.035em}
+.live-hero p{margin:0;color:#c5d3e1}
+.live-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:#c8162a;color:#fff;border-radius:999px;
+  padding:7px 10px;font-size:11px;font-weight:900;letter-spacing:.13em;
+}
+.live-panel{padding:14px}
+.video-frame{
+  width:100%;
+  aspect-ratio:16/9;
+  background:#000;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 14px 40px rgba(0,0,0,.18);
+}
+.video-frame iframe,.video-frame video{display:block;width:100%;height:100%;border:0;background:#000}
+.live-external{min-height:320px;display:grid;place-items:center;align-content:center;gap:14px;text-align:center}
+.live-help{text-align:center;color:var(--muted);font-size:12px}
+@media(max-width:620px){
+  .live-hero{padding:18px}
+  .live-panel{padding:8px}
+  .video-frame{border-radius:11px}
+}
