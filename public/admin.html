@@ -35,6 +35,7 @@
     <button class="btn" data-admin-tab="setup">League Setup</button>
     <button class="btn" data-admin-tab="clubs">Clubs & Teams</button>
     <button class="btn" data-admin-tab="fixtures">Fixtures</button>
+    <button class="btn" data-admin-tab="content">News & Events</button>
     <button class="btn" data-admin-tab="access">Access</button>
   </div>
 
@@ -148,6 +149,35 @@
       </div>
     </div>
     <div class="panel" style="margin-top:18px"><h2>Fixtures</h2><div id="adminFixtures"></div></div>
+  </section>
+
+  <section class="admin-pane" data-pane="content">
+    <div class="grid two">
+      <div class="panel">
+        <div class="kicker">Public communication</div>
+        <h2>Publish news, announcement or event</h2>
+        <form id="contentPostForm" class="form-grid">
+          <label>Type
+            <select name="type" id="contentType">
+              <option value="ANNOUNCEMENT">Announcement</option>
+              <option value="NEWS">News</option>
+              <option value="EVENT">Event</option>
+            </select>
+          </label>
+          <label>Event date/time<input name="eventDate" id="contentEventDate" type="datetime-local"></label>
+          <label class="full">Title<input name="title" required placeholder="Headline"></label>
+          <label class="full">Details<textarea name="body" rows="5" placeholder="Write the public message..."></textarea></label>
+          <label><span><input name="published" type="checkbox" checked style="width:auto"> Published</span></label>
+          <label><span><input name="pinned" type="checkbox" style="width:auto"> Pin to top</span></label>
+          <button class="btn primary full" type="submit">Publish</button>
+        </form>
+      </div>
+      <div class="panel">
+        <div class="kicker">Public feed</div>
+        <h2>News & Events</h2>
+        <div id="adminPosts" class="empty">No posts yet.</div>
+      </div>
+    </div>
   </section>
 
   <section class="admin-pane" data-pane="access">
