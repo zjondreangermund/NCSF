@@ -2396,6 +2396,7 @@ function liveStateFor(fixtureId) {
     state = {
       fixtureId: id,
       publisher: null,
+      publisherGraceTimer: null,
       viewers: new Map(),
       chatClients: new Set(),
       startedAt: null
@@ -2470,8 +2471,12 @@ liveWss.on("connection", async (ws, req) => {
         return;
       }
 
+      if (state.publisherGraceTimer) {
+        clearTimeout(state.publisherGraceTimer);
+        state.publisherGraceTimer = null;
+      }
       state.publisher = ws;
-      state.startedAt = Date.now();
+      if (!state.startedAt) state.startedAt = Date.now();
 
       await pool.query(
         "UPDATE fixtures SET stream_url=$2,stream_title=$3,stream_active=TRUE WHERE id=$1",
@@ -2497,20 +2502,32 @@ liveWss.on("connection", async (ws, req) => {
         }
       });
 
-      ws.on("close", async () => {
+      ws.on("close", () => {
         if (state.publisher !== ws) return;
         state.publisher = null;
+
         for (const viewer of state.viewers.values()) {
-          sendLiveControl(viewer, { type: "ended" });
+          sendLiveControl(viewer, { type: "reconnecting" });
         }
-        try {
-          await pool.query(
-            "UPDATE fixtures SET stream_active=FALSE,stream_url=NULL WHERE id=$1 AND stream_url=$2",
-            [fixtureId, "internal://fixture/" + fixtureId]
-          );
-        } catch (error) {
-          console.error("Failed to clear live stream:", error);
-        }
+
+        if (state.publisherGraceTimer) clearTimeout(state.publisherGraceTimer);
+        state.publisherGraceTimer = setTimeout(async () => {
+          state.publisherGraceTimer = null;
+          if (state.publisher && state.publisher.readyState === WebSocket.OPEN) return;
+
+          for (const viewer of state.viewers.values()) {
+            sendLiveControl(viewer, { type: "ended" });
+          }
+
+          try {
+            await pool.query(
+              "UPDATE fixtures SET stream_active=FALSE,stream_url=NULL WHERE id=$1 AND stream_url=$2",
+              [fixtureId, "internal://fixture/" + fixtureId]
+            );
+          } catch (error) {
+            console.error("Failed to clear live stream after reconnect grace:", error);
+          }
+        }, 30000);
       });
       return;
     }
