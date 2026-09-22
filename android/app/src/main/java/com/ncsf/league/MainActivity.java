@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.pm.ActivityInfo;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
@@ -12,6 +13,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
+import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
 import android.webkit.JavascriptInterface;
@@ -31,6 +33,9 @@ public class MainActivity extends Activity {
     private static final int MEDIA_PERMISSION_REQUEST = 502;
 
     private WebView webView;
+    private FrameLayout root;
+    private View customView;
+    private WebChromeClient.CustomViewCallback customViewCallback;
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingMediaPermission;
 
@@ -40,7 +45,7 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(Color.rgb(7, 24, 44));
         getWindow().setNavigationBarColor(Color.rgb(7, 24, 44));
 
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         webView = new WebView(this);
 
         root.addView(webView, new FrameLayout.LayoutParams(
@@ -58,7 +63,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.5");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.6");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -77,7 +82,41 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.setWebChromeClient(new WebChromeClient() {            @Override
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (customView != null) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
+                customView = view;
+                customViewCallback = callback;
+                webView.setVisibility(View.GONE);
+                root.addView(customView, new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT));
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                getWindow().getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_FULLSCREEN |
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (customView == null) return;
+                root.removeView(customView);
+                customView = null;
+                webView.setVisibility(View.VISIBLE);
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+                if (customViewCallback != null) {
+                    customViewCallback.onCustomViewHidden();
+                    customViewCallback = null;
+                }
+            }
+
+            @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> {
                     boolean wantsCamera = false;
@@ -222,6 +261,11 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (customView != null) {
+            WebChromeClient chrome = (WebChromeClient) webView.getWebChromeClient();
+            if (chrome != null) chrome.onHideCustomView();
+            return;
+        }
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
