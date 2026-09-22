@@ -2443,6 +2443,21 @@ async function buildLiveMatchState(fixtureId) {
     ? frames[currentIndex - 1]
     : (currentIndex < 0 && frames.length ? frames[frames.length - 1] : null);
 
+  const completed = payload.totals.completed;
+  const completedRound = completed > 0 && completed % 5 === 0 ? completed / 5 : null;
+  let roundSummary = null;
+  if (completedRound) {
+    const roundFrames = frames.filter(fr => Number(fr.round_no) === completedRound && fr.winner_side);
+    const progressiveFrames = frames.filter(fr => Number(fr.round_no) <= completedRound && fr.winner_side);
+    roundSummary = {
+      roundNo: completedRound,
+      home: roundFrames.filter(fr => fr.winner_side === "HOME").length,
+      away: roundFrames.filter(fr => fr.winner_side === "AWAY").length,
+      progressiveHome: progressiveFrames.filter(fr => fr.winner_side === "HOME").length,
+      progressiveAway: progressiveFrames.filter(fr => fr.winner_side === "AWAY").length
+    };
+  }
+
   const frameView = fr => fr ? ({
     id: fr.id,
     roundNo: Number(fr.round_no),
@@ -2459,10 +2474,11 @@ async function buildLiveMatchState(fixtureId) {
     homeTeamName: fixture.home_team_name,
     awayTeamName: fixture.away_team_name,
     lineupsReady: payload.lineups.length === 10 && frames.length === 25,
-    completed: payload.totals.completed,
+    completed,
     homeScore: payload.totals.home,
     awayScore: payload.totals.away,
     remaining: payload.totals.remaining,
+    roundSummary,
     current: frameView(current),
     next: frameView(next),
     previous: frameView(previous),
