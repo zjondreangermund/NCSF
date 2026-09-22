@@ -1242,3 +1242,181 @@ body[data-page="scoresheet"] .page{max-width:1120px}
   .live-chat-head{padding-top:10px}
   .live-chat-message{max-width:91%}
 }
+
+
+/* Live overlay refinements: keep the video visible behind chat */
+.live-chat-drawer{
+  background:linear-gradient(90deg,rgba(4,14,25,.06),rgba(4,14,25,.52))!important;
+  backdrop-filter:none!important;
+  box-shadow:none!important;
+  pointer-events:none;
+}
+.live-chat-drawer .live-chat-handle,
+.live-chat-drawer .live-chat-body{pointer-events:auto}
+.live-chat-body{
+  background:linear-gradient(180deg,rgba(4,14,25,.16),rgba(4,14,25,.42));
+}
+.live-chat-head{
+  background:rgba(4,14,25,.42);
+  backdrop-filter:blur(5px);
+}
+.live-chat-messages{
+  background:transparent!important;
+  padding-top:18px;
+}
+.live-chat-message{
+  background:rgba(4,14,25,.58)!important;
+  backdrop-filter:blur(4px);
+  box-shadow:0 4px 14px rgba(0,0,0,.12);
+}
+.live-chat-message.mine{
+  background:rgba(18,74,119,.64)!important;
+}
+.live-chat-form{
+  background:rgba(3,14,26,.46)!important;
+  backdrop-filter:blur(7px);
+}
+.live-chat-form input{
+  background:rgba(255,255,255,.12)!important;
+}
+.live-chat-signin{
+  background:rgba(3,14,26,.42);
+  backdrop-filter:blur(6px);
+}
+.live-chat-handle{
+  background:rgba(7,24,44,.78)!important;
+  backdrop-filter:blur(6px);
+}
+
+.live-fullscreen-btn{
+  position:absolute;
+  right:10px;
+  bottom:10px;
+  z-index:18;
+  width:38px;
+  height:38px;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:10px;
+  background:rgba(4,14,25,.72);
+  color:#fff;
+  display:grid;
+  place-items:center;
+  font-size:20px;
+  line-height:1;
+  cursor:pointer;
+  backdrop-filter:blur(5px);
+}
+.internal-live:fullscreen,
+.internal-live:-webkit-full-screen{
+  width:100vw!important;
+  height:100vh!important;
+  max-width:none!important;
+  border-radius:0!important;
+  background:#000!important;
+}
+.internal-live:fullscreen video,
+.internal-live:-webkit-full-screen video{
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+}
+
+.broadcast-viewers-pill{
+  border:0;
+  cursor:pointer;
+  padding:7px 10px;
+  border-radius:999px;
+  background:rgba(4,14,25,.76);
+  backdrop-filter:blur(8px);
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.04em;
+}
+.broadcast-viewer-list{
+  position:absolute;
+  z-index:35;
+  top:52px;
+  right:14px;
+  width:min(240px,72%);
+  max-height:220px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:10px;
+  border-radius:12px;
+  background:rgba(4,14,25,.88);
+  color:#fff;
+  backdrop-filter:blur(8px);
+  box-shadow:0 12px 28px rgba(0,0,0,.25);
+}
+.broadcast-viewer-list strong{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:#a9bdd0;
+  margin-bottom:2px;
+}
+.broadcast-viewer-list span{
+  font-size:12px;
+  padding:6px 7px;
+  border-radius:8px;
+  background:rgba(255,255,255,.08);
+}
+.broadcast-viewer-preview{
+  position:absolute;
+  inset:0;
+  z-index:5;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  background:#000;
+}
+.broadcast-camera-dimmed{opacity:0}
+.broadcast-video-shell:fullscreen,
+.broadcast-video-shell:-webkit-full-screen{
+  width:100vw!important;
+  height:100vh!important;
+  aspect-ratio:auto!important;
+  border-radius:0!important;
+  background:#000!important;
+}
+.broadcast-video-shell:fullscreen video,
+.broadcast-video-shell:-webkit-full-screen video{
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+}
+.broadcast-video-shell:fullscreen .live-chat-drawer,
+.broadcast-video-shell:-webkit-full-screen .live-chat-drawer{
+  height:100%!important;
+}
+.broadcast-video-shell:fullscreen .broadcast-overlay,
+.broadcast-video-shell:-webkit-full-screen .broadcast-overlay{
+  top:18px;
+  left:18px;
+  right:18px;
+}
+
+@media(max-width:760px){
+  .live-chat-drawer{
+    background:linear-gradient(180deg,rgba(4,14,25,.02),rgba(4,14,25,.52))!important;
+    height:min(62vh,420px)!important;
+  }
+  .live-chat-drawer.open{
+    transform:translateY(0)!important;
+  }
+  .live-chat-body{
+    background:linear-gradient(180deg,rgba(4,14,25,.06),rgba(4,14,25,.34));
+  }
+  .live-chat-head{
+    background:rgba(4,14,25,.30);
+  }
+  .live-chat-message{
+    max-width:88%;
+  }
+  .live-chat-form{
+    background:rgba(3,14,26,.54)!important;
+  }
+}
