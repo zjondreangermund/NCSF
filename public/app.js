@@ -890,7 +890,7 @@ function formatEventDate(value){
     $('#broadcastMeta').textContent=(fixture.divisionName||'')+(fixture.venue?' • '+fixture.venue:'');
     const preview=$('#broadcastPreview'),viewerPreview=$('#broadcastViewerPreview');
     const startBtn=$('#startBroadcast'),stopBtn=$('#stopBroadcast'),switchBtn=$('#switchCamera');
-    const micBtn=$('#broadcastMic'),viewerPreviewBtn=$('#viewerPreviewBtn');
+    const micBtn=$('#broadcastMic'),permissionBtn=$('#broadcastPermissions'),viewerPreviewBtn=$('#viewerPreviewBtn');
     const stage=$('#broadcastStage'),stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
     const viewerList=$('#broadcastViewerList');
     let facing='environment',stream=null,socket=null,starting=false,withAudio=true,chatStarted=false,viewerPreviewOn=false;
@@ -898,6 +898,66 @@ function formatEventDate(value){
     const peers=new Map();
     const pendingIce=new Map();
     const viewerNames=new Map();
+    let mediaPermissionResolver=null;
+
+    window.onNcsfMediaPermissionResult=(cameraGranted,audioGranted)=>{
+      if(mediaPermissionResolver){
+        const resolve=mediaPermissionResolver;
+        mediaPermissionResolver=null;
+        resolve({cameraGranted:Boolean(cameraGranted),audioGranted:Boolean(audioGranted)});
+      }
+      if(permissionBtn)permissionBtn.classList.toggle('hidden',Boolean(cameraGranted));
+    };
+
+    const requestNativeMediaPermissions=async()=>{
+      if(!(window.NCSFApp&&typeof window.NCSFApp.requestBroadcastPermissions==='function')){
+        return {cameraGranted:true,audioGranted:true};
+      }
+      return await new Promise(resolve=>{
+        mediaPermissionResolver=resolve;
+        const timeout=setTimeout(()=>{
+          if(mediaPermissionResolver===resolve){
+            mediaPermissionResolver=null;
+            resolve({
+              cameraGranted:typeof window.NCSFApp.hasCameraPermission==='function'?Boolean(window.NCSFApp.hasCameraPermission()):false,
+              audioGranted:typeof window.NCSFApp.hasMicrophonePermission==='function'?Boolean(window.NCSFApp.hasMicrophonePermission()):false
+            });
+          }
+        },12000);
+        const original=mediaPermissionResolver;
+        mediaPermissionResolver=result=>{
+          clearTimeout(timeout);
+          resolve(result);
+        };
+        try{window.NCSFApp.requestBroadcastPermissions()}
+        catch(_e){
+          clearTimeout(timeout);
+          mediaPermissionResolver=null;
+          resolve({cameraGranted:false,audioGranted:false});
+        }
+      });
+    };
+
+    const showPermissionRecovery=()=>{
+      permissionBtn?.classList.remove('hidden');
+      if(permissionBtn)permissionBtn.textContent='Allow Camera & Mic';
+    };
+
+    permissionBtn?.addEventListener('click',async()=>{
+      permissionBtn.disabled=true;
+      try{
+        const result=await requestNativeMediaPermissions();
+        if(result.cameraGranted){
+          permissionBtn.classList.add('hidden');
+          toast(result.audioGranted?'Camera and microphone allowed':'Camera allowed. Microphone can be enabled separately.');
+        }else{
+          toast('Camera permission is still denied. Opening app permissions…',true);
+          try{window.NCSFApp?.openAppPermissionSettings?.()}catch(_e){}
+        }
+      }finally{
+        permissionBtn.disabled=false;
+      }
+    });
 
     const renderViewerList=()=>{
       if(!viewerList)return;
@@ -1184,6 +1244,14 @@ function formatEventDate(value){
           throw new Error('Live camera streaming is not supported on this device.');
         }
 
+        if(window.NCSFApp&&typeof window.NCSFApp.hasCameraPermission==='function'&&!window.NCSFApp.hasCameraPermission()){
+          const permissionResult=await requestNativeMediaPermissions();
+          if(!permissionResult.cameraGranted){
+            showPermissionRecovery();
+            throw new Error('Camera permission denied. Tap Allow Camera & Mic and allow Camera access.');
+          }
+        }
+
         const videoConstraints={
           facingMode:{ideal:facing},
           width:{ideal:1280},
@@ -1231,8 +1299,12 @@ function formatEventDate(value){
         }
         toast(withAudio?'You are live':'You are live — video only');
       }catch(err){
+        const name=String(err?.name||'');
+        const msg=String(err?.message||'');
+        const denied=name==='NotAllowedError'||/permission|denied|not allowed/i.test(msg);
+        if(denied)showPermissionRecovery();
         stop();
-        toast(err.message||'Could not start live stream.',true);
+        toast(denied?'Camera permission denied. Use Allow Camera & Mic.':(msg||'Could not start live stream.'),true);
       }finally{
         starting=false;
         startBtn.disabled=false;
@@ -1255,6 +1327,11 @@ function formatEventDate(value){
     window.addEventListener('beforeunload',stop);
     setUi(false);
     updateMicButton();
+    try{
+      if(window.NCSFApp&&typeof window.NCSFApp.hasCameraPermission==='function'){
+        permissionBtn?.classList.toggle('hidden',Boolean(window.NCSFApp.hasCameraPermission()));
+      }
+    }catch(_e){}
   }
 
   function formatChatTime(value){
