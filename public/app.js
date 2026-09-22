@@ -456,14 +456,19 @@
   }
   function updateActionButtons(){
     const f=state.fixture.fixture,side=userSide(f),u=state.user;
-    const submit=$('#submitMatch'),confirm=$('#confirmMatch'),approve=$('#approveMatch');
+    const submit=$('#submitMatch'),confirm=$('#confirmMatch'),approve=$('#approveMatch'),broadcast=$('#broadcastMatch');
     const isParticipatingSide=side==='HOME'||side==='AWAY';
     const canSubmit=Boolean(u)&&isParticipatingSide&&['SCHEDULED','IN_PROGRESS'].includes(f.status);
     const canConfirm=Boolean(u)&&isParticipatingSide&&f.status==='SUBMITTED'&&Boolean(f.submittedSide)&&side!==f.submittedSide;
     const canApprove=Boolean(u)&&u.role==='NCSF_ADMIN'&&f.status==='CONFIRMED';
+    const canBroadcast=Boolean(u)&&(u.role==='NCSF_ADMIN'||isParticipatingSide)&&f.status!=='APPROVED';
     if(submit)submit.classList.toggle('hidden',!canSubmit);
     if(confirm)confirm.classList.toggle('hidden',!canConfirm);
     if(approve)approve.classList.toggle('hidden',!canApprove);
+    if(broadcast){
+      broadcast.classList.toggle('hidden',!canBroadcast);
+      if(canBroadcast)broadcast.href='/broadcast?id='+f.id;
+    }
   }
 
   async function loadPublicMetaIntoSelect(){
@@ -613,6 +618,10 @@ function formatEventDate(value){
     if(title)title.textContent=live.title||'Live Match';
     if(meta)meta.textContent=(live.homeTeamName+' vs '+live.awayTeamName)+(live.venue?' • '+live.venue:'');
     if(!box)return;
+    if(String(live.streamUrl||'').startsWith('internal://')){
+      startInternalLiveViewer(live.fixtureId);
+      return;
+    }
     const yt=youtubeEmbedUrl(live.streamUrl);
     if(yt){
       box.innerHTML='<div class="video-frame"><iframe src="'+esc(yt)+'?autoplay=1" title="'+esc(live.title||'NCSF Live')+'" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
@@ -624,6 +633,215 @@ function formatEventDate(value){
     }
     box.innerHTML='<div class="live-external"><p>This stream opens from its provider.</p><a class="btn primary" target="_blank" rel="noopener" href="'+esc(live.streamUrl)+'">Open Live Stream</a></div>';
   }
+
+  function liveSocketUrl(params){
+    const protocol=location.protocol==='https:'?'wss:':'ws:';
+    return protocol+'//'+location.host+'/live-socket?'+new URLSearchParams(params).toString();
+  }
+
+  function startInternalLiveViewer(fixtureId){
+    const box=$('#livePlayer');
+    if(!box)return;
+    if(!window.MediaSource){
+      box.innerHTML='<div class="empty">Live playback is not supported on this device.</div>';
+      return;
+    }
+    box.innerHTML='<div class="video-frame internal-live"><video id="internalLiveVideo" controls autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
+    const video=$('#internalLiveVideo');
+    const waiting=$('#liveWaiting');
+    let mediaSource=null,sourceBuffer=null,queue=[],socket=null,retryTimer=null,ended=false;
+
+    const pump=()=>{
+      if(!sourceBuffer||sourceBuffer.updating||!queue.length)return;
+      const item=queue.shift();
+      try{sourceBuffer.appendBuffer(item)}catch(_e){queue.unshift(item)}
+    };
+
+    const setup=(mimeType)=>{
+      if(!MediaSource.isTypeSupported(mimeType)){
+        waiting.textContent='This live video format is not supported on this device.';
+        return;
+      }
+      queue=[];
+      sourceBuffer=null;
+      mediaSource=new MediaSource();
+      video.src=URL.createObjectURL(mediaSource);
+      mediaSource.addEventListener('sourceopen',()=>{
+        try{
+          sourceBuffer=mediaSource.addSourceBuffer(mimeType);
+          try{sourceBuffer.mode='sequence'}catch(_e){}
+          sourceBuffer.addEventListener('updateend',()=>{
+            pump();
+            if(video.paused)video.play().catch(()=>{});
+            if(video.buffered.length){
+              const end=video.buffered.end(video.buffered.length-1);
+              if(end-video.currentTime>5)video.currentTime=Math.max(video.buffered.start(0),end-1.5);
+            }
+          });
+          pump();
+        }catch(err){
+          waiting.textContent='Unable to initialise live playback.';
+        }
+      },{once:true});
+    };
+
+    const connect=()=>{
+      if(ended)return;
+      socket=new WebSocket(liveSocketUrl({fixtureId:String(fixtureId),mode:'viewer'}));
+      socket.binaryType='arraybuffer';
+      socket.onopen=()=>{waiting.textContent='Waiting for live video…'};
+      socket.onmessage=e=>{
+        if(typeof e.data==='string'){
+          let msg;try{msg=JSON.parse(e.data)}catch{return}
+          if(msg.type==='meta'){
+            setup(msg.mimeType);
+            waiting.textContent='LIVE';
+            waiting.classList.add('is-live');
+          }else if(msg.type==='ended'){
+            ended=true;
+            waiting.textContent='Live broadcast ended';
+            waiting.classList.remove('is-live');
+          }else if(msg.type==='waiting'){
+            waiting.textContent='Camera connected. Starting video…';
+          }else if(msg.type==='offline'){
+            waiting.textContent='This fixture is not live.';
+          }
+          return;
+        }
+        const add=buf=>{queue.push(new Uint8Array(buf));pump()};
+        if(e.data instanceof Blob)e.data.arrayBuffer().then(add);
+        else add(e.data);
+      };
+      socket.onclose=()=>{
+        if(!ended){
+          waiting.textContent='Reconnecting to live stream…';
+          clearTimeout(retryTimer);
+          retryTimer=setTimeout(connect,2000);
+        }
+      };
+    };
+    connect();
+  }
+
+  function supportedBroadcastMime(){
+    const types=['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'];
+    return types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';
+  }
+
+  async function initBroadcastPage(){
+    if(!requireUser())return;
+    const id=Number(new URLSearchParams(location.search).get('id')||0);
+    if(!id){$('#broadcastMeta').textContent='No fixture selected.';return}
+    let fixture;
+    try{
+      const data=await api('/api/fixtures/'+id);
+      fixture=data.fixture;
+    }catch(err){
+      $('#broadcastMeta').textContent=err.message;
+      return;
+    }
+
+    $('#broadcastTitle').textContent=fixture.homeTeamName+' vs '+fixture.awayTeamName;
+    $('#broadcastMeta').textContent=(fixture.divisionName||'')+(fixture.venue?' • '+fixture.venue:'');
+    $('#watchBroadcast').href='/live?id='+id;
+
+    const preview=$('#broadcastPreview'),startBtn=$('#startBroadcast'),stopBtn=$('#stopBroadcast'),switchBtn=$('#switchCamera');
+    const stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
+    let facing='environment',stream=null,recorder=null,socket=null,starting=false;
+
+    const setUi=(live)=>{
+      startBtn.classList.toggle('hidden',live);
+      stopBtn.classList.toggle('hidden',!live);
+      stateLabel.textContent=live?'LIVE':'OFFLINE';
+      stateLabel.classList.toggle('is-live',live);
+    };
+    const stopTracks=()=>{
+      if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+      preview.srcObject=null;
+    };
+    const stop=()=>{
+      try{if(recorder&&recorder.state!=='inactive')recorder.stop()}catch(_e){}
+      recorder=null;
+      try{if(socket&&socket.readyState<=1)socket.close()}catch(_e){}
+      socket=null;
+      stopTracks();
+      setUi(false);
+      viewerLabel.textContent='0 viewers';
+    };
+
+    const start=async()=>{
+      if(starting||recorder)return;
+      starting=true;
+      startBtn.disabled=true;
+      try{
+        if(!navigator.mediaDevices?.getUserMedia)throw new Error('Camera streaming is not supported on this device.');
+        const mimeType=supportedBroadcastMime();
+        if(!mimeType)throw new Error('This device cannot create a compatible live video stream.');
+
+        const tokenData=await api('/api/fixtures/'+id+'/broadcast-token',{method:'POST'});
+        stream=await navigator.mediaDevices.getUserMedia({
+          video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}},
+          audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+        });
+        preview.srcObject=stream;
+        await preview.play().catch(()=>{});
+
+        socket=new WebSocket(liveSocketUrl({fixtureId:String(id),mode:'publisher',token:tokenData.token}));
+        socket.binaryType='arraybuffer';
+        await new Promise((resolve,reject)=>{
+          const timer=setTimeout(()=>reject(new Error('Live server connection timed out.')),10000);
+          socket.onopen=()=>{clearTimeout(timer);resolve()};
+          socket.onerror=()=>{clearTimeout(timer);reject(new Error('Could not connect to the NCSF live server.'))};
+        });
+
+        socket.onmessage=e=>{
+          if(typeof e.data!=='string')return;
+          let msg;try{msg=JSON.parse(e.data)}catch{return}
+          if(msg.type==='viewerCount')viewerLabel.textContent=msg.count+' viewer'+(msg.count===1?'':'s');
+        };
+        socket.onclose=e=>{
+          if(recorder){toast(e.reason||'Live connection ended',true);stop()}
+        };
+
+        recorder=new MediaRecorder(stream,{
+          mimeType,
+          videoBitsPerSecond:1400000,
+          audioBitsPerSecond:64000
+        });
+        socket.send(JSON.stringify({type:'meta',mimeType}));
+        recorder.ondataavailable=async e=>{
+          if(!e.data||!e.data.size||!socket||socket.readyState!==WebSocket.OPEN)return;
+          if(socket.bufferedAmount>8*1024*1024)return;
+          try{socket.send(await e.data.arrayBuffer())}catch(_e){}
+        };
+        recorder.onerror=()=>{toast('Camera encoder error. Live stream stopped.',true);stop()};
+        recorder.start(750);
+        setUi(true);
+        toast('You are live');
+      }catch(err){
+        stop();
+        toast(err.message||'Could not start live stream.',true);
+      }finally{
+        starting=false;
+        startBtn.disabled=false;
+      }
+    };
+
+    startBtn.addEventListener('click',start);
+    stopBtn.addEventListener('click',()=>{stop();toast('Live broadcast stopped')});
+    switchBtn.addEventListener('click',async()=>{
+      facing=facing==='environment'?'user':'environment';
+      if(recorder){
+        stop();
+        await start();
+      }else{
+        toast('Camera set to '+(facing==='environment'?'rear':'front'));
+      }
+    });
+    window.addEventListener('beforeunload',stop);
+    setUi(false);
+  }
+
   async function initLivePage(){
     const id=Number(new URLSearchParams(location.search).get('id')||0);
     if(!id){$('#livePlayer').innerHTML='<div class="empty">No fixture selected.</div>';return}
@@ -665,15 +883,14 @@ function formatEventDate(value){
     $('#approveMatch')?.addEventListener('click',()=>transitionMatch('approve','Result approved and rankings updated'));
   }
   function printScoresheet(){
-    try{
-      if(window.NCSFApp && typeof window.NCSFApp.printPage==='function'){
-        window.NCSFApp.printPage();
-        return;
-      }
-      window.print();
-    }catch(err){
-      try{window.print()}catch(_ignored){toast('Printing is not available on this device.',true)}
-    }
+    const id=state.fixture?.fixture?.id;
+    if(!id){toast('No scoresheet selected.',true);return}
+    const a=document.createElement('a');
+    a.href='/api/fixtures/'+id+'/pdf';
+    a.download='';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   async function transitionMatch(action,message){
@@ -795,6 +1012,7 @@ function formatEventDate(value){
         <td>
           <a class="btn small secondary" href="/scoresheet?id=${f.id}">Open</a>
           ${f.stream_active&&f.stream_url?`<a class="btn small live-btn" href="/live?id=${f.id}"><span class="live-dot"></span>LIVE</a>`:''}
+          ${f.status!=='APPROVED'?`<a class="btn small" href="/broadcast?id=${f.id}">Broadcast</a>`:''}
           <button class="btn small fixture-edit" data-id="${f.id}">Edit</button>
           ${f.status==='POSTPONED'?`<button class="btn small fixture-restore" data-id="${f.id}">Restore</button>`:(!['APPROVED','FORFEIT'].includes(f.status)?`<button class="btn small fixture-postpone" data-id="${f.id}">Postpone</button>`:'')}
           ${['SCHEDULED','POSTPONED'].includes(f.status)?`<button class="btn small danger fixture-delete" data-id="${f.id}">Delete</button>`:''}
@@ -925,6 +1143,7 @@ async function loadAdminPosts(){
     if(PAGE==='teams-page')await initTeamsPage();
     if(PAGE==='players-page')await initPlayersPage();
     if(PAGE==='live-page')await initLivePage();
+    if(PAGE==='broadcast-page')await initBroadcastPage();
     if(PAGE==='news-page')await initNewsPage();
     if(PAGE==='rankings-page')await initRankingsPage();
     if(PAGE==='scoresheet')await initScoresheet();
