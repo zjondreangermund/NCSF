@@ -47,7 +47,7 @@
     const box=$('#userActions'); if(!box)return;
     if(!state.user){
       box.innerHTML='<button class="btn light" id="loginBtn">Admin Sign In</button>';
-      $('#loginBtn')?.addEventListener('click',openAuth);
+      $('#loginBtn')?.addEventListener('click',()=>{if($('#authModal'))openAuth();else location.href='/?login=1'});
       return;
     }
     let links='';
@@ -101,6 +101,7 @@
   }
   async function initHome(){
     bindAuth();
+    if(new URLSearchParams(location.search).get('login')==='1')openAuth();
     state.meta=await api('/api/public/meta');
     const select=$('#divisionSelect');
     select.innerHTML=options(state.meta.divisions,'id',d=>d.season_name+' — '+d.name,null,'Choose division');
@@ -296,6 +297,116 @@
     if(confirm)confirm.classList.toggle('hidden',!u||!(u.role==='NCSF_ADMIN'||side==='AWAY')||f.status!=='SUBMITTED');
     if(approve)approve.classList.toggle('hidden',!u||!['NCSF_ADMIN','CLUB_ADMIN'].includes(u.role)||f.status!=='CONFIRMED');
   }
+
+  async function loadPublicMetaIntoSelect(){
+    state.meta=await api('/api/public/meta');
+    const select=$('#publicDivision');
+    if(!select)return null;
+    select.innerHTML=options(state.meta.divisions,'id',d=>d.season_name+' — '+d.name,null,'Choose division');
+    if(state.meta.divisions[0])select.value=state.meta.divisions[0].id;
+    return select;
+  }
+
+  async function initFixturesPage(){
+    const select=await loadPublicMetaIntoSelect();
+    if(!select)return;
+    const load=async()=>{
+      const id=Number(select.value||0);
+      if(!id){$('#publicFixtures').innerHTML='<div class="empty">No division configured yet.</div>';return}
+      const status=$('#fixtureStatusFilter')?.value||'SCHEDULED,POSTPONED';
+      try{
+        const d=await api('/api/fixtures?divisionId='+id+'&status='+encodeURIComponent(status));
+        $('#publicFixtures').innerHTML=fixtureCards(d.fixtures,true);
+      }catch(err){toast(err.message,true)}
+    };
+    select.addEventListener('change',load);
+    $('#fixtureStatusFilter')?.addEventListener('change',load);
+    await load();
+  }
+
+  async function initResultsPage(){
+    const select=await loadPublicMetaIntoSelect();
+    if(!select)return;
+    const load=async()=>{
+      const id=Number(select.value||0);
+      if(!id){$('#publicResults').innerHTML='<div class="empty">No division configured yet.</div>';return}
+      try{
+        const d=await api('/api/fixtures?divisionId='+id+'&status=APPROVED');
+        $('#publicResults').innerHTML=fixtureCards(d.fixtures,true);
+      }catch(err){toast(err.message,true)}
+    };
+    select.addEventListener('change',load);
+    await load();
+  }
+
+  async function initTeamsPage(){
+    const select=await loadPublicMetaIntoSelect();
+    if(!select)return;
+    const load=async()=>{
+      const id=Number(select.value||0);
+      if(!id){$('#publicTeams').innerHTML='<div class="empty">No division configured yet.</div>';return}
+      try{
+        const d=await api('/api/public/teams?divisionId='+id);
+        $('#publicTeams').innerHTML=d.teams.length
+          ? '<div class="table-wrap"><table><thead><tr><th>Team</th><th>Club</th><th>Division</th><th>Players</th></tr></thead><tbody>'+d.teams.map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td>${esc(t.club_name)}</td><td>${esc(t.division_name||'—')}</td><td>${t.player_count}</td></tr>`).join('')+'</tbody></table></div>'
+          : '<div class="empty">No teams registered in this division.</div>';
+      }catch(err){toast(err.message,true)}
+    };
+    select.addEventListener('change',load);
+    await load();
+  }
+
+  async function initPlayersPage(){
+    const select=await loadPublicMetaIntoSelect();
+    if(!select)return;
+    let players=[];
+    const render=()=>{
+      const q=String($('#playerSearch')?.value||'').trim().toLowerCase();
+      const rows=!q?players:players.filter(p=>(p.first_name+' '+p.last_name+' '+(p.ncsf_number||'')+' '+p.club_name+' '+p.team_name).toLowerCase().includes(q));
+      $('#publicPlayers').innerHTML=rows.length
+        ? '<div class="table-wrap"><table><thead><tr><th>Player</th><th>NCSF #</th><th>Club</th><th>Team</th><th>Frames</th><th>Won</th><th>Win %</th></tr></thead><tbody>'+rows.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td>${esc(p.club_name)}</td><td>${esc(p.team_name)}</td><td>${p.frames_played}</td><td><strong>${p.frames_won}</strong></td><td>${p.win_percentage}%</td></tr>`).join('')+'</tbody></table></div>'
+        : '<div class="empty">No players found.</div>';
+    };
+    const load=async()=>{
+      const id=Number(select.value||0);
+      if(!id){players=[];render();return}
+      try{
+        players=(await api('/api/public/players?divisionId='+id)).players;
+        render();
+      }catch(err){toast(err.message,true)}
+    };
+    select.addEventListener('change',load);
+    $('#playerSearch')?.addEventListener('input',render);
+    await load();
+  }
+
+  async function initRankingsPage(){
+    const select=await loadPublicMetaIntoSelect();
+    if(!select)return;
+    const load=async()=>{
+      const id=Number(select.value||0);
+      if(!id){
+        $('#fullTeamRankings').innerHTML='<div class="empty">No division configured yet.</div>';
+        $('#fullPlayerRankings').innerHTML='<div class="empty">No division configured yet.</div>';
+        return;
+      }
+      try{
+        const [st,pr]=await Promise.all([
+          api('/api/divisions/'+id+'/standings'),
+          api('/api/divisions/'+id+'/individual-rankings')
+        ]);
+        $('#fullTeamRankings').innerHTML=st.standings.length
+          ? '<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>Frames Won</th><th>Lost</th><th>+/-</th></tr></thead><tbody>'+st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td></tr>`).join('')+'</tbody></table></div>'
+          : '<div class="empty">No approved results yet.</div>';
+        $('#fullPlayerRankings').innerHTML=pr.rankings.length
+          ? '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Frames</th><th>Won</th><th>Lost</th><th>Win %</th></tr></thead><tbody>'+pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong><br><small class="muted">${esc(r.ncsf_number||'—')}</small></td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${r.win_percentage}%</td></tr>`).join('')+'</tbody></table></div>'
+          : '<div class="empty">No approved player results yet.</div>';
+      }catch(err){toast(err.message,true)}
+    };
+    select.addEventListener('change',load);
+    await load();
+  }
+
   async function initScoresheet(){
     const id=Number(new URLSearchParams(location.search).get('id'));
     if(!id){$('#scoreSheetRoot').innerHTML='<div class="empty">No fixture selected.</div>';return}
@@ -504,6 +615,11 @@
   await loadUser();
   try{
     if(PAGE==='home')await initHome();
+    if(PAGE==='fixtures-page')await initFixturesPage();
+    if(PAGE==='results-page')await initResultsPage();
+    if(PAGE==='teams-page')await initTeamsPage();
+    if(PAGE==='players-page')await initPlayersPage();
+    if(PAGE==='rankings-page')await initRankingsPage();
     if(PAGE==='scoresheet')await initScoresheet();
     if(PAGE==='team')await initTeam();
     if(PAGE==='club-admin')await initClubAdmin();
