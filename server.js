@@ -1512,7 +1512,7 @@ app.get("/api/fixtures", async (req, res) => {
   const args = [];
   const where = [];
   if (!req.session.userId) {
-    where.push("(f.status IN ('SCHEDULED','POSTPONED','APPROVED') OR (f.stream_active=TRUE AND f.stream_url IS NOT NULL))");
+    where.push("(f.status IN ('SCHEDULED','IN_PROGRESS','POSTPONED','APPROVED') OR (f.stream_active=TRUE AND f.stream_url IS NOT NULL))");
   }
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
