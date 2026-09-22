@@ -56,17 +56,33 @@ jobs:
           print(f"Wrote {target}")
           PY
 
+      - name: Restore stable Android signing key
+        run: |
+          base64 -d android/ncsf-dev.keystore.b64 > android/ncsf-dev.keystore
+
       - name: Build installable APK
         run: gradle -p android assembleDebug --no-daemon
 
+      - name: Verify APK permissions
+        run: |
+          unzip -p android/app/build/outputs/apk/debug/app-debug.apk AndroidManifest.xml > /tmp/AndroidManifest.bin
+          strings -el /tmp/AndroidManifest.bin | grep -F "android.permission.CAMERA"
+          strings -el /tmp/AndroidManifest.bin | grep -F "android.permission.RECORD_AUDIO"
+
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk NCSF.apk
+        run: |
+          VERSION=$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' android/app/build.gradle | head -1)
+          cp android/app/build/outputs/apk/debug/app-debug.apk NCSF.apk
+          cp NCSF.apk "NCSF-v${VERSION}.apk"
+          echo "APK_VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: NCSF-Android
-          path: NCSF.apk
+          path: |
+            NCSF.apk
+            NCSF-v${{ env.APK_VERSION }}.apk
           retention-days: 30
 
       - name: Publish stable APK download
@@ -74,7 +90,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view android-latest >/dev/null 2>&1; then
-            gh release upload android-latest NCSF.apk --clobber
+            gh release upload android-latest NCSF.apk "NCSF-v${APK_VERSION}.apk" --clobber
           else
-            gh release create android-latest NCSF.apk --target main --title "NCSF Android App" --notes "Installable NCSF Blackball League Android app. This build uses the official NCSF logo and connects to the live league platform."
+            gh release create android-latest NCSF.apk "NCSF-v${APK_VERSION}.apk" --target main --title "NCSF Android App" --notes "Installable NCSF Blackball League Android app. This build uses the official NCSF logo and connects to the live league platform."
           fi
