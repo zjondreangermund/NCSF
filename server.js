@@ -2341,10 +2341,7 @@ function liveStateFor(fixtureId) {
     state = {
       fixtureId: id,
       publisher: null,
-      viewers: new Set(),
-      mimeType: null,
-      initChunk: null,
-      chunks: [],
+      viewers: new Map(),
       startedAt: null
     };
     liveStreams.set(id, state);
@@ -2362,6 +2359,11 @@ function updatePublisherViewerCount(state) {
   sendLiveControl(state.publisher, { type: "viewerCount", count: state.viewers.size });
 }
 
+function relayToViewer(state, viewerId, payload) {
+  const viewer = state.viewers.get(String(viewerId || ""));
+  if (viewer) sendLiveControl(viewer, payload);
+}
+
 liveWss.on("connection", async (ws, req) => {
   try {
     const u = new URL(req.url, "http://localhost");
@@ -2371,6 +2373,9 @@ liveWss.on("connection", async (ws, req) => {
       ws.close(4400, "Fixture required");
       return;
     }
+
+    ws.isAlive = true;
+    ws.on("pong", () => { ws.isAlive = true; });
 
     const state = liveStateFor(fixtureId);
 
@@ -2393,53 +2398,38 @@ liveWss.on("connection", async (ws, req) => {
       }
 
       state.publisher = ws;
-      state.mimeType = null;
-      state.initChunk = null;
-      state.chunks = [];
       state.startedAt = Date.now();
 
       await pool.query(
         "UPDATE fixtures SET stream_url=$2,stream_title=$3,stream_active=TRUE WHERE id=$1",
         [fixtureId, "internal://fixture/" + fixtureId, fixture.home_team_name + " vs " + fixture.away_team_name]
       );
+
       sendLiveControl(ws, { type: "ready", fixtureId, viewerCount: state.viewers.size });
-      for (const viewer of state.viewers) sendLiveControl(viewer, { type: "waiting" });
+      for (const [viewerId, viewer] of state.viewers) {
+        sendLiveControl(viewer, { type: "waiting" });
+        sendLiveControl(ws, { type: "viewer-joined", viewerId });
+      }
       updatePublisherViewerCount(state);
 
       ws.on("message", (data, isBinary) => {
-        if (!isBinary) {
-          let msg;
-          try { msg = JSON.parse(data.toString()); } catch { return; }
-          if (msg.type === "meta" && typeof msg.mimeType === "string") {
-            state.mimeType = msg.mimeType;
-            state.initChunk = null;
-            state.chunks = [];
-            for (const viewer of state.viewers) {
-              sendLiveControl(viewer, { type: "meta", mimeType: state.mimeType, startedAt: state.startedAt });
-            }
-          }
-          return;
-        }
+        if (isBinary) return;
+        let msg;
+        try { msg = JSON.parse(data.toString()); } catch { return; }
 
-        const chunk = Buffer.from(data);
-        if (!state.initChunk) {
-          state.initChunk = chunk;
-        } else {
-          state.chunks.push(chunk);
-          if (state.chunks.length > 25) state.chunks.shift();
-        }
-
-        for (const viewer of state.viewers) {
-          if (viewer.readyState === WebSocket.OPEN && viewer.bufferedAmount < 6 * 1024 * 1024) {
-            viewer.send(chunk, { binary: true });
-          }
+        if (msg.type === "webrtc-offer" && msg.viewerId && msg.sdp) {
+          relayToViewer(state, msg.viewerId, { type: "webrtc-offer", sdp: msg.sdp });
+        } else if (msg.type === "webrtc-ice" && msg.viewerId && msg.candidate) {
+          relayToViewer(state, msg.viewerId, { type: "webrtc-ice", candidate: msg.candidate });
         }
       });
 
       ws.on("close", async () => {
         if (state.publisher !== ws) return;
         state.publisher = null;
-        for (const viewer of state.viewers) sendLiveControl(viewer, { type: "ended" });
+        for (const viewer of state.viewers.values()) {
+          sendLiveControl(viewer, { type: "ended" });
+        }
         try {
           await pool.query(
             "UPDATE fixtures SET stream_active=FALSE,stream_url=NULL WHERE id=$1 AND stream_url=$2",
@@ -2460,17 +2450,28 @@ liveWss.on("connection", async (ws, req) => {
       return;
     }
 
-    state.viewers.add(ws);
-    if (state.mimeType) sendLiveControl(ws, { type: "meta", mimeType: state.mimeType, startedAt: state.startedAt });
-    if (state.initChunk && ws.readyState === WebSocket.OPEN) ws.send(state.initChunk, { binary: true });
-    for (const chunk of state.chunks) {
-      if (ws.readyState !== WebSocket.OPEN) break;
-      ws.send(chunk, { binary: true });
-    }
+    const viewerId = crypto.randomBytes(10).toString("hex");
+    ws.viewerId = viewerId;
+    state.viewers.set(viewerId, ws);
+    sendLiveControl(ws, { type: "viewer-ready", viewerId, startedAt: state.startedAt });
+    sendLiveControl(state.publisher, { type: "viewer-joined", viewerId });
     updatePublisherViewerCount(state);
 
+    ws.on("message", (data, isBinary) => {
+      if (isBinary) return;
+      let msg;
+      try { msg = JSON.parse(data.toString()); } catch { return; }
+
+      if (msg.type === "webrtc-answer" && msg.sdp) {
+        sendLiveControl(state.publisher, { type: "webrtc-answer", viewerId, sdp: msg.sdp });
+      } else if (msg.type === "webrtc-ice" && msg.candidate) {
+        sendLiveControl(state.publisher, { type: "webrtc-ice", viewerId, candidate: msg.candidate });
+      }
+    });
+
     ws.on("close", () => {
-      state.viewers.delete(ws);
+      state.viewers.delete(viewerId);
+      sendLiveControl(state.publisher, { type: "viewer-left", viewerId });
       updatePublisherViewerCount(state);
     });
   } catch (error) {
@@ -2478,6 +2479,18 @@ liveWss.on("connection", async (ws, req) => {
     try { ws.close(1011, "Live stream error"); } catch {}
   }
 });
+
+const liveHeartbeat = setInterval(() => {
+  for (const ws of liveWss.clients) {
+    if (ws.isAlive === false) {
+      try { ws.terminate(); } catch {}
+      continue;
+    }
+    ws.isAlive = false;
+    try { ws.ping(); } catch {}
+  }
+}, 25000);
+liveHeartbeat.unref();
 
 app.use((err, _req, res, _next) => {
   console.error(err);
