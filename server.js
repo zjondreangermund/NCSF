@@ -2,6 +2,7 @@ require("dotenv").config();
 require("express-async-errors");
 
 const path = require("path");
+const fs = require("fs");
 const express = require("express");
 const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
@@ -1632,6 +1633,21 @@ const pageRoutes = {
 for (const [route, file] of Object.entries(pageRoutes)) {
   app.get(route, (_req, res) => res.sendFile(path.join(__dirname, "public", file)));
 }
+
+let cachedNcsfLogoJpeg = null;
+function getNcsfLogoJpeg() {
+  if (cachedNcsfLogoJpeg) return cachedNcsfLogoJpeg;
+  const svg = fs.readFileSync(path.join(__dirname, "public", "ncsf-logo.svg"), "utf8");
+  const match = svg.match(/data:image\/jpeg;base64,([^"']+)/i);
+  if (!match) throw new Error("Embedded NCSF logo image is missing.");
+  cachedNcsfLogoJpeg = Buffer.from(match[1], "base64");
+  return cachedNcsfLogoJpeg;
+}
+
+app.get(["/ncsf-logo.jpg", "/favicon.ico"], (_req, res) => {
+  res.set("Cache-Control", "public, max-age=86400");
+  res.type("jpg").send(getNcsfLogoJpeg());
+});
 
 app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
 
