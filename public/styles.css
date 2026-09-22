@@ -2690,3 +2690,156 @@ body.ncsf-live-fullscreen-active{
   transform:none!important;
 }
 
+
+
+/* Landscape live polish: edge-to-edge video with compact professional stats */
+@media(orientation:landscape){
+  .ncsf-live-fullscreen,
+  .ncsf-live-fullscreen .internal-live,
+  .ncsf-live-fullscreen .video-frame{
+    width:100vw!important;
+    height:100vh!important;
+    max-width:none!important;
+    max-height:none!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:hidden!important;
+    background:#000!important;
+  }
+
+  .ncsf-live-fullscreen video{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+    object-position:center center!important;
+    transform:none!important;
+  }
+
+  .ncsf-live-fullscreen .live-match-overlay{
+    left:50%!important;
+    right:auto!important;
+    bottom:46px!important;
+    width:min(72vw,820px)!important;
+    max-width:calc(100vw - 120px)!important;
+    transform:translateX(-50%)!important;
+    gap:4px!important;
+  }
+
+  .ncsf-live-fullscreen .live-scorebar{
+    grid-template-columns:118px minmax(0,1fr) 118px!important;
+    min-height:44px!important;
+    border-top:1px solid rgba(255,255,255,.82)!important;
+    border-bottom:1px solid rgba(255,255,255,.82)!important;
+  }
+
+  .ncsf-live-fullscreen .live-score-team{
+    gap:6px!important;
+    padding:5px 8px!important;
+  }
+
+  .ncsf-live-fullscreen .live-score-team .team-name{
+    font-size:9px!important;
+    font-weight:800!important;
+    letter-spacing:.01em!important;
+  }
+
+  .ncsf-live-fullscreen .live-score-team .team-score{
+    font-size:19px!important;
+    font-weight:900!important;
+  }
+
+  .ncsf-live-fullscreen .live-score-frame{
+    gap:1px!important;
+    padding:5px 10px!important;
+    border-left:1px solid rgba(255,255,255,.58)!important;
+    border-right:1px solid rgba(255,255,255,.58)!important;
+  }
+
+  .ncsf-live-fullscreen .live-score-frame small{
+    font-size:7px!important;
+    letter-spacing:.08em!important;
+    opacity:.88!important;
+  }
+
+  .ncsf-live-fullscreen .live-score-frame strong{
+    font-size:13px!important;
+    line-height:1.15!important;
+    font-weight:800!important;
+  }
+
+  .ncsf-live-fullscreen .live-score-frame strong b{
+    font-size:7px!important;
+    opacity:.82!important;
+  }
+
+  .ncsf-live-fullscreen .live-score-frame span{
+    font-size:8px!important;
+    opacity:.82!important;
+  }
+
+  .ncsf-live-fullscreen .live-next-frame{
+    max-width:72%!important;
+    gap:6px!important;
+    padding-top:4px!important;
+    border-top:1px solid rgba(255,255,255,.58)!important;
+  }
+
+  .ncsf-live-fullscreen .live-next-frame span{
+    font-size:7px!important;
+    letter-spacing:.08em!important;
+    opacity:.88!important;
+  }
+
+  .ncsf-live-fullscreen .live-next-frame strong{
+    font-size:10px!important;
+    font-weight:700!important;
+  }
+
+  .ncsf-live-fullscreen .live-round-summary{
+    bottom:0!important;
+    gap:4px!important;
+  }
+
+  .ncsf-live-fullscreen .live-round-summary small{
+    font-size:8px!important;
+  }
+
+  .ncsf-live-fullscreen .live-round-summary .round-result{
+    font-size:17px!important;
+  }
+
+  .ncsf-live-fullscreen .live-round-summary .round-progressive{
+    font-size:10px!important;
+  }
+
+  .ncsf-live-fullscreen .ncsf-live-controls{
+    height:42px!important;
+    padding:5px 9px!important;
+  }
+
+  .ncsf-live-fullscreen .ncsf-video-control{
+    width:34px!important;
+    height:34px!important;
+  }
+
+  .ncsf-live-fullscreen .ncsf-sound-hint{
+    font-size:9px!important;
+  }
+
+  .ncsf-live-fullscreen .fullscreen-chat:not(.open){
+    top:10px!important;
+    right:10px!important;
+    width:108px!important;
+    height:34px!important;
+    min-height:34px!important;
+  }
+
+  .ncsf-live-fullscreen .fullscreen-chat:not(.open) .live-chat-handle{
+    width:108px!important;
+    height:34px!important;
+    min-height:34px!important;
+    font-size:10px!important;
+  }
+}
