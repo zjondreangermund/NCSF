@@ -390,11 +390,11 @@ async function getIndividualRankings(divisionId) {
            p.ncsf_number,
            t.name team_name,
            c.name club_name,
-           COUNT(fr.id)::int frames_played,
-           COUNT(fr.id) FILTER (WHERE fr.winner_player_id=p.id)::int frames_won,
-           COUNT(fr.id) FILTER (WHERE fr.winner_player_id IS NOT NULL AND fr.winner_player_id<>p.id)::int frames_lost,
-           CASE WHEN COUNT(fr.id)=0 THEN 0
-                ELSE ROUND((COUNT(fr.id) FILTER (WHERE fr.winner_player_id=p.id)::numeric / COUNT(fr.id)::numeric) * 100, 1)
+           COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL)::int frames_played,
+           COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL AND fr.winner_player_id=p.id)::int frames_won,
+           COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL AND fr.winner_player_id IS NOT NULL AND fr.winner_player_id<>p.id)::int frames_lost,
+           CASE WHEN COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL)=0 THEN 0
+                ELSE ROUND((COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL AND fr.winner_player_id=p.id)::numeric / NULLIF(COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL),0)::numeric) * 100, 1)
            END win_percentage
     FROM players p
     JOIN teams t ON t.id=p.team_id
@@ -464,6 +464,8 @@ async function fixturePayload(fixture) {
       awayTeamName: fixture.away_team_name,
       homeClubName: fixture.home_club_name,
       awayClubName: fixture.away_club_name,
+      homeClubId: fixture.home_club_id,
+      awayClubId: fixture.away_club_id,
       status: fixture.status,
       notes: fixture.notes,
       homeConfirmed: Boolean(fixture.home_confirmed_by),
