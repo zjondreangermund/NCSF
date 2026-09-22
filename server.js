@@ -1230,7 +1230,7 @@ function streamOnePageScoresheetPdf(res, payload) {
     const col = (round - 1) % 2;
     const isLastSingle = round === 5;
     const x = isLastSingle
-      ? left + (usable - colW) / 2
+      ? left
       : left + col * (colW + horizontalGap);
     const yRound = roundsY + row * (roundBlockH + verticalGap);
     const frames = payload.frames.filter(fr => Number(fr.round_no) === round);
