@@ -696,6 +696,47 @@ app.get("/api/my/fixtures", requireAuth, async (req, res) => {
   res.json({ fixtures: rows });
 });
 
+app.get("/api/admin/dashboard", requireRoles(ROLE.NCSF), async (_req, res) => {
+  const [counts, statusRows, pending, missingAccess] = await Promise.all([
+    pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM clubs WHERE active=TRUE) clubs,
+        (SELECT COUNT(*)::int FROM teams WHERE active=TRUE) teams,
+        (SELECT COUNT(*)::int FROM players WHERE active=TRUE) players,
+        (SELECT COUNT(*)::int FROM divisions WHERE active=TRUE) divisions,
+        (SELECT COUNT(*)::int FROM fixtures) fixtures
+    `),
+    pool.query("SELECT status, COUNT(*)::int count FROM fixtures GROUP BY status ORDER BY status"),
+    pool.query(`
+      SELECT f.id,f.round_no,f.fixture_date,f.status,d.name division_name,
+             ht.name home_team_name,at.name away_team_name,
+             COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
+             COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+      FROM fixtures f
+      JOIN divisions d ON d.id=f.division_id
+      JOIN teams ht ON ht.id=f.home_team_id
+      JOIN teams at ON at.id=f.away_team_id
+      LEFT JOIN frames fr ON fr.fixture_id=f.id
+      WHERE f.status IN ('SUBMITTED','CONFIRMED')
+      GROUP BY f.id,d.name,ht.name,at.name
+      ORDER BY f.fixture_date NULLS LAST,f.id
+      LIMIT 20
+    `),
+    pool.query(`
+      SELECT t.id,t.name team_name,c.name club_name
+      FROM teams t
+      JOIN clubs c ON c.id=t.club_id
+      LEFT JOIN users u ON u.team_id=t.id AND u.role='TEAM_ADMIN' AND u.active=TRUE
+      WHERE t.active=TRUE
+      GROUP BY t.id,c.name
+      HAVING COUNT(u.id)=0
+      ORDER BY c.name,t.name
+    `)
+  ]);
+  const byStatus = Object.fromEntries(statusRows.rows.map(r => [r.status, r.count]));
+  res.json({ counts: counts.rows[0], byStatus, pending: pending.rows, missingAccess: missingAccess.rows });
+});
+
 app.get("/api/admin/meta", requireRoles(ROLE.NCSF, ROLE.CLUB, ROLE.TEAM), async (req, res) => {
   const user = req.user;
   if (user.role === ROLE.NCSF) {
@@ -858,6 +899,86 @@ app.post("/api/admin/fixtures", requireRoles(ROLE.NCSF), async (req, res) => {
     awayTeamId
   ]);
   res.status(201).json({ fixture: rows[0] });
+});
+
+app.patch("/api/admin/fixtures/:id", requireRoles(ROLE.NCSF), async (req, res) => {
+  const fixtureId = Number(req.params.id);
+  const fixture = await fixtureById(fixtureId);
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+
+  const roundNo = req.body.roundNo === undefined ? fixture.round_no : Number(req.body.roundNo);
+  const fixtureDate = req.body.fixtureDate === undefined ? fixture.fixture_date : (req.body.fixtureDate || null);
+  const venue = req.body.venue === undefined ? fixture.venue : (String(req.body.venue || "").trim() || null);
+  if (!Number.isInteger(roundNo) || roundNo < 1) return res.status(400).json({ error: "Round number must be 1 or higher." });
+
+  const { rows } = await pool.query(`
+    UPDATE fixtures
+    SET round_no=$2, fixture_date=$3, venue=$4
+    WHERE id=$1
+    RETURNING *
+  `, [fixtureId, roundNo, fixtureDate, venue]);
+  await audit(req.user.id, fixtureId, "FIXTURE_UPDATED", { roundNo, fixtureDate, venue });
+  res.json({ fixture: rows[0] });
+});
+
+app.post("/api/admin/fixtures/:id/postpone", requireRoles(ROLE.NCSF), async (req, res) => {
+  const fixtureId = Number(req.params.id);
+  const fixture = await fixtureById(fixtureId);
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if (fixture.status === "APPROVED") return res.status(409).json({ error: "Approved fixtures cannot be postponed." });
+  await pool.query("UPDATE fixtures SET status='POSTPONED' WHERE id=$1", [fixtureId]);
+  await audit(req.user.id, fixtureId, "FIXTURE_POSTPONED", {});
+  res.json(await fixturePayload(await fixtureById(fixtureId)));
+});
+
+app.post("/api/admin/fixtures/:id/restore", requireRoles(ROLE.NCSF), async (req, res) => {
+  const fixtureId = Number(req.params.id);
+  const fixture = await fixtureById(fixtureId);
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if (fixture.status !== "POSTPONED") return res.status(409).json({ error: "Only postponed fixtures can be restored." });
+  const { rows } = await pool.query("SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND winner_side IS NOT NULL", [fixtureId]);
+  const status = rows[0].count > 0 ? "IN_PROGRESS" : "SCHEDULED";
+  await pool.query("UPDATE fixtures SET status=$2 WHERE id=$1", [fixtureId, status]);
+  await audit(req.user.id, fixtureId, "FIXTURE_RESTORED", { status });
+  res.json(await fixturePayload(await fixtureById(fixtureId)));
+});
+
+app.delete("/api/admin/fixtures/:id", requireRoles(ROLE.NCSF), async (req, res) => {
+  const fixtureId = Number(req.params.id);
+  const fixture = await fixtureById(fixtureId);
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if (!["SCHEDULED","POSTPONED"].includes(fixture.status)) return res.status(409).json({ error: "Only unplayed scheduled or postponed fixtures can be deleted." });
+  const { rows } = await pool.query("SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND winner_side IS NOT NULL", [fixtureId]);
+  if (rows[0].count > 0) return res.status(409).json({ error: "A fixture with scored frames cannot be deleted." });
+  await pool.query("DELETE FROM fixtures WHERE id=$1", [fixtureId]);
+  res.json({ ok: true });
+});
+
+app.patch("/api/admin/users/:id", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
+  const userId = Number(req.params.id);
+  const { rows } = await pool.query("SELECT * FROM users WHERE id=$1", [userId]);
+  const target = rows[0];
+  if (!target) return res.status(404).json({ error: "User not found." });
+
+  if (req.user.role === ROLE.CLUB) {
+    if (target.role !== ROLE.TEAM || target.club_id !== req.user.club_id) {
+      return res.status(403).json({ error: "Club admins can only manage team logins for their own club." });
+    }
+  }
+
+  const active = req.body.active === undefined ? target.active : Boolean(req.body.active);
+  let passwordHash = target.password_hash;
+  if (req.body.password !== undefined) {
+    const password = String(req.body.password || "");
+    if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+    passwordHash = await bcrypt.hash(password, 12);
+  }
+
+  const updated = await pool.query(`
+    UPDATE users SET active=$2,password_hash=$3 WHERE id=$1
+    RETURNING id,email,display_name,role,club_id,team_id,active
+  `, [userId, active, passwordHash]);
+  res.json({ user: safeUser(updated.rows[0]) });
 });
 
 app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF), async (req, res) => {
