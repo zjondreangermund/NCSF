@@ -28,8 +28,12 @@
 </header>
 <main class="page">
   <div class="section-title"><div><div class="kicker">Competition schedule</div><h1>Fixtures</h1></div></div>
+  <section class="panel live-fixtures-panel">
+    <div class="section-head"><div><span class="eyebrow">MATCH CENTRE</span><h3>Live & In Progress</h3></div><small>Current matches across all divisions</small></div>
+    <div id="activeFixtures" class="empty">Checking current matches…</div>
+  </section>
   <section class="panel">
-    <div class="filters"><select id="publicDivision"></select><select id="fixtureStatusFilter"><option value="SCHEDULED,POSTPONED">Upcoming</option><option value="SCHEDULED">Scheduled</option><option value="POSTPONED">Postponed</option><option value="APPROVED">Completed</option></select></div>
+    <div class="filters"><select id="publicDivision"></select><select id="fixtureStatusFilter"><option value="IN_PROGRESS,SCHEDULED,POSTPONED">Active / Upcoming</option><option value="IN_PROGRESS">In Progress</option><option value="SCHEDULED">Scheduled</option><option value="POSTPONED">Postponed</option><option value="APPROVED">Completed</option></select></div>
     <div id="publicFixtures" class="empty" style="margin-top:16px">Loading fixtures…</div>
   </section>
 </main><div class="footer">Namibia Cue Sports Federation • Digital League Manager</div>
