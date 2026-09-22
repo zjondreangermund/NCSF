@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b223f">
+  <title>NCSF Team Match Centre</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-page="team">
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <img class="js-logo" alt="NCSF logo">
+      <span><strong>Namibia Cue Sports Federation</strong><small>League Manager</small></span>
+    </a>
+    <nav class="nav">
+      <a href="/#home">Home</a>
+      <a href="/#fixtures">Fixtures</a>
+      <a href="/#standings">Team Rankings</a>
+      <a href="/#players">Individual Rankings</a>
+    </nav>
+    <div class="user-actions" id="userActions"></div>
+  </div>
+</header>
+<main class="page">
+  <div class="section-title"><div><div class="kicker">Team access</div><h1>Match Centre</h1></div></div>
+  <div id="teamIdentity" class="notice">Loading team access…</div>
+  <section class="panel" style="margin-top:18px">
+    <div class="panel-head"><div><div class="kicker">Open the match to enter lineups and results</div><h2>My Fixtures</h2></div></div>
+    <div id="myFixtures" class="empty">No fixtures.</div>
+  </section>
+  <section class="panel" style="margin-top:18px">
+    <h2>Squad</h2>
+    <div id="mySquad" class="empty">No players assigned.</div>
+  </section>
+</main>
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+</body></html>
