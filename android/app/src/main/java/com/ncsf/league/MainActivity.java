@@ -11,6 +11,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.Settings;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
 import android.view.View;
@@ -65,7 +66,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.9");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.10");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -212,7 +213,7 @@ public class MainActivity extends Activity {
         public void enterLiveFullscreen() {
             runOnUiThread(() -> {
                 liveFullscreen = true;
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
                 getWindow().getDecorView().setSystemUiVisibility(
                         View.SYSTEM_UI_FLAG_FULLSCREEN |
                         View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
@@ -235,6 +236,61 @@ public class MainActivity extends Activity {
                 }
             });
         }
+
+        @JavascriptInterface
+        public boolean hasCameraPermission() {
+            return checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        }
+
+        @JavascriptInterface
+        public boolean hasMicrophonePermission() {
+            return checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        }
+
+        @JavascriptInterface
+        public void requestBroadcastPermissions() {
+            runOnUiThread(() -> {
+                java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
+                if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    permissions.add(Manifest.permission.CAMERA);
+                }
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    permissions.add(Manifest.permission.RECORD_AUDIO);
+                }
+
+                if (permissions.isEmpty()) {
+                    notifyWebMediaPermissionResult();
+                } else {
+                    requestPermissions(permissions.toArray(new String[0]), MEDIA_PERMISSION_REQUEST);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void openAppPermissionSettings() {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    intent.setData(Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                } catch (Exception ex) {
+                    Toast.makeText(MainActivity.this, "Open Settings and allow Camera and Microphone for NCSF.", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+    }
+
+    private void notifyWebMediaPermissionResult() {
+        final boolean cameraGranted =
+                checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        final boolean audioGranted =
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        if (webView != null) {
+            webView.evaluateJavascript(
+                    "window.onNcsfMediaPermissionResult&&window.onNcsfMediaPermissionResult(" +
+                            cameraGranted + "," + audioGranted + ");",
+                    null);
+        }
     }
 
     private void exitLiveFullscreenNative() {
@@ -252,24 +308,27 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == MEDIA_PERMISSION_REQUEST && pendingMediaPermission != null) {
-            java.util.ArrayList<String> grantedResources = new java.util.ArrayList<>();
-            for (String resource : pendingMediaPermission.getResources()) {
-                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)
-                        && checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                    grantedResources.add(resource);
+        if (requestCode == MEDIA_PERMISSION_REQUEST) {
+            if (pendingMediaPermission != null) {
+                java.util.ArrayList<String> grantedResources = new java.util.ArrayList<>();
+                for (String resource : pendingMediaPermission.getResources()) {
+                    if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)
+                            && checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        grantedResources.add(resource);
+                    }
+                    if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)
+                            && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        grantedResources.add(resource);
+                    }
                 }
-                if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)
-                        && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    grantedResources.add(resource);
+                if (!grantedResources.isEmpty()) {
+                    pendingMediaPermission.grant(grantedResources.toArray(new String[0]));
+                } else {
+                    pendingMediaPermission.deny();
                 }
+                pendingMediaPermission = null;
             }
-            if (!grantedResources.isEmpty()) {
-                pendingMediaPermission.grant(grantedResources.toArray(new String[0]));
-            } else {
-                pendingMediaPermission.deny();
-            }
-            pendingMediaPermission = null;
+            notifyWebMediaPermissionResult();
         }
     }
 
