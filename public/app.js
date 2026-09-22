@@ -475,8 +475,18 @@
     }));
     $('#clubTeams').innerHTML=teams.length?'<div class="card-list">'+teams.map(t=>{
       const access=state.meta.users.filter(u=>u.team_id===t.id&&u.role==='TEAM_ADMIN');
-      return `<div class="card-row"><span><strong>${esc(t.name)}</strong><small>${esc(t.division_name||'No division')} • ${state.meta.players.filter(p=>p.team_id===t.id).length} players</small></span><span>${access.length?access.map(u=>'<span class="pill">'+esc(u.display_name)+'</span>').join(' '):'<span class="muted">No team login</span>'}</span></div>`;
+      return `<div class="card-row"><span><strong>${esc(t.name)}</strong><small>${esc(t.division_name||'No division')} • ${state.meta.players.filter(p=>p.team_id===t.id).length} players</small></span><span>${access.length?access.map(u=>`<span class="pill ${u.active?'APPROVED':'FORFEIT'}">${esc(u.display_name)}${u.active?'':' (Disabled)'}</span> <button class="btn small club-user-password" data-id="${u.id}">Reset</button> <button class="btn small ${u.active?'danger':''} club-user-active" data-id="${u.id}" data-active="${u.active}">${u.active?'Disable':'Enable'}</button>`).join('<br>'):'<span class="muted">No team login</span>'}</span></div>`;
     }).join('')+'</div>':'<div class="empty">No teams assigned to this club.</div>';
+    $$('.club-user-password').forEach(btn=>btn.addEventListener('click',async()=>{
+      const password=prompt('Enter a new temporary password (minimum 8 characters):');
+      if(password===null)return;
+      try{await api('/api/admin/users/'+btn.dataset.id,{method:'PATCH',body:{password}});toast('Team login password reset')}catch(err){toast(err.message,true)}
+    }));
+    $$('.club-user-active').forEach(btn=>btn.addEventListener('click',async()=>{
+      const active=btn.dataset.active!=='true';
+      if(!confirm((active?'Enable':'Disable')+' this team login?'))return;
+      try{await api('/api/admin/users/'+btn.dataset.id,{method:'PATCH',body:{active}});await reloadClub();toast('Team login updated')}catch(err){toast(err.message,true)}
+    }));
   }
   async function initAdmin(){
     if(!requireUser(['NCSF_ADMIN']))return;
