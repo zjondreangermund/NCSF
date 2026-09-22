@@ -322,7 +322,7 @@
       </section>
       <div class="score-progress"><span style="width:${progress}%"></span></div>
       <div class="match-rosters">${lineupEditor('HOME')}${lineupEditor('AWAY')}</div>
-      ${data.frames.length===25?[1,2,3,4,5].map(roundHtml).join(''):'<div class="notice warn">Save both starting fives to generate the official 25-frame rotation.</div>'}
+      ${data.frames.length===25?'<div class="score-rounds-grid">'+[1,2,3,4,5].map(roundHtml).join('')+'</div>':'<div class="notice warn">Save both starting fives to generate the official 25-frame rotation.</div>'}
       <section class="final-score-card">
         <div><span>FINAL TOTAL</span><strong>${t.home}</strong></div>
         <div class="match-result"><span>MATCH RESULT</span><strong>${esc(matchResult)}</strong></div>
