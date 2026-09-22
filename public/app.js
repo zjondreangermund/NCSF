@@ -613,6 +613,7 @@ function formatEventDate(value){
     renderAdminLists();
     syncFixtureTeams();
     loadAdminDashboard();
+    loadAdminPosts();
   }
   async function loadAdminDashboard(){
     try{
