@@ -504,6 +504,131 @@ async function assignOfficialNcsfNumbers() {
   }
 }
 
+
+async function setupCentralDivisionAndSchedule() {
+  const migrationKey = "central-division-fixtures-events-2026-09-22-v1";
+  const already = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [migrationKey]);
+  if (already.rowCount) return;
+
+  const centralTeams = ["RPC","Pocket Kings NA","Precision 7","007 - Central","Ofifiya PC","Queen Cues","Namshooters","Tura Boys","Cue Crew","Cattle Country","Joga Bonita","YOPC 2","Rack Royalty","Blackball Bandits","YOPC 1","Pool Pirates"];
+  const coastalTeams = ["007-Coastal","Coastal Warriors","Coastal Suns","Coastal Waves","Celtic","West Coast","Sparta"];
+  const fixtures = [
+    ["2026-09-26T10:30:00+02:00","Cattle Country","YOPC 1",1],
+    ["2026-09-26T10:30:00+02:00","Namshooters","Blackball Bandits",1],
+    ["2026-09-26T10:30:00+02:00","Pocket Kings NA","Pool Pirates",1],
+    ["2026-09-26T10:30:00+02:00","Tura Boys","Queen Cues",1],
+    ["2026-09-26T10:30:00+02:00","RPC","Rack Royalty",1],
+    ["2026-09-26T10:30:00+02:00","Cue Crew","007 - Central",1],
+    ["2026-09-26T10:30:00+02:00","Ofifiya PC","Joga Bonita",1],
+    ["2026-09-26T15:00:00+02:00","Cattle Country","YOPC 2",1],
+    ["2026-09-26T15:00:00+02:00","Namshooters","Pool Pirates",1],
+    ["2026-09-26T15:00:00+02:00","Pocket Kings NA","Blackball Bandits",1],
+    ["2026-09-26T15:00:00+02:00","Tura Boys","Joga Bonita",1],
+    ["2026-09-26T15:00:00+02:00","Precision 7","Rack Royalty",1],
+    ["2026-09-26T15:00:00+02:00","Queen Cues","007 - Central",1],
+    ["2026-10-03T10:30:00+02:00","RPC","Pocket Kings NA",2],
+    ["2026-10-03T10:30:00+02:00","Precision 7","007 - Central",2],
+    ["2026-10-03T10:30:00+02:00","Ofifiya PC","Queen Cues",2],
+    ["2026-10-03T10:30:00+02:00","Cue Crew","Cattle Country",2],
+    ["2026-10-03T10:30:00+02:00","Joga Bonita","YOPC 2",2],
+    ["2026-10-03T10:30:00+02:00","Tura Boys","Rack Royalty",2],
+    ["2026-10-03T15:00:00+02:00","Precision 7","Pocket Kings NA",2],
+    ["2026-10-03T15:00:00+02:00","RPC","007 - Central",2],
+    ["2026-10-03T15:00:00+02:00","Namshooters","Tura Boys",2],
+    ["2026-10-03T15:00:00+02:00","Ofifiya PC","Cattle Country",2],
+    ["2026-10-03T15:00:00+02:00","Rack Royalty","Blackball Bandits",2],
+    ["2026-10-03T15:00:00+02:00","YOPC 2","Cue Crew",2]
+  ];
+  const events = [
+    ["Top 8 Play-offs — Central Zone","Top 8 play-offs for the Central Zone.","2026-10-17T11:00:00+02:00",true],
+    ["NBBL League Quarter Finals","Quarter finals from the official NBBL league calendar.","2026-10-31T10:30:00+02:00",false],
+    ["NBBL League Semi Finals","Semi finals from the official NBBL league calendar.","2026-10-31T15:00:00+02:00",false],
+    ["NCSF AGM","Annual General Meeting.","2026-11-14T08:00:00+02:00",true],
+    ["NBBL League Finals","Finals from the official NBBL league calendar.","2026-11-14T15:00:00+02:00",true],
+    ["Namibia Champ of Champs","Namibia Champion of Champions event.","2026-11-27T09:00:00+02:00",true]
+  ];
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const seasonResult = await client.query("SELECT id FROM seasons ORDER BY active DESC, start_date DESC NULLS LAST, id DESC LIMIT 1");
+    if (!seasonResult.rowCount) throw new Error("Create a season before importing Central Division.");
+    const seasonId = seasonResult.rows[0].id;
+
+    let coastalDivisionId = null;
+    let d = await client.query("SELECT id FROM divisions WHERE season_id=$1 AND LOWER(name)='coastal' LIMIT 1", [seasonId]);
+    if (d.rowCount) {
+      coastalDivisionId = d.rows[0].id;
+    } else {
+      d = await client.query("SELECT division_id id FROM teams WHERE name='Coastal Waves' AND division_id IS NOT NULL LIMIT 1");
+      if (d.rowCount) {
+        coastalDivisionId = d.rows[0].id;
+        await client.query("UPDATE divisions SET name='Coastal',sort_order=1 WHERE id=$1", [coastalDivisionId]);
+      } else {
+        d = await client.query("INSERT INTO divisions(season_id,name,sort_order,active) VALUES($1,'Coastal',1,TRUE) RETURNING id", [seasonId]);
+        coastalDivisionId = d.rows[0].id;
+      }
+    }
+    await client.query("UPDATE teams SET division_id=$1 WHERE name=ANY($2::text[])", [coastalDivisionId, coastalTeams]);
+
+    let centralDivisionId = null;
+    d = await client.query("SELECT id FROM divisions WHERE season_id=$1 AND LOWER(name)='central' LIMIT 1", [seasonId]);
+    if (d.rowCount) {
+      centralDivisionId = d.rows[0].id;
+      await client.query("UPDATE divisions SET active=TRUE,sort_order=2 WHERE id=$1", [centralDivisionId]);
+    } else {
+      d = await client.query("INSERT INTO divisions(season_id,name,sort_order,active) VALUES($1,'Central',2,TRUE) RETURNING id", [seasonId]);
+      centralDivisionId = d.rows[0].id;
+    }
+
+    const teamIds = new Map();
+    for (const teamName of centralTeams) {
+      let q = await client.query("SELECT id FROM clubs WHERE name=$1 LIMIT 1", [teamName]);
+      let clubId;
+      if (q.rowCount) clubId = q.rows[0].id;
+      else {
+        q = await client.query("INSERT INTO clubs(name,short_name,active) VALUES($1,$1,TRUE) RETURNING id", [teamName]);
+        clubId = q.rows[0].id;
+      }
+
+      q = await client.query("SELECT id FROM teams WHERE club_id=$1 AND name=$2 LIMIT 1", [clubId, teamName]);
+      let teamId;
+      if (q.rowCount) {
+        teamId = q.rows[0].id;
+        await client.query("UPDATE teams SET division_id=$2,active=TRUE WHERE id=$1", [teamId, centralDivisionId]);
+      } else {
+        q = await client.query("INSERT INTO teams(club_id,division_id,name,short_name,active) VALUES($1,$2,$3,$3,TRUE) RETURNING id", [clubId, centralDivisionId, teamName]);
+        teamId = q.rows[0].id;
+      }
+      teamIds.set(teamName, teamId);
+    }
+
+    for (const item of fixtures) {
+      const date=item[0], homeName=item[1], awayName=item[2], roundNo=item[3];
+      const homeId=teamIds.get(homeName), awayId=teamIds.get(awayName);
+      const q = await client.query("SELECT id FROM fixtures WHERE division_id=$1 AND home_team_id=$2 AND away_team_id=$3 AND fixture_date=$4::timestamptz LIMIT 1", [centralDivisionId,homeId,awayId,date]);
+      if (!q.rowCount) await client.query("INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id,status) VALUES($1,$2,$3::timestamptz,$4,$5,'SCHEDULED')", [centralDivisionId,roundNo,date,homeId,awayId]);
+    }
+
+    for (const item of events) {
+      const title=item[0], body=item[1], eventDate=item[2], pinned=item[3];
+      const q = await client.query("SELECT id FROM content_posts WHERE type='EVENT' AND title=$1 AND event_date=$2::timestamptz LIMIT 1", [title,eventDate]);
+      if (!q.rowCount) await client.query("INSERT INTO content_posts(type,title,body,event_date,published,pinned) VALUES('EVENT',$1,$2,$3::timestamptz,TRUE,$4)", [title,body,eventDate,pinned]);
+    }
+    const note = await client.query("SELECT id FROM content_posts WHERE type='ANNOUNCEMENT' AND title='Central Division remaining fixtures published' LIMIT 1");
+    if (!note.rowCount) await client.query("INSERT INTO content_posts(type,title,body,published,pinned) VALUES('ANNOUNCEMENT','Central Division remaining fixtures published','The Central Division fixtures for 26 September and 3 October 2026 are now available in the NCSF League Manager.',TRUE,TRUE)");
+
+    await client.query("INSERT INTO app_migrations(key) VALUES($1)", [migrationKey]);
+    await client.query("COMMIT");
+    console.log("Configured Coastal/Central divisions and imported remaining Central fixtures/events.");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 function cleanEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -1677,6 +1802,7 @@ app.use((err, _req, res, _next) => {
 initDatabase()
   .then(seedOfficialCoastalRosters)
   .then(assignOfficialNcsfNumbers)
+  .then(setupCentralDivisionAndSchedule)
   .then(() => app.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);
