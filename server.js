@@ -217,6 +217,9 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_frames_fixture ON frames(fixture_id);
     CREATE INDEX IF NOT EXISTS idx_frames_winner ON frames(winner_player_id);
     CREATE INDEX IF NOT EXISTS idx_players_team ON players(team_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_players_ncsf_number_unique
+      ON players(ncsf_number) WHERE ncsf_number IS NOT NULL;
+    CREATE SEQUENCE IF NOT EXISTS ncsf_player_number_seq START 1;
   `);
 }
 
@@ -420,6 +423,50 @@ async function seedOfficialCoastalRosters() {
     await client.query("INSERT INTO app_migrations(key) VALUES ($1)", [migrationKey]);
     await client.query("COMMIT");
     console.log("Applied official Coastal league club/team/player roster import.");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function generateNcsfNumber(db = pool) {
+  const { rows } = await db.query("SELECT nextval('ncsf_player_number_seq')::bigint AS n");
+  return "NCSF-" + String(rows[0].n).padStart(4, "0");
+}
+
+async function assignOfficialNcsfNumbers() {
+  const migrationKey = "assign-individual-ncsf-numbers-2026-09-22-v1";
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_migrations (
+      key TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  const already = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [migrationKey]);
+  if (already.rowCount) return;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows: players } = await client.query(`
+      SELECT p.id
+      FROM players p
+      LEFT JOIN teams t ON t.id=p.team_id
+      LEFT JOIN clubs c ON c.id=p.club_id
+      ORDER BY COALESCE(c.name,''), COALESCE(t.name,''), p.last_name, p.first_name, p.id
+    `);
+    let n = 0;
+    for (const player of players) {
+      n += 1;
+      const number = "NCSF-" + String(n).padStart(4, "0");
+      await client.query("UPDATE players SET ncsf_number=$2 WHERE id=$1", [player.id, number]);
+    }
+    await client.query("SELECT setval('ncsf_player_number_seq', $1, true)", [Math.max(n, 1)]);
+    await client.query("INSERT INTO app_migrations(key) VALUES($1)", [migrationKey]);
+    await client.query("COMMIT");
+    console.log("Assigned individual NCSF numbers to all registered players.");
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -1087,10 +1134,12 @@ app.post("/api/admin/players", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, r
   const lastName = String(req.body.lastName || "").trim();
   if (!clubId || !firstName || !lastName) return res.status(400).json({ error: "Club, first name and last name are required." });
 
+  const suppliedNumber = String(req.body.ncsfNumber || "").trim();
+  const ncsfNumber = suppliedNumber || await generateNcsfNumber();
   const { rows } = await pool.query(`
     INSERT INTO players(club_id,team_id,ncsf_number,first_name,last_name)
     VALUES($1,$2,$3,$4,$5) RETURNING *
-  `, [clubId, teamId, String(req.body.ncsfNumber || "").trim() || null, firstName, lastName]);
+  `, [clubId, teamId, ncsfNumber, firstName, lastName]);
   res.status(201).json({ player: rows[0] });
 });
 
@@ -1553,6 +1602,7 @@ app.use((err, _req, res, _next) => {
 
 initDatabase()
   .then(seedOfficialCoastalRosters)
+  .then(assignOfficialNcsfNumbers)
   .then(() => app.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);
