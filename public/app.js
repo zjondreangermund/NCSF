@@ -819,10 +819,12 @@ function formatEventDate(value){
         match.homeTeamName+' '+r.home+' — '+r.away+' '+match.awayTeamName;
       roundBox.querySelector('.round-progressive').textContent=
         'Progressive Total  '+r.progressiveHome+' — '+r.progressiveAway;
+      overlay.classList.add('round-summary-active');
       roundBox.classList.remove('hidden');
       requestAnimationFrame(()=>roundBox.classList.add('show'));
       stage.__roundSummaryTimer=setTimeout(()=>{
         roundBox.classList.remove('show');
+        overlay.classList.remove('round-summary-active');
         setTimeout(()=>roundBox.classList.add('hidden'),350);
       },5000);
     }
