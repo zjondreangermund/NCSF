@@ -738,7 +738,14 @@ function formatEventDate(value){
         '<div class="live-score-frame"><small>WAITING FOR LINEUPS</small><strong>Match not started</strong><span></span></div>'+
         '<div class="live-score-team away"><strong class="team-score">0</strong><span class="team-name">AWAY</span></div>'+
       '</div>'+
-      '<div class="live-next-frame hidden"><span>NEXT</span><strong></strong></div>';
+      '<div class="live-next-frame hidden"><span>NEXT</span><strong></strong></div>'+
+      '<div class="live-round-summary hidden">'+
+        '<div class="round-line"></div>'+
+        '<small>ROUND COMPLETE</small>'+
+        '<strong class="round-result"></strong>'+
+        '<span class="round-progressive"></span>'+
+        '<div class="round-line"></div>'+
+      '</div>';
     stage.appendChild(overlay);
     return overlay;
   }
@@ -752,11 +759,17 @@ function formatEventDate(value){
     const awayScore=overlay.querySelector('.live-score-team.away .team-score');
     const frame=overlay.querySelector('.live-score-frame');
     const nextBox=overlay.querySelector('.live-next-frame');
+    const roundBox=overlay.querySelector('.live-round-summary');
 
     homeName.textContent=match.homeTeamName||'HOME';
     awayName.textContent=match.awayTeamName||'AWAY';
     homeScore.textContent=String(match.homeScore||0);
     awayScore.textContent=String(match.awayScore||0);
+
+    const previousCompleted=stage.dataset.liveCompleted===''||stage.dataset.liveCompleted===undefined
+      ? null
+      : Number(stage.dataset.liveCompleted);
+    stage.dataset.liveCompleted=String(match.completed||0);
 
     if(!match.lineupsReady){
       frame.innerHTML='<small>WAITING FOR LINEUPS</small><strong>Teams still selecting players</strong><span>Live pairings will appear automatically</span>';
@@ -774,23 +787,44 @@ function formatEventDate(value){
       frame.innerHTML='<small>FINAL • 25/25 FRAMES</small><strong>'+esc(result)+'</strong><span>Official scoresheet result</span>';
       nextBox.classList.add('hidden');
       overlay.classList.add('is-final');
-      return;
-    }
-
-    overlay.classList.remove('is-final');
-    const current=match.current;
-    if(current){
-      frame.innerHTML=
-        '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+'/25</small>'+
-        '<strong>'+esc(current.homePlayerName)+' <b>vs</b> '+esc(current.awayPlayerName)+'</strong>'+
-        '<span>Current frame</span>';
-    }
-
-    if(match.next){
-      nextBox.querySelector('strong').textContent=match.next.homePlayerName+' vs '+match.next.awayPlayerName;
-      nextBox.classList.remove('hidden');
     }else{
-      nextBox.classList.add('hidden');
+      overlay.classList.remove('is-final');
+      const current=match.current;
+      if(current){
+        frame.innerHTML=
+          '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+'/25</small>'+
+          '<strong>'+esc(current.homePlayerName)+' <b>vs</b> '+esc(current.awayPlayerName)+'</strong>'+
+          '<span>Current frame</span>';
+      }
+
+      if(match.next){
+        nextBox.querySelector('strong').textContent=match.next.homePlayerName+' vs '+match.next.awayPlayerName;
+        nextBox.classList.remove('hidden');
+      }else{
+        nextBox.classList.add('hidden');
+      }
+    }
+
+    if(
+      roundBox &&
+      previousCompleted!==null &&
+      Number(match.completed)>previousCompleted &&
+      Number(match.completed)%5===0 &&
+      match.roundSummary
+    ){
+      clearTimeout(stage.__roundSummaryTimer);
+      const r=match.roundSummary;
+      roundBox.querySelector('small').textContent='ROUND '+r.roundNo+' COMPLETE';
+      roundBox.querySelector('.round-result').textContent=
+        match.homeTeamName+' '+r.home+' — '+r.away+' '+match.awayTeamName;
+      roundBox.querySelector('.round-progressive').textContent=
+        'Progressive Total  '+r.progressiveHome+' — '+r.progressiveAway;
+      roundBox.classList.remove('hidden');
+      requestAnimationFrame(()=>roundBox.classList.add('show'));
+      stage.__roundSummaryTimer=setTimeout(()=>{
+        roundBox.classList.remove('show');
+        setTimeout(()=>roundBox.classList.add('hidden'),350);
+      },5000);
     }
   }
 
@@ -1166,6 +1200,12 @@ function formatEventDate(value){
         if(window.NCSFApp&&typeof window.NCSFApp.setBroadcastActive==='function'){
           window.NCSFApp.setBroadcastActive(Boolean(active));
         }
+        if(window.NCSFApp){
+          if(active&&typeof window.NCSFApp.enterLiveFullscreen==='function')window.NCSFApp.enterLiveFullscreen();
+          if(!active&&typeof window.NCSFApp.exitLiveFullscreen==='function')window.NCSFApp.exitLiveFullscreen();
+        }else if(active&&screen.orientation?.lock){
+          await screen.orientation.lock('landscape').catch(()=>{});
+        }
       }catch(_e){}
       try{
         if(active&&navigator.wakeLock?.request){
@@ -1359,10 +1399,14 @@ function formatEventDate(value){
           }
         }
 
+        await setBroadcastAwake(true);
+        await new Promise(resolve=>setTimeout(resolve,350));
+
         const videoConstraints={
           facingMode:{ideal:facing},
-          width:{ideal:1280},
-          height:{ideal:720},
+          width:{ideal:1920},
+          height:{ideal:1080},
+          aspectRatio:{ideal:16/9},
           frameRate:{ideal:30,max:30}
         };
 
@@ -1390,7 +1434,6 @@ function formatEventDate(value){
 
         manualStop=false;
         reconnectAttempt=0;
-        await setBroadcastAwake(true);
         const connected=await connectPublisher();
         if(!connected){
           stateLabel.textContent='RECONNECTING…';
