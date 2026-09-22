@@ -661,6 +661,7 @@ function formatEventDate(value){
     document.documentElement.classList.add('ncsf-live-fullscreen-active');
     document.body.classList.add('ncsf-live-fullscreen-active');
     try{
+      if(screen.orientation?.lock)screen.orientation.lock('landscape').catch(()=>{});
       if(window.NCSFApp&&typeof window.NCSFApp.enterLiveFullscreen==='function'){
         window.NCSFApp.enterLiveFullscreen();
       }else if(stage.requestFullscreen){
@@ -697,17 +698,19 @@ function formatEventDate(value){
     controls.innerHTML=
       '<div class="ncsf-live-controls-left">'+
         '<span class="ncsf-live-word"><i></i>LIVE</span>'+
-        (allowAudio?'<button class="ncsf-video-control ncsf-mute-control" type="button" aria-label="Mute">'+liveControlIcon(video.muted?'muted':'volume')+'</button>':'')+
+        (allowAudio?'<button class="ncsf-video-control ncsf-mute-control" type="button" aria-label="Unmute">'+liveControlIcon(video.muted?'muted':'volume')+'</button><span class="ncsf-sound-hint">Tap for sound</span>':'')+
       '</div>'+
       '<button class="ncsf-video-control ncsf-fullscreen-control" type="button" aria-label="Full screen">'+liveControlIcon('fullscreen')+'</button>';
     stage.appendChild(controls);
 
     const mute=controls.querySelector('.ncsf-mute-control');
+    const soundHint=controls.querySelector('.ncsf-sound-hint');
     mute?.addEventListener('click',e=>{
       e.stopPropagation();
       video.muted=!video.muted;
       mute.setAttribute('aria-label',video.muted?'Unmute':'Mute');
       mute.innerHTML=liveControlIcon(video.muted?'muted':'volume');
+      soundHint?.classList.toggle('hidden',!video.muted);
       if(!video.muted)video.play().catch(()=>{});
     });
 
@@ -728,7 +731,7 @@ function formatEventDate(value){
       return;
     }
 
-    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
+    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" muted autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
     const frame=$('#internalLiveFrame');
     const video=$('#internalLiveVideo');
     const waiting=$('#liveWaiting');
@@ -883,7 +886,7 @@ function formatEventDate(value){
     $('#broadcastMeta').textContent=(fixture.divisionName||'')+(fixture.venue?' • '+fixture.venue:'');
     const preview=$('#broadcastPreview'),viewerPreview=$('#broadcastViewerPreview');
     const startBtn=$('#startBroadcast'),stopBtn=$('#stopBroadcast'),switchBtn=$('#switchCamera');
-    const viewerPreviewBtn=$('#viewerPreviewBtn');
+    const micBtn=$('#broadcastMic'),viewerPreviewBtn=$('#viewerPreviewBtn');
     const stage=$('#broadcastStage'),stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
     const viewerList=$('#broadcastViewerList');
     let facing='environment',stream=null,socket=null,starting=false,withAudio=true,chatStarted=false,viewerPreviewOn=false;
@@ -920,6 +923,64 @@ function formatEventDate(value){
     viewerPreviewBtn?.addEventListener('click',toggleViewerPreview);
     installLiveVideoControls(preview,stage,{allowAudio:false});
 
+    const updateMicButton=()=>{
+      if(!micBtn)return;
+      const track=stream?.getAudioTracks?.()[0]||null;
+      if(!track){
+        micBtn.textContent='Mic: Add';
+        micBtn.classList.remove('success');
+        return;
+      }
+      micBtn.textContent=track.enabled?'Mic: On':'Mic: Off';
+      micBtn.classList.toggle('success',track.enabled);
+    };
+
+    const addMicrophone=async()=>{
+      if(!stream)throw new Error('Start the live stream first.');
+      const existing=stream.getAudioTracks()[0];
+      if(existing){
+        existing.enabled=true;
+        withAudio=true;
+        updateMicButton();
+        return;
+      }
+      const audioStream=await navigator.mediaDevices.getUserMedia({
+        video:false,
+        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+      });
+      const track=audioStream.getAudioTracks()[0];
+      if(!track)throw new Error('No microphone source was found.');
+      stream.addTrack(track);
+      withAudio=true;
+      updateMicButton();
+      setUi(true);
+      for(const viewerId of [...viewerNames.keys()]){
+        await createPeerForViewer(viewerId);
+      }
+    };
+
+    micBtn?.addEventListener('click',async()=>{
+      if(!stream){toast('Start Live first',true);return}
+      const track=stream.getAudioTracks()[0];
+      if(!track){
+        try{
+          micBtn.disabled=true;
+          await addMicrophone();
+          toast('Microphone added to the live stream');
+        }catch(err){
+          toast(err.message||'Could not start microphone.',true);
+        }finally{
+          micBtn.disabled=false;
+        }
+        return;
+      }
+      track.enabled=!track.enabled;
+      withAudio=track.enabled;
+      updateMicButton();
+      setUi(true);
+      toast(track.enabled?'Microphone on':'Microphone muted');
+    });
+
     const closePeer=viewerId=>{
       const pc=peers.get(viewerId);
       if(pc){try{pc.close()}catch(_e){}}
@@ -953,6 +1014,7 @@ function formatEventDate(value){
       renderViewerList();
       if(viewerLabel)viewerLabel.textContent='0 viewers';
       if(viewerPreviewOn)toggleViewerPreview();
+      updateMicButton();
     };
 
     const createPeerForViewer=async viewerId=>{
@@ -1002,21 +1064,23 @@ function formatEventDate(value){
           frameRate:{ideal:30,max:30}
         };
 
-        withAudio=true;
+        stream=await navigator.mediaDevices.getUserMedia({video:videoConstraints,audio:false});
+        withAudio=false;
         try{
-          stream=await navigator.mediaDevices.getUserMedia({
-            video:videoConstraints,
+          const audioStream=await navigator.mediaDevices.getUserMedia({
+            video:false,
             audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
           });
+          const audioTrack=audioStream.getAudioTracks()[0];
+          if(audioTrack){
+            stream.addTrack(audioTrack);
+            withAudio=true;
+          }
         }catch(audioErr){
-          const msg=String(audioErr?.message||'').toLowerCase();
-          const audioProblem=audioErr?.name==='NotReadableError'||audioErr?.name==='NotAllowedError'||audioErr?.name==='AbortError'||
-            msg.includes('audio')||msg.includes('microphone')||msg.includes('source');
-          if(!audioProblem)throw audioErr;
           withAudio=false;
-          stream=await navigator.mediaDevices.getUserMedia({video:videoConstraints,audio:false});
-          toast('Microphone unavailable — continuing live with video only');
+          toast('Microphone unavailable — live video will continue. Tap Mic: Add to retry.');
         }
+        updateMicButton();
 
         preview.srcObject=stream;
         await preview.play().catch(()=>{});
@@ -1114,6 +1178,7 @@ function formatEventDate(value){
     });
     window.addEventListener('beforeunload',stop);
     setUi(false);
+    updateMicButton();
   }
 
   function formatChatTime(value){
