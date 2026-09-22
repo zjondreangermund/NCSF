@@ -939,19 +939,16 @@ function formatEventDate(value){
       if(permissionBtn)permissionBtn.textContent='Allow Camera & Mic';
     };
 
-    permissionBtn?.addEventListener('click',async()=>{
-      permissionBtn.disabled=true;
+    permissionBtn?.addEventListener('click',()=>{
       try{
-        const result=await requestNativeMediaPermissions();
-        if(result.cameraGranted){
-          permissionBtn.classList.add('hidden');
-          toast(result.audioGranted?'Camera and microphone allowed':'Camera allowed. Microphone can be enabled separately.');
+        if(window.NCSFApp&&typeof window.NCSFApp.openAppPermissionSettings==='function'){
+          window.NCSFApp.openAppPermissionSettings();
+          toast('Opening NCSF phone permissions…');
         }else{
-          toast('Camera permission is still denied. Opening app permissions…',true);
-          try{window.NCSFApp?.openAppPermissionSettings?.()}catch(_e){}
+          toast('Open Phone Settings > Apps > NCSF > Permissions and allow Camera and Microphone.',true);
         }
-      }finally{
-        permissionBtn.disabled=false;
+      }catch(_e){
+        toast('Open Phone Settings > Apps > NCSF > Permissions and allow Camera and Microphone.',true);
       }
     });
 
@@ -1244,7 +1241,8 @@ function formatEventDate(value){
           const permissionResult=await requestNativeMediaPermissions();
           if(!permissionResult.cameraGranted){
             showPermissionRecovery();
-            throw new Error('Camera permission denied. Tap Allow Camera & Mic and allow Camera access.');
+            try{window.NCSFApp?.openAppPermissionSettings?.()}catch(_e){}
+            throw new Error('Camera permission denied. Allow Camera and Microphone in the NCSF phone permissions screen.');
           }
         }
 
@@ -1298,9 +1296,12 @@ function formatEventDate(value){
         const name=String(err?.name||'');
         const msg=String(err?.message||'');
         const denied=name==='NotAllowedError'||/permission|denied|not allowed/i.test(msg);
-        if(denied)showPermissionRecovery();
+        if(denied){
+          showPermissionRecovery();
+          try{window.NCSFApp?.openAppPermissionSettings?.()}catch(_e){}
+        }
         stop();
-        toast(denied?'Camera permission denied. Use Allow Camera & Mic.':(msg||'Could not start live stream.'),true);
+        toast(denied?'Camera permission denied. Enable Camera and Microphone in NCSF phone permissions.':(msg||'Could not start live stream.'),true);
       }finally{
         starting=false;
         startBtn.disabled=false;
