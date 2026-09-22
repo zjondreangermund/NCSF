@@ -654,21 +654,9 @@ function formatEventDate(value){
       return;
     }
 
-    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" controls autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div><button class="live-fullscreen-btn" id="liveFullscreenBtn" type="button" aria-label="Full screen">⛶</button></div>';
+    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" controls autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
     const video=$('#internalLiveVideo');
     const waiting=$('#liveWaiting');
-    const fullscreenBtn=$('#liveFullscreenBtn');
-    const enterFullscreen=async()=>{
-      try{
-        if(video.requestFullscreen)await video.requestFullscreen();
-        else if(video.webkitRequestFullscreen)video.webkitRequestFullscreen();
-        else if(video.webkitEnterFullscreen)video.webkitEnterFullscreen();
-        if(screen.orientation?.lock)await screen.orientation.lock('landscape').catch(()=>{});
-      }catch(_e){
-        try{video.webkitEnterFullscreen?.()}catch(_ignored){}
-      }
-    };
-    fullscreenBtn?.addEventListener('click',enterFullscreen);
     let socket=null,pc=null,retryTimer=null,offerTimer=null,ended=false,pendingIce=[];
 
     const closePeer=()=>{
@@ -819,7 +807,7 @@ function formatEventDate(value){
     $('#broadcastMeta').textContent=(fixture.divisionName||'')+(fixture.venue?' • '+fixture.venue:'');
     const preview=$('#broadcastPreview'),viewerPreview=$('#broadcastViewerPreview');
     const startBtn=$('#startBroadcast'),stopBtn=$('#stopBroadcast'),switchBtn=$('#switchCamera');
-    const viewerPreviewBtn=$('#viewerPreviewBtn'),fullscreenBtn=$('#broadcastFullscreen');
+    const viewerPreviewBtn=$('#viewerPreviewBtn');
     const stage=$('#broadcastStage'),stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
     const viewerList=$('#broadcastViewerList');
     let facing='environment',stream=null,socket=null,starting=false,withAudio=true,chatStarted=false,viewerPreviewOn=false;
@@ -853,16 +841,7 @@ function formatEventDate(value){
       if(viewerPreviewBtn)viewerPreviewBtn.textContent=viewerPreviewOn?'Camera View':'Viewer View';
     };
 
-    const enterBroadcastFullscreen=async()=>{
-      try{
-        if(stage?.requestFullscreen)await stage.requestFullscreen();
-        else if(stage?.webkitRequestFullscreen)stage.webkitRequestFullscreen();
-        if(screen.orientation?.lock)await screen.orientation.lock('landscape').catch(()=>{});
-      }catch(_e){}
-    };
-
     viewerPreviewBtn?.addEventListener('click',toggleViewerPreview);
-    fullscreenBtn?.addEventListener('click',enterBroadcastFullscreen);
 
     const closePeer=viewerId=>{
       const pc=peers.get(viewerId);
@@ -1162,27 +1141,50 @@ function formatEventDate(value){
     closeBtn?.addEventListener('click',()=>setOpen(false));
 
     let gestureStartX=0,gestureStartY=0,gestureActive=false;
-    handle.addEventListener('pointerdown',e=>{
+    const beginGesture=e=>{
+      if(e.target.closest('input,button,a'))return;
       gestureActive=true;
       gestureStartX=e.clientX;
       gestureStartY=e.clientY;
-      try{handle.setPointerCapture(e.pointerId)}catch(_e){}
-    });
-    handle.addEventListener('pointerup',e=>{
+    };
+    const endGesture=e=>{
       if(!gestureActive)return;
       gestureActive=false;
       const dx=e.clientX-gestureStartX;
       const dy=e.clientY-gestureStartY;
       const mobile=window.matchMedia('(max-width:760px)').matches;
       if(mobile){
-        if(dy<-30)setOpen(true);
-        else if(dy>30)setOpen(false);
+        if(dy<-35)setOpen(true);
+        else if(dy>45)setOpen(false);
       }else{
-        if(dx<-30)setOpen(true);
-        else if(dx>30)setOpen(false);
+        if(dx<-35)setOpen(true);
+        else if(dx>45)setOpen(false);
       }
-    });
-    handle.addEventListener('pointercancel',()=>{gestureActive=false});
+    };
+    drawer.addEventListener('pointerdown',beginGesture);
+    drawer.addEventListener('pointerup',endGesture);
+    drawer.addEventListener('pointercancel',()=>{gestureActive=false});
+
+    let touchStartX=0,touchStartY=0;
+    drawer.addEventListener('touchstart',e=>{
+      if(!e.touches?.length||e.target.closest('input,button,a'))return;
+      touchStartX=e.touches[0].clientX;
+      touchStartY=e.touches[0].clientY;
+    },{passive:true});
+    drawer.addEventListener('touchend',e=>{
+      if(!e.changedTouches?.length||(!touchStartX&&!touchStartY))return;
+      const dx=e.changedTouches[0].clientX-touchStartX;
+      const dy=e.changedTouches[0].clientY-touchStartY;
+      touchStartX=0;touchStartY=0;
+      const mobile=window.matchMedia('(max-width:760px)').matches;
+      if(mobile&&Math.abs(dy)>Math.abs(dx)){
+        if(dy>55)setOpen(false);
+        else if(dy<-55)setOpen(true);
+      }else if(!mobile&&Math.abs(dx)>Math.abs(dy)){
+        if(dx>55)setOpen(false);
+        else if(dx<-55)setOpen(true);
+      }
+    },{passive:true});
 
     if(state.user){
       form?.classList.remove('hidden');
