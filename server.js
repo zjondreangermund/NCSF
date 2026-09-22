@@ -1114,6 +1114,166 @@ async function fixturePayload(fixture) {
   };
 }
 
+function pdfPlayerNames(payload) {
+  const names = new Map();
+  for (const p of [...payload.lineups, ...payload.reserves]) {
+    names.set(Number(p.player_id), (p.first_name + " " + p.last_name).trim());
+  }
+  for (const fr of payload.frames) {
+    names.set(Number(fr.home_player_id), fr.home_player_name);
+    names.set(Number(fr.away_player_id), fr.away_player_name);
+  }
+  return names;
+}
+
+function drawCell(doc, x, y, w, h, text, opts = {}) {
+  doc.rect(x, y, w, h).lineWidth(opts.lineWidth || 0.45).strokeColor(opts.stroke || "#b7bec7").stroke();
+  if (opts.fill) doc.rect(x, y, w, h).fillColor(opts.fill).fill();
+  doc.fillColor(opts.color || "#111111")
+    .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
+    .fontSize(opts.size || 6.2)
+    .text(String(text ?? ""), x + 2.5, y + 2.2, {
+      width: Math.max(1, w - 5),
+      height: Math.max(1, h - 4),
+      align: opts.align || "left",
+      ellipsis: true,
+      lineBreak: false
+    });
+}
+
+function streamOnePageScoresheetPdf(res, payload) {
+  const f = payload.fixture;
+  const t = payload.totals;
+  const names = pdfPlayerNames(payload);
+  const doc = new PDFDocument({
+    size: "A4",
+    layout: "landscape",
+    margin: 16,
+    autoFirstPage: true,
+    info: { Title: `NCSF ${f.homeTeamName} vs ${f.awayTeamName}` }
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="NCSF-${String(f.homeTeamName).replace(/[^a-z0-9]+/gi,"-")}-vs-${String(f.awayTeamName).replace(/[^a-z0-9]+/gi,"-")}.pdf"`);
+  res.setHeader("Cache-Control", "no-store");
+  doc.pipe(res);
+
+  const W = doc.page.width;
+  const left = 16;
+  const usable = W - 32;
+
+  try {
+    doc.image(getNcsfLogoJpeg(), left, 14, { fit: [38, 38], align: "center", valign: "center" });
+  } catch (_e) {}
+
+  doc.fillColor("#0b223f").font("Helvetica-Bold").fontSize(13).text("NAMIBIA CUE SPORTS FEDERATION", 60, 15, { width: 410 });
+  doc.fontSize(9).fillColor("#222").text("Blackball League Scoresheet", 60, 32, { width: 300 });
+  doc.font("Helvetica").fontSize(6.5).fillColor("#5f6874")
+    .text(`${f.seasonName} - ${f.divisionName} - Round ${f.roundNo}`, 60, 45, { width: 350 });
+
+  const d = f.fixtureDate ? new Date(f.fixtureDate) : null;
+  const dateText = d ? d.toLocaleDateString("en-GB", { timeZone: "Africa/Windhoek" }) : "TBA";
+  const timeText = d ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Windhoek" }) : "TBA";
+  const metaX = W - 255;
+  const meta = [["DATE", dateText], ["TIME", timeText], ["VENUE", f.venue || "TBA"]];
+  meta.forEach((m, i) => {
+    const x = metaX + i * 80;
+    drawCell(doc, x, 15, 76, 30, m[1], { size: 7, bold: true, align: "center", fill: "#f3f5f7" });
+    doc.font("Helvetica-Bold").fontSize(4.8).fillColor("#687280").text(m[0], x + 2, 17, { width: 72, align: "center" });
+  });
+
+  const heroY = 60;
+  const heroH = 42;
+  drawCell(doc, left, heroY, usable, heroH, "", { fill: "#eef2f6", stroke: "#0b223f", lineWidth: 0.9 });
+  doc.fillColor("#5c6775").font("Helvetica-Bold").fontSize(5).text("HOME", left + 10, heroY + 7);
+  doc.fillColor("#0b223f").fontSize(12).text(f.homeTeamName, left + 10, heroY + 17, { width: 265, ellipsis: true });
+  doc.fillColor("#5c6775").fontSize(5).text("AWAY", W - 275, heroY + 7, { width: 250, align: "right" });
+  doc.fillColor("#0b223f").fontSize(12).text(f.awayTeamName, W - 275, heroY + 17, { width: 250, align: "right", ellipsis: true });
+  doc.font("Helvetica-Bold").fontSize(18).fillColor("#0b223f")
+    .text(`${t.home}  -  ${t.away}`, W / 2 - 60, heroY + 11, { width: 120, align: "center" });
+  doc.fontSize(5.5).fillColor("#5c6775").text(`${t.completed}/25 frames`, W / 2 - 60, heroY + 30, { width: 120, align: "center" });
+
+  const roundsY = 112;
+  const gap = 3;
+  const colW = (usable - gap * 4) / 5;
+  const rowH = 22;
+  const headH = 19;
+  const letters = ["A","B","C","D","E"];
+
+  for (let round = 1; round <= 5; round++) {
+    const x = left + (round - 1) * (colW + gap);
+    const frames = payload.frames.filter(fr => Number(fr.round_no) === round);
+    const rh = frames.filter(fr => fr.winner_side === "HOME").length;
+    const ra = frames.filter(fr => fr.winner_side === "AWAY").length;
+
+    drawCell(doc, x, roundsY, colW, headH, `ROUND ${round}     ${rh}-${ra}`, {
+      size: 7, bold: true, align: "center", fill: "#e9edf2", stroke: "#7c8794"
+    });
+
+    const yHead = roundsY + headH;
+    const widths = [13, colW * 0.34, 17, 17, colW * 0.34, 13];
+    const labels = ["#", "HOME", "H", "A", "AWAY", "#"];
+    let cx = x;
+    labels.forEach((label, idx) => {
+      drawCell(doc, cx, yHead, widths[idx], 15, label, { size: 4.7, bold: true, align: "center", fill: "#f7f8fa" });
+      cx += widths[idx];
+    });
+
+    frames.forEach((fr, i) => {
+      const y = yHead + 15 + i * rowH;
+      const vals = [
+        fr.home_slot,
+        fr.home_player_name,
+        fr.winner_side === "HOME" ? "1" : "0",
+        fr.winner_side === "AWAY" ? "1" : "0",
+        fr.away_player_name,
+        letters[(Number(fr.away_slot || 1) - 1)] || ""
+      ];
+      cx = x;
+      vals.forEach((val, idx) => {
+        drawCell(doc, cx, y, widths[idx], rowH, val, {
+          size: idx === 1 || idx === 4 ? 5.2 : 6.2,
+          bold: idx === 2 || idx === 3,
+          align: idx === 1 ? "left" : idx === 4 ? "right" : "center"
+        });
+        cx += widths[idx];
+      });
+    });
+  }
+
+  const summaryY = 290;
+  const matchResult = t.completed < 25 ? "IN PROGRESS" :
+    (t.home > t.away ? `${f.homeTeamName} WON` : t.away > t.home ? `${f.awayTeamName} WON` : "DRAW");
+  const summary = [
+    ["MATCH RESULT", matchResult],
+    ["PLAYER OF MATCH", names.get(Number(f.playerOfMatchId)) || "-"],
+    ["BREAK & RUN", names.get(Number(f.breakRunPlayerId)) || "-"],
+    ["RACK & RUN", names.get(Number(f.rackRunPlayerId)) || "-"],
+    ["BONUS", String(f.bonusPoints || 0)],
+    ["STATUS", String(f.status || "").replaceAll("_"," ")]
+  ];
+  const sw = usable / summary.length;
+  summary.forEach((s, i) => {
+    const x = left + i * sw;
+    drawCell(doc, x, summaryY, sw, 31, s[1], { size: 6.2, bold: true, align: "center", fill: i === 0 ? "#f3e8c8" : "#f7f8fa" });
+    doc.font("Helvetica-Bold").fontSize(4.3).fillColor("#6a7380").text(s[0], x + 2, summaryY + 3, { width: sw - 4, align: "center" });
+  });
+
+  const signY = 336;
+  const homeCaptain = names.get(Number(f.homeCaptainId)) || "-";
+  const awayCaptain = names.get(Number(f.awayCaptainId)) || "-";
+  doc.font("Helvetica-Bold").fontSize(6).fillColor("#2b3440").text(`HOME CAPTAIN: ${homeCaptain}`, left, signY, { width: 300 });
+  doc.moveTo(left, signY + 28).lineTo(left + 310, signY + 28).strokeColor("#444").lineWidth(0.5).stroke();
+  doc.font("Helvetica").fontSize(5).fillColor("#666").text("Signature", left, signY + 31);
+  doc.font("Helvetica-Bold").fontSize(6).fillColor("#2b3440").text(`AWAY CAPTAIN: ${awayCaptain}`, W - 326, signY, { width: 310, align: "right" });
+  doc.moveTo(W - 326, signY + 28).lineTo(W - 16, signY + 28).strokeColor("#444").lineWidth(0.5).stroke();
+  doc.font("Helvetica").fontSize(5).fillColor("#666").text("Signature", W - 66, signY + 31, { width: 50, align: "right" });
+
+  doc.font("Helvetica").fontSize(5).fillColor("#7b8490")
+    .text("Generated by NCSF League Manager", left, doc.page.height - 18, { width: usable, align: "center" });
+
+  doc.end();
+}
 app.get("/api/health", async (_req, res) => {
   try {
     await pool.query("SELECT 1");
@@ -1357,6 +1517,27 @@ app.get("/api/live/:id", async (req, res) => {
       divisionName: fixture.division_name
     }
   });
+});
+
+
+app.post("/api/fixtures/:id/broadcast-token", requireAuth, async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  const user = await currentUserById(req.session.userId);
+  if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to broadcast this fixture." });
+  if (fixture.status === "APPROVED") return res.status(409).json({ error: "Approved fixtures cannot be broadcast as live matches." });
+  const token = issueBroadcastToken(fixture.id, user.id);
+  res.json({ token, fixtureId: fixture.id, title: fixture.home_team_name + " vs " + fixture.away_team_name });
+});
+
+app.get("/api/fixtures/:id/pdf", async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if (fixture.status !== "APPROVED") {
+    const user = req.session.userId ? await currentUserById(req.session.userId) : null;
+    if (!canManageFixture(user, fixture)) return res.status(403).json({ error: "This scoresheet is not public yet." });
+  }
+  const payload = await fixturePayload(fixture);
+  streamOnePageScoresheetPdf(res, payload);
 });
 
 app.get("/api/teams/:id/players", async (req, res) => {
