@@ -255,6 +255,18 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS live_chat_messages (
+      id BIGSERIAL PRIMARY KEY,
+      fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      display_name TEXT NOT NULL,
+      role TEXT,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_live_chat_fixture_created
+      ON live_chat_messages(fixture_id, created_at DESC, id DESC);
+
     CREATE TABLE IF NOT EXISTS audit_logs (
       id BIGSERIAL PRIMARY KEY,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -1557,6 +1569,49 @@ app.get("/api/live/:id", async (req, res) => {
 });
 
 
+app.get("/api/live/:id/chat", async (req, res) => {
+  const fixtureId = Number(req.params.id);
+  const fixture = await fixtureById(fixtureId);
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+
+  const { rows } = await pool.query(`
+    SELECT id,fixture_id,user_id,display_name,role,message,created_at
+    FROM live_chat_messages
+    WHERE fixture_id=$1
+    ORDER BY created_at DESC,id DESC
+    LIMIT 100
+  `, [fixtureId]);
+
+  res.json({ messages: rows.reverse() });
+});
+
+app.post("/api/live/:id/chat", requireAuth, async (req, res) => {
+  const fixtureId = Number(req.params.id);
+  const fixture = await fixtureById(fixtureId);
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if (!fixture.stream_active) return res.status(409).json({ error: "Live chat is available while the fixture is live." });
+
+  const user = await currentUserById(req.session.userId);
+  if (!user || !user.active) return res.status(403).json({ error: "Active NCSF sign-in required." });
+
+  const message = String(req.body.message || "").replace(/\s+/g, " ").trim();
+  if (!message) return res.status(400).json({ error: "Enter a chat message." });
+  if (message.length > 280) return res.status(400).json({ error: "Chat messages are limited to 280 characters." });
+
+  const { rows } = await pool.query(`
+    INSERT INTO live_chat_messages(fixture_id,user_id,display_name,role,message)
+    VALUES($1,$2,$3,$4,$5)
+    RETURNING id,fixture_id,user_id,display_name,role,message,created_at
+  `, [fixtureId, user.id, user.display_name, user.role, message]);
+
+  const chatMessage = rows[0];
+  const liveState = liveStateFor(fixtureId);
+  for (const client of liveState.chatClients) {
+    sendLiveControl(client, { type: "chat-message", message: chatMessage });
+  }
+  res.status(201).json({ message: chatMessage });
+});
+
 app.post("/api/fixtures/:id/broadcast-token", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
@@ -2342,6 +2397,7 @@ function liveStateFor(fixtureId) {
       fixtureId: id,
       publisher: null,
       viewers: new Map(),
+      chatClients: new Set(),
       startedAt: null
     };
     liveStreams.set(id, state);
@@ -2378,6 +2434,19 @@ liveWss.on("connection", async (ws, req) => {
     ws.on("pong", () => { ws.isAlive = true; });
 
     const state = liveStateFor(fixtureId);
+
+    if (mode === "chat") {
+      const fixture = await fixtureById(fixtureId);
+      if (!fixture || !fixture.stream_active) {
+        sendLiveControl(ws, { type: "chat-offline" });
+        ws.close(4404, "Chat offline");
+        return;
+      }
+      state.chatClients.add(ws);
+      sendLiveControl(ws, { type: "chat-ready", fixtureId });
+      ws.on("close", () => state.chatClients.delete(ws));
+      return;
+    }
 
     if (mode === "publisher") {
       const token = u.searchParams.get("token");
