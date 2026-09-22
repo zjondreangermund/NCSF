@@ -51,9 +51,9 @@
       return;
     }
     let links='';
-    if(state.user.role==='NCSF_ADMIN')links+='<a class="btn light small" href="/admin.html">NCSF Admin</a>';
-    if(state.user.role==='CLUB_ADMIN')links+='<a class="btn light small" href="/club-admin.html">Club Admin</a>';
-    links+='<a class="btn light small" href="/team.html">Match Centre</a>';
+    if(state.user.role==='NCSF_ADMIN')links+='<a class="btn light small" href="/admin">NCSF Admin</a>';
+    if(state.user.role==='CLUB_ADMIN')links+='<a class="btn light small" href="/club-admin">Club Admin</a>';
+    links+='<a class="btn light small" href="/team">Match Centre</a>';
     box.innerHTML='<span class="who"><strong>'+esc(state.user.displayName)+'</strong></span>'+links+'<button class="btn light small" id="logoutBtn">Sign out</button>';
     $('#logoutBtn')?.addEventListener('click',async()=>{await api('/api/auth/logout',{method:'POST'});location.href='/'});
   }
@@ -76,16 +76,16 @@
       try{
         const data=await api('/api/auth/login',{method:'POST',body:formObject(e.currentTarget)});
         state.user=data.user; $('#authModal').classList.add('hidden'); renderUserActions(); toast('Signed in');
-        if(state.user.role==='NCSF_ADMIN')location.href='/admin.html';
-        else if(state.user.role==='CLUB_ADMIN')location.href='/club-admin.html';
-        else location.href='/team.html';
+        if(state.user.role==='NCSF_ADMIN')location.href='/admin';
+        else if(state.user.role==='CLUB_ADMIN')location.href='/club-admin';
+        else location.href='/team';
       }catch(err){toast(err.message,true)}
     });
     $('#setupForm')?.addEventListener('submit',async e=>{
       e.preventDefault();
       try{
         const data=await api('/api/setup',{method:'POST',body:formObject(e.currentTarget)});
-        state.user=data.user; toast('NCSF administrator created'); location.href='/admin.html';
+        state.user=data.user; toast('NCSF administrator created'); location.href='/admin';
       }catch(err){toast(err.message,true)}
     });
   }
@@ -96,7 +96,7 @@
         <div><div class="team-name">${esc(f.home_team_name)}</div><div class="match-meta">${esc(fmtDate(f.fixture_date))}</div></div>
         <div class="match-score">${Number(f.home_frames||0)} &ndash; ${Number(f.away_frames||0)}</div>
         <div class="away"><div class="team-name">${esc(f.away_team_name)}</div><div class="match-meta">Round ${esc(f.round_no)} • ${statusPill(f.status)}</div></div>
-        <div class="open-cell">${allowOpen && (f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet.html?id=${f.id}">Open scoresheet</a>`:''}</div>
+        <div class="open-cell">${allowOpen && (f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet?id=${f.id}">Open scoresheet</a>`:''}</div>
       </div>`).join('');
   }
   async function initHome(){
@@ -520,7 +520,7 @@
       if($('#pendingCount'))$('#pendingCount').textContent=d.pending.length;
       if($('#missingAccessCount'))$('#missingAccessCount').textContent=d.missingAccess.length;
       if($('#pendingResults'))$('#pendingResults').innerHTML=d.pending.length
-        ? '<div class="card-list">'+d.pending.map(f=>`<div class="card-row"><span><strong>${esc(f.home_team_name)} ${f.home_frames} — ${f.away_frames} ${esc(f.away_team_name)}</strong><small>${esc(f.division_name)} • Round ${f.round_no} • ${esc(fmtDate(f.fixture_date))}</small></span><a class="btn small primary" href="/scoresheet.html?id=${f.id}">${f.status==='CONFIRMED'?'Review / Approve':'Review'}</a></div>`).join('')+'</div>'
+        ? '<div class="card-list">'+d.pending.map(f=>`<div class="card-row"><span><strong>${esc(f.home_team_name)} ${f.home_frames} — ${f.away_frames} ${esc(f.away_team_name)}</strong><small>${esc(f.division_name)} • Round ${f.round_no} • ${esc(fmtDate(f.fixture_date))}</small></span><a class="btn small primary" href="/scoresheet?id=${f.id}">${f.status==='CONFIRMED'?'Review / Approve':'Review'}</a></div>`).join('')+'</div>'
         : '<div class="empty">No results waiting for approval.</div>';
       if($('#missingTeamAccess'))$('#missingTeamAccess').innerHTML=d.missingAccess.length
         ? '<div class="card-list">'+d.missingAccess.map(t=>`<div class="card-row"><span><strong>${esc(t.team_name)}</strong><small>${esc(t.club_name)}</small></span><button class="btn small goto-access">Create Login</button></div>`).join('')+'</div>'
@@ -546,7 +546,7 @@
         <td><strong>${f.home_frames||0} — ${f.away_frames||0}</strong></td>
         <td>${statusPill(f.status)}</td>
         <td>
-          <a class="btn small secondary" href="/scoresheet.html?id=${f.id}">Open</a>
+          <a class="btn small secondary" href="/scoresheet?id=${f.id}">Open</a>
           <button class="btn small fixture-edit" data-id="${f.id}">Edit</button>
           ${f.status==='POSTPONED'?`<button class="btn small fixture-restore" data-id="${f.id}">Restore</button>`:(!['APPROVED','FORFEIT'].includes(f.status)?`<button class="btn small fixture-postpone" data-id="${f.id}">Postpone</button>`:'')}
           ${['SCHEDULED','POSTPONED'].includes(f.status)?`<button class="btn small danger fixture-delete" data-id="${f.id}">Delete</button>`:''}
