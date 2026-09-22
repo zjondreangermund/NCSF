@@ -27,17 +27,16 @@
 </header>
 <main class="page">
   <div class="sheet-toolbar no-print">
-    <strong>NCSF Scoresheet</strong>
+    <div class="sheet-toolbar-title"><strong>Blackball Scoresheet</strong><small id="saveState">Saved to NCSF</small></div>
     <span id="sheetStatus" class="pill">Loading</span>
-    <span class="save-state" id="saveState">Saved</span>
     <span class="spacer"></span>
-    <label class="btn light" style="display:inline-flex;gap:6px;align-items:center">Upload signed
+    <label class="btn light" style="display:inline-flex;gap:6px;align-items:center">Signed Sheet
       <input id="scoreUpload" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" hidden>
     </label>
     <button class="btn light" id="printSheet">Print / PDF</button>
-    <button class="btn success" id="submitMatch">Submit</button>
-    <button class="btn secondary" id="confirmMatch">Confirm</button>
-    <button class="btn primary" id="approveMatch">Approve</button>
+    <button class="btn success" id="submitMatch">Submit Result</button>
+    <button class="btn secondary" id="confirmMatch">Confirm Result</button>
+    <button class="btn primary" id="approveMatch">Approve Official</button>
   </div>
 
   <section id="scoreSheetRoot">
