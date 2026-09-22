@@ -369,3 +369,26 @@ body[data-page="scoresheet"] .page{max-width:1120px}
 
 
 .sheet-toolbar-title{display:grid;gap:2px}.sheet-toolbar-title strong{color:#fff}.sheet-toolbar-title small{font-size:10px;color:#aebfd0;font-weight:700}
+
+
+/* Keep mobile navigation and account actions on separate rows. */
+.is-ncsf-app .app-download-card{display:none!important}
+
+@media(max-width:900px){
+  .topbar-inner{display:flex;flex-wrap:wrap;align-items:center}
+  .brand{order:1;flex:1 1 auto}
+  .nav{order:2;flex:0 0 100%;width:100%;min-width:0;overflow-x:auto;padding:2px 0 5px;scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+  .user-actions{order:3;flex:0 0 100%;width:100%;min-width:0;overflow-x:auto;padding:2px 0 3px;scrollbar-width:none}
+  .user-actions::-webkit-scrollbar{display:none}
+  .user-actions .btn,.nav a{flex:0 0 auto}
+}
+@media(max-width:620px){
+  .topbar-inner{gap:7px;padding:8px 10px}
+  .brand{flex:0 0 100%;width:100%}
+  .nav{gap:5px}
+  .nav a{padding:8px 10px;font-size:11px}
+  .user-actions{gap:6px}
+  .user-actions .btn{padding:8px 10px;font-size:11px;white-space:nowrap}
+  .user-actions .who{display:none!important}
+}
