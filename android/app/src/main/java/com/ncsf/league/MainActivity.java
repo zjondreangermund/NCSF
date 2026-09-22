@@ -12,9 +12,12 @@ import android.graphics.RectF;
 import android.graphics.SweepGradient;
 import android.net.Uri;
 import android.os.Bundle;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintManager;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -62,10 +65,11 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.2");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        webView.addJavascriptInterface(new AppBridge(), "NCSFApp");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -87,7 +91,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                loadingEdge.stop();
+                loadingEdge.start();
                 super.onPageFinished(view, url);
             }
         });
@@ -95,11 +99,7 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
-                if (newProgress < 100) {
-                    loadingEdge.start();
-                } else {
-                    loadingEdge.stop();
-                }
+                loadingEdge.start();
             }
 
             @Override
@@ -129,6 +129,21 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private class AppBridge {
+        @JavascriptInterface
+        public void printPage() {
+            runOnUiThread(() -> {
+                try {
+                    PrintManager printManager = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+                    PrintDocumentAdapter adapter = webView.createPrintDocumentAdapter("NCSF Blackball Scoresheet");
+                    printManager.print("NCSF Blackball Scoresheet", adapter, null);
+                } catch (Exception ex) {
+                    Toast.makeText(MainActivity.this, "Unable to open the Android print dialog.", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
     }
 
     @Override
@@ -182,17 +197,17 @@ public class MainActivity extends Activity {
 
         LoadingEdgeView(Context context) {
             super(context);
-            stroke = dp(context, 4.5f);
+            stroke = dp(context, 5.5f);
             radius = dp(context, 24f);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(stroke);
             paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setShadowLayer(dp(context, 9f), 0, 0, Color.argb(150, 255, 255, 255));
+            paint.setShadowLayer(dp(context, 12f), 0, 0, Color.argb(205, 255, 255, 255));
             setLayerType(View.LAYER_TYPE_SOFTWARE, null);
             setClickable(false);
             setFocusable(false);
             setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            setVisibility(GONE);
+            setVisibility(VISIBLE);
         }
 
         private static float dp(Context context, float value) {
@@ -234,11 +249,7 @@ public class MainActivity extends Activity {
         }
 
         void stop() {
-            if (animator != null) {
-                animator.cancel();
-                animator = null;
-            }
-            setVisibility(GONE);
+            start();
         }
 
         @Override
