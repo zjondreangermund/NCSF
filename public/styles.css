@@ -392,3 +392,20 @@ body[data-page="scoresheet"] .page{max-width:1120px}
   .user-actions .btn{padding:8px 10px;font-size:11px;white-space:nowrap}
   .user-actions .who{display:none!important}
 }
+
+
+/* Mobile nav: always start at Home, never center clipped content. */
+@media(max-width:900px){
+  .nav{
+    justify-content:flex-start!important;
+    scroll-padding-left:0;
+    overscroll-behavior-x:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  .nav a:first-child{margin-left:0}
+}
+@media(max-width:620px){
+  .topbar{overflow:hidden}
+  .topbar-inner{padding-left:12px!important;padding-right:12px!important}
+  .nav{padding-left:0!important;padding-right:14px!important}
+}
