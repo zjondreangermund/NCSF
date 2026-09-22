@@ -146,6 +146,9 @@ async function initDatabase() {
       status TEXT NOT NULL DEFAULT 'SCHEDULED'
         CHECK (status IN ('SCHEDULED','IN_PROGRESS','SUBMITTED','CONFIRMED','APPROVED','POSTPONED','FORFEIT')),
       notes TEXT,
+      submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      submitted_side TEXT CHECK (submitted_side IN ('HOME','AWAY')),
+      confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       home_confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       away_confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -230,6 +233,14 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_frames_winner ON frames(winner_player_id);
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS home_captain_id INTEGER REFERENCES players(id) ON DELETE SET NULL;
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS away_captain_id INTEGER REFERENCES players(id) ON DELETE SET NULL;
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS submitted_side TEXT CHECK (submitted_side IN ('HOME','AWAY'));
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    UPDATE fixtures
+      SET submitted_side='HOME',
+          submitted_by=COALESCE(submitted_by,home_confirmed_by),
+          confirmed_by=COALESCE(confirmed_by,away_confirmed_by)
+      WHERE status IN ('SUBMITTED','CONFIRMED','APPROVED') AND submitted_side IS NULL;
     CREATE INDEX IF NOT EXISTS idx_players_team ON players(team_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_players_ncsf_number_unique
       ON players(ncsf_number) WHERE ncsf_number IS NOT NULL;
@@ -1035,6 +1046,9 @@ async function fixturePayload(fixture) {
       awayClubId: fixture.away_club_id,
       status: fixture.status,
       notes: fixture.notes,
+      submittedSide: fixture.submitted_side,
+      submittedBy: fixture.submitted_by,
+      confirmedBy: fixture.confirmed_by,
       homeConfirmed: Boolean(fixture.home_confirmed_by),
       awayConfirmed: Boolean(fixture.away_confirmed_by),
       approvedAt: fixture.approved_at,
@@ -1910,18 +1924,33 @@ app.post("/api/fixtures/:id/submit", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
-  const userSide = sideForUser(user, fixture);
-  if (user.role !== ROLE.NCSF && userSide !== "HOME") return res.status(403).json({ error: "The home team submits the completed match sheet." });
+
+  const submittingSide = sideForUser(user, fixture);
+  if (!["HOME","AWAY"].includes(submittingSide)) {
+    return res.status(403).json({ error: "A participating team or its club admin must submit the result." });
+  }
+  if (!["SCHEDULED","IN_PROGRESS"].includes(fixture.status)) {
+    return res.status(409).json({ error: "This result has already been submitted." });
+  }
 
   const payload = await fixturePayload(fixture);
   if (payload.frames.length !== 25 || payload.totals.completed !== 25) return res.status(409).json({ error: "All 25 frames must be completed before submission." });
   if (payload.lineups.length !== 10) return res.status(409).json({ error: "Both five-player lineups are required." });
 
+  const homeConfirmedBy = submittingSide === "HOME" ? user.id : null;
+  const awayConfirmedBy = submittingSide === "AWAY" ? user.id : null;
   await pool.query(
-    "UPDATE fixtures SET status='SUBMITTED',home_confirmed_by=$2 WHERE id=$1",
-    [fixture.id, user.id]
+    `UPDATE fixtures
+       SET status='SUBMITTED',
+           submitted_by=$2,
+           submitted_side=$3,
+           confirmed_by=NULL,
+           home_confirmed_by=$4,
+           away_confirmed_by=$5
+       WHERE id=$1`,
+    [fixture.id, user.id, submittingSide, homeConfirmedBy, awayConfirmedBy]
   );
-  await audit(user.id, fixture.id, "MATCH_SUBMITTED", { totals: payload.totals });
+  await audit(user.id, fixture.id, "MATCH_SUBMITTED", { side: submittingSide, totals: payload.totals });
   res.json(await fixturePayload(await fixtureById(fixture.id)));
 });
 
@@ -1929,22 +1958,36 @@ app.post("/api/fixtures/:id/confirm", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
-  const userSide = sideForUser(user, fixture);
-  if (user.role !== ROLE.NCSF && userSide !== "AWAY") return res.status(403).json({ error: "The away team confirms the submitted score sheet." });
-  if (!["SUBMITTED","CONFIRMED"].includes(fixture.status) && user.role !== ROLE.NCSF) return res.status(409).json({ error: "The match has not been submitted by the home team." });
+  if (fixture.status !== "SUBMITTED") return res.status(409).json({ error: "The result is not waiting for opponent confirmation." });
 
+  const confirmingSide = sideForUser(user, fixture);
+  if (!["HOME","AWAY"].includes(confirmingSide)) {
+    return res.status(403).json({ error: "Only the opposing participating team can confirm the submitted result." });
+  }
+  if (!fixture.submitted_side) return res.status(409).json({ error: "The submitting team could not be identified. Ask NCSF administration to review this fixture." });
+  if (confirmingSide === fixture.submitted_side) {
+    return res.status(403).json({ error: "The team that submitted the result cannot confirm its own submission." });
+  }
+
+  const homeConfirmedBy = confirmingSide === "HOME" ? user.id : fixture.home_confirmed_by;
+  const awayConfirmedBy = confirmingSide === "AWAY" ? user.id : fixture.away_confirmed_by;
   await pool.query(
-    "UPDATE fixtures SET away_confirmed_by=$2,status='CONFIRMED' WHERE id=$1",
-    [fixture.id, user.id]
+    `UPDATE fixtures
+       SET confirmed_by=$2,
+           home_confirmed_by=$3,
+           away_confirmed_by=$4,
+           status='CONFIRMED'
+       WHERE id=$1`,
+    [fixture.id, user.id, homeConfirmedBy, awayConfirmedBy]
   );
-  await audit(user.id, fixture.id, "MATCH_CONFIRMED", {});
+  await audit(user.id, fixture.id, "MATCH_CONFIRMED", { side: confirmingSide, submittedSide: fixture.submitted_side });
   res.json(await fixturePayload(await fixtureById(fixture.id)));
 });
 
-app.post("/api/fixtures/:id/approve", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
+app.post("/api/fixtures/:id/approve", requireRoles(ROLE.NCSF), async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
-  if (!fixture || !canManageFixture(req.user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
-  if (fixture.status !== "CONFIRMED" && req.user.role !== ROLE.NCSF) return res.status(409).json({ error: "Both teams must confirm the result before approval." });
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if (fixture.status !== "CONFIRMED") return res.status(409).json({ error: "The opposing team must confirm the submitted result before NCSF approval." });
 
   const payload = await fixturePayload(fixture);
   if (payload.totals.completed !== 25) return res.status(409).json({ error: "All 25 frames must be scored." });
