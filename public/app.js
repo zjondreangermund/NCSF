@@ -914,27 +914,23 @@ function formatEventDate(value){
         return {cameraGranted:true,audioGranted:true};
       }
       return await new Promise(resolve=>{
-        mediaPermissionResolver=resolve;
-        const timeout=setTimeout(()=>{
-          if(mediaPermissionResolver===resolve){
-            mediaPermissionResolver=null;
-            resolve({
-              cameraGranted:typeof window.NCSFApp.hasCameraPermission==='function'?Boolean(window.NCSFApp.hasCameraPermission()):false,
-              audioGranted:typeof window.NCSFApp.hasMicrophonePermission==='function'?Boolean(window.NCSFApp.hasMicrophonePermission()):false
-            });
-          }
-        },12000);
-        const original=mediaPermissionResolver;
-        mediaPermissionResolver=result=>{
-          clearTimeout(timeout);
-          resolve(result);
-        };
-        try{window.NCSFApp.requestBroadcastPermissions()}
-        catch(_e){
+        let finished=false;
+        const finish=result=>{
+          if(finished)return;
+          finished=true;
           clearTimeout(timeout);
           mediaPermissionResolver=null;
-          resolve({cameraGranted:false,audioGranted:false});
-        }
+          resolve(result);
+        };
+        const timeout=setTimeout(()=>{
+          finish({
+            cameraGranted:typeof window.NCSFApp.hasCameraPermission==='function'?Boolean(window.NCSFApp.hasCameraPermission()):false,
+            audioGranted:typeof window.NCSFApp.hasMicrophonePermission==='function'?Boolean(window.NCSFApp.hasMicrophonePermission()):false
+          });
+        },12000);
+        mediaPermissionResolver=finish;
+        try{window.NCSFApp.requestBroadcastPermissions()}
+        catch(_e){finish({cameraGranted:false,audioGranted:false})}
       });
     };
 
