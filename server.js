@@ -1195,33 +1195,47 @@ function streamOnePageScoresheetPdf(res, payload) {
   doc.fontSize(5.5).fillColor("#5c6775").text(`${t.completed}/25 frames`, W / 2 - 60, heroY + 30, { width: 120, align: "center" });
 
   const roundsY = 112;
-  const gap = 3;
-  const colW = (usable - gap * 4) / 5;
-  const rowH = 22;
-  const headH = 19;
+  const horizontalGap = 8;
+  const verticalGap = 6;
+  const colW = (usable - horizontalGap) / 2;
+  const rowH = 12;
+  const headH = 15;
+  const tableHeadH = 11;
+  const roundBlockH = headH + tableHeadH + (5 * rowH);
   const letters = ["A","B","C","D","E"];
 
   for (let round = 1; round <= 5; round++) {
-    const x = left + (round - 1) * (colW + gap);
+    const row = Math.floor((round - 1) / 2);
+    const col = (round - 1) % 2;
+    const isLastSingle = round === 5;
+    const x = isLastSingle
+      ? left + (usable - colW) / 2
+      : left + col * (colW + horizontalGap);
+    const yRound = roundsY + row * (roundBlockH + verticalGap);
     const frames = payload.frames.filter(fr => Number(fr.round_no) === round);
     const rh = frames.filter(fr => fr.winner_side === "HOME").length;
     const ra = frames.filter(fr => fr.winner_side === "AWAY").length;
 
-    drawCell(doc, x, roundsY, colW, headH, `ROUND ${round}     ${rh}-${ra}`, {
+    drawCell(doc, x, yRound, colW, headH, `ROUND ${round}     ${rh}-${ra}`, {
       size: 7, bold: true, align: "center", fill: "#e9edf2", stroke: "#7c8794"
     });
 
-    const yHead = roundsY + headH;
-    const widths = [13, colW * 0.34, 17, 17, colW * 0.34, 13];
+    const yHead = yRound + headH;
+    const narrow = 14;
+    const scoreW = 18;
+    const playerW = (colW - (narrow * 2) - (scoreW * 2)) / 2;
+    const widths = [narrow, playerW, scoreW, scoreW, playerW, narrow];
     const labels = ["#", "HOME", "H", "A", "AWAY", "#"];
     let cx = x;
     labels.forEach((label, idx) => {
-      drawCell(doc, cx, yHead, widths[idx], 15, label, { size: 4.7, bold: true, align: "center", fill: "#f7f8fa" });
+      drawCell(doc, cx, yHead, widths[idx], tableHeadH, label, {
+        size: 5, bold: true, align: "center", fill: "#f7f8fa"
+      });
       cx += widths[idx];
     });
 
     frames.forEach((fr, i) => {
-      const y = yHead + 15 + i * rowH;
+      const y = yHead + tableHeadH + i * rowH;
       const vals = [
         fr.home_slot,
         fr.home_player_name,
@@ -1233,7 +1247,7 @@ function streamOnePageScoresheetPdf(res, payload) {
       cx = x;
       vals.forEach((val, idx) => {
         drawCell(doc, cx, y, widths[idx], rowH, val, {
-          size: idx === 1 || idx === 4 ? 5.2 : 6.2,
+          size: idx === 1 || idx === 4 ? 6.1 : 6.5,
           bold: idx === 2 || idx === 3,
           align: idx === 1 ? "left" : idx === 4 ? "right" : "center"
         });
@@ -1242,7 +1256,7 @@ function streamOnePageScoresheetPdf(res, payload) {
     });
   }
 
-  const summaryY = 290;
+  const summaryY = roundsY + (3 * roundBlockH) + (2 * verticalGap) + 8;
   const matchResult = t.completed < 25 ? "IN PROGRESS" :
     (t.home > t.away ? `${f.homeTeamName} WON` : t.away > t.home ? `${f.awayTeamName} WON` : "DRAW");
   const summary = [
@@ -1260,7 +1274,7 @@ function streamOnePageScoresheetPdf(res, payload) {
     doc.font("Helvetica-Bold").fontSize(4.3).fillColor("#6a7380").text(s[0], x + 2, summaryY + 3, { width: sw - 4, align: "center" });
   });
 
-  const signY = 336;
+  const signY = summaryY + 43;
   const homeCaptain = names.get(Number(f.homeCaptainId)) || "-";
   const awayCaptain = names.get(Number(f.awayCaptainId)) || "-";
   doc.font("Helvetica-Bold").fontSize(6).fillColor("#2b3440").text(`HOME CAPTAIN: ${homeCaptain}`, left, signY, { width: 300 });
