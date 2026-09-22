@@ -490,10 +490,12 @@
   }
   async function initAdmin(){
     if(!requireUser(['NCSF_ADMIN']))return;
-    $$('.admin-tabs button').forEach(btn=>btn.addEventListener('click',()=>{
-      $$('.admin-tabs button').forEach(b=>b.classList.toggle('active',b===btn));
-      $$('.admin-pane').forEach(p=>p.classList.toggle('hidden',p.dataset.pane!==btn.dataset.adminTab));
-    }));
+    const showPane=(name)=>{
+      $$('.admin-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===name));
+      $$('.admin-pane').forEach(p=>p.classList.toggle('hidden',p.dataset.pane!==name));
+    };
+    $$('.admin-tabs button').forEach(btn=>btn.addEventListener('click',()=>showPane(btn.dataset.adminTab)));
+    showPane($('.admin-tabs button.active')?.dataset.adminTab||'dashboard');
     await reloadAdmin();
     bindAdminForms();
   }
@@ -611,7 +613,21 @@
       ['adminUserForm','/api/admin/users','Login created']
     ];
     simple.forEach(([id,url,msg])=>$('#'+id)?.addEventListener('submit',async e=>{
-      e.preventDefault();try{await api(url,{method:'POST',body:formObject(e.currentTarget)});e.currentTarget.reset();await reloadAdmin();toast(msg)}catch(err){toast(err.message,true)}
+      e.preventDefault();
+      const form=e.currentTarget;
+      const submit=form.querySelector('[type="submit"]');
+      if(submit?.disabled)return;
+      if(submit)submit.disabled=true;
+      try{
+        await api(url,{method:'POST',body:formObject(form)});
+        form.reset();
+        await reloadAdmin();
+        toast(msg);
+      }catch(err){
+        toast(err.message,true);
+      }finally{
+        if(submit)submit.disabled=false;
+      }
     }));
     $('#scheduleForm')?.addEventListener('submit',async e=>{
       e.preventDefault();const o=formObject(e.currentTarget);
