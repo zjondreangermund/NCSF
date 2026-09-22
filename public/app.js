@@ -1032,7 +1032,12 @@ function formatEventDate(value){
       closeAllPeers();
       const oldSocket=socket;
       socket=null;
-      try{if(oldSocket&&oldSocket.readyState<=1)oldSocket.close()}catch(_e){}
+      try{
+        if(oldSocket&&oldSocket.readyState===WebSocket.OPEN){
+          oldSocket.send(JSON.stringify({type:'publisher-stop'}));
+        }
+        if(oldSocket&&oldSocket.readyState<=1)oldSocket.close();
+      }catch(_e){}
       stopTracks();
       setBroadcastAwake(false);
       setUi(false);
