@@ -647,6 +647,40 @@ function formatEventDate(value){
   };
 
   let ncsfFullscreenStage=null;
+  let ncsfFullscreenChatHome=null;
+
+  function moveLiveChatForFullscreen(stage,active){
+    const drawer=$('#liveChatDrawer');
+    const host=$('#liveChatInlineHost');
+    if(!drawer)return;
+
+    if(active){
+      if(!ncsfFullscreenChatHome){
+        ncsfFullscreenChatHome={
+          parent:drawer.parentNode,
+          next:drawer.nextSibling
+        };
+      }
+      stage?.appendChild(drawer);
+      drawer.classList.add('fullscreen-chat');
+      drawer.classList.remove('open');
+      drawer.setAttribute('data-fullscreen-chat','true');
+      drawer.dispatchEvent(new CustomEvent('ncsf-chat-mode',{detail:{fullscreen:true}}));
+    }else{
+      drawer.classList.remove('fullscreen-chat');
+      drawer.removeAttribute('data-fullscreen-chat');
+      const home=ncsfFullscreenChatHome;
+      if(home?.parent){
+        if(home.next&&home.next.parentNode===home.parent)home.parent.insertBefore(drawer,home.next);
+        else home.parent.appendChild(drawer);
+      }else if(host){
+        host.appendChild(drawer);
+      }
+      ncsfFullscreenChatHome=null;
+      drawer.classList.add('open');
+      drawer.dispatchEvent(new CustomEvent('ncsf-chat-mode',{detail:{fullscreen:false}}));
+    }
+  }
 
   function liveControlIcon(kind){
     if(kind==='volume')return '<span class="live-volume-icon"><i></i><b></b></span>';
@@ -660,6 +694,7 @@ function formatEventDate(value){
     stage.classList.add('ncsf-live-fullscreen');
     document.documentElement.classList.add('ncsf-live-fullscreen-active');
     document.body.classList.add('ncsf-live-fullscreen-active');
+    moveLiveChatForFullscreen(stage,true);
     try{
       if(screen.orientation?.lock)screen.orientation.lock('landscape').catch(()=>{});
       if(window.NCSFApp&&typeof window.NCSFApp.enterLiveFullscreen==='function'){
@@ -677,6 +712,7 @@ function formatEventDate(value){
     stage?.classList.remove('ncsf-live-fullscreen');
     document.documentElement.classList.remove('ncsf-live-fullscreen-active');
     document.body.classList.remove('ncsf-live-fullscreen-active');
+    moveLiveChatForFullscreen(stage,false);
     ncsfFullscreenStage=null;
     try{
       if(window.NCSFApp&&typeof window.NCSFApp.exitLiveFullscreen==='function'){
@@ -1354,7 +1390,8 @@ function formatEventDate(value){
     const seen=new Set();
 
     const setOpen=value=>{
-      open=Boolean(value);
+      const fullscreen=drawer.classList.contains('fullscreen-chat');
+      open=fullscreen?Boolean(value):true;
       drawer.classList.toggle('open',open);
       handle.setAttribute('aria-expanded',open?'true':'false');
       const chevron=$('.live-chat-chevron',handle);
@@ -1431,6 +1468,11 @@ function formatEventDate(value){
 
     handle.addEventListener('click',()=>setOpen(!open));
     closeBtn?.addEventListener('click',()=>setOpen(false));
+    drawer.addEventListener('ncsf-chat-mode',e=>{
+      const fullscreen=Boolean(e.detail?.fullscreen);
+      setOpen(fullscreen?false:true);
+      requestAnimationFrame(()=>{messages.scrollTop=messages.scrollHeight});
+    });
 
     let gestureStartX=0,gestureStartY=0,gestureActive=false;
     const beginGesture=e=>{
@@ -1507,7 +1549,7 @@ function formatEventDate(value){
 
     loadHistory();
     connectChat();
-    setOpen(false);
+    setOpen(drawer.classList.contains('fullscreen-chat')?false:true);
   }
 
   async function initLivePage(){
