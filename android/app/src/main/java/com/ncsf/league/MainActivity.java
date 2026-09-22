@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback customViewCallback;
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingMediaPermission;
+    private boolean liveFullscreen = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,7 +64,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.6");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.7");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -203,6 +204,29 @@ public class MainActivity extends Activity {
                 }
             });
         }
+
+        @JavascriptInterface
+        public void enterLiveFullscreen() {
+            runOnUiThread(() -> {
+                liveFullscreen = true;
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                getWindow().getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_FULLSCREEN |
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+            });
+        }
+
+        @JavascriptInterface
+        public void exitLiveFullscreen() {
+            runOnUiThread(() -> exitLiveFullscreenNative());
+        }
+    }
+
+    private void exitLiveFullscreenNative() {
+        liveFullscreen = false;
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
     }
 
     @Override
@@ -261,6 +285,13 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (liveFullscreen) {
+            webView.evaluateJavascript(
+                    "window.exitNcsfLiveFullscreen&&window.exitNcsfLiveFullscreen();",
+                    null);
+            exitLiveFullscreenNative();
+            return;
+        }
         if (customView != null) {
             WebChromeClient chrome = (WebChromeClient) webView.getWebChromeClient();
             if (chrome != null) chrome.onHideCustomView();
