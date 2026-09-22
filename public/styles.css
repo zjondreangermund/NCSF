@@ -409,3 +409,32 @@ body[data-page="scoresheet"] .page{max-width:1120px}
   .topbar-inner{padding-left:12px!important;padding-right:12px!important}
   .nav{padding-left:0!important;padding-right:14px!important}
 }
+
+
+/* News, announcements and event calendar */
+.news-layout{align-items:start}
+.timeline,.news-feed{display:grid;gap:12px}
+.timeline-item,.news-card{
+  position:relative;
+  border:1px solid #dce4ed;
+  border-radius:15px;
+  background:#fff;
+  padding:16px;
+  box-shadow:0 7px 22px rgba(7,24,44,.05);
+}
+.timeline-item{display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:start}
+.timeline-item.pinned,.news-card.pinned{border-color:rgba(214,173,82,.55);box-shadow:0 8px 24px rgba(214,173,82,.11)}
+.timeline-date{font-weight:850;color:var(--navy);font-size:13px;line-height:1.45}
+.timeline-item h3,.news-card h3{margin:6px 0 7px;color:var(--navy)}
+.timeline-item p,.news-card p{margin:0;color:var(--muted);line-height:1.55}
+.news-meta{display:flex;align-items:center;gap:8px;justify-content:space-between;color:#788497;font-size:11px}
+.content-type{display:inline-flex;align-items:center;width:max-content;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.09em;margin-right:7px}
+.content-type.EVENT{background:#e8f5ef;color:#0b6b4e}
+.content-type.ANNOUNCEMENT{background:#fff3d8;color:#7a5a12}
+.content-type.NEWS{background:#eaf1fb;color:#174f86}
+.content-admin-row>span:first-child{display:grid;gap:4px}
+.content-admin-row .content-type{margin-bottom:2px}
+@media(max-width:700px){
+  .news-layout{grid-template-columns:1fr!important}
+  .timeline-item{grid-template-columns:1fr;gap:7px}
+}
