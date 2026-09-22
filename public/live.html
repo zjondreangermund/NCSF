@@ -37,7 +37,32 @@
   </section>
 
   <section class="panel live-panel">
-    <div id="livePlayer" class="empty">Loading live stream…</div>
+    <div class="live-stage" id="liveStage">
+      <div id="livePlayer" class="empty">Loading live stream…</div>
+
+      <aside class="live-chat-drawer" id="liveChatDrawer" aria-label="Live stream chat">
+        <button class="live-chat-handle" id="liveChatHandle" type="button" aria-expanded="false">
+          <span class="live-chat-grip"></span>
+          <strong>Live Chat</strong>
+          <span class="live-chat-badge hidden" id="liveChatBadge">0</span>
+          <span class="live-chat-chevron">⌃</span>
+        </button>
+        <div class="live-chat-body">
+          <div class="live-chat-head">
+            <div><strong>Match Chat</strong><small>Live with other viewers</small></div>
+            <button class="live-chat-close" id="liveChatClose" type="button" aria-label="Hide chat">×</button>
+          </div>
+          <div class="live-chat-messages" id="liveChatMessages">
+            <div class="empty">Loading chat…</div>
+          </div>
+          <form class="live-chat-form" id="liveChatForm">
+            <input id="liveChatInput" maxlength="280" autocomplete="off" placeholder="Write a message…" aria-label="Live chat message">
+            <button class="btn primary small" type="submit">Send</button>
+          </form>
+          <div class="live-chat-signin hidden" id="liveChatSignin">Sign in to send messages.</div>
+        </div>
+      </aside>
+    </div>
   </section>
 </main>
 
