@@ -14,6 +14,7 @@ import android.os.Environment;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
 import android.view.View;
+import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
 import android.webkit.JavascriptInterface;
@@ -64,7 +65,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.8");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.9");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -222,6 +223,17 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void exitLiveFullscreen() {
             runOnUiThread(() -> exitLiveFullscreenNative());
+        }
+
+        @JavascriptInterface
+        public void setBroadcastActive(boolean active) {
+            runOnUiThread(() -> {
+                if (active) {
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                } else {
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                }
+            });
         }
     }
 
