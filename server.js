@@ -1186,7 +1186,7 @@ app.get("/api/public/teams", async (req, res) => {
   const where = ["t.active=TRUE"];
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
-    where.push(`t.division_id=${args.length}`);
+    where.push(`t.division_id=$${args.length}`);
   }
   const { rows } = await pool.query(`
     SELECT t.id,t.name,t.short_name,t.division_id,c.name club_name,d.name division_name,s.name season_name,
@@ -1208,11 +1208,11 @@ app.get("/api/public/players", async (req, res) => {
   const where = ["p.active=TRUE","t.active=TRUE"];
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
-    where.push(`t.division_id=${args.length}`);
+    where.push(`t.division_id=$${args.length}`);
   }
   if (req.query.teamId) {
     args.push(Number(req.query.teamId));
-    where.push(`p.team_id=${args.length}`);
+    where.push(`p.team_id=$${args.length}`);
   }
   const { rows } = await pool.query(`
     SELECT p.id,p.ncsf_number,p.first_name,p.last_name,t.id team_id,t.name team_name,
@@ -1252,18 +1252,18 @@ app.get("/api/fixtures", async (req, res) => {
   }
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
-    where.push(`f.division_id=${args.length}`);
+    where.push(`f.division_id=$${args.length}`);
   }
   if (req.query.teamId) {
     args.push(Number(req.query.teamId));
-    where.push(`(f.home_team_id=${args.length} OR f.away_team_id=${args.length})`);
+    where.push(`(f.home_team_id=$${args.length} OR f.away_team_id=$${args.length})`);
   }
   if (req.query.status) {
     const statuses = String(req.query.status).split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
     const allowed = ['SCHEDULED','IN_PROGRESS','SUBMITTED','CONFIRMED','APPROVED','POSTPONED','FORFEIT'];
     if (!statuses.length || statuses.some(s => !allowed.includes(s))) return res.status(400).json({ error: "Invalid fixture status." });
     args.push(statuses);
-    where.push(`f.status = ANY(${args.length}::text[])`);
+    where.push(`f.status = ANY($${args.length}::text[])`);
   }
   const { rows } = await pool.query(`
     SELECT f.id,f.division_id,f.round_no,f.fixture_date,f.status,f.venue,
