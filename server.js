@@ -1,0 +1,1145 @@
+require("dotenv").config();
+
+const path = require("path");
+const express = require("express");
+const session = require("express-session");
+const PgSession = require("connect-pg-simple")(session);
+const { Pool } = require("pg");
+const bcrypt = require("bcryptjs");
+const multer = require("multer");
+const helmet = require("helmet");
+const compression = require("compression");
+const morgan = require("morgan");
+
+if (!process.env.DATABASE_URL) {
+  console.error("DATABASE_URL is required.");
+  process.exit(1);
+}
+
+const app = express();
+const port = Number(process.env.PORT || 3000);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false }
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.mimetype);
+    cb(ok ? null : new Error("Only JPG, PNG, WEBP or PDF score sheets are allowed."), ok);
+  }
+});
+
+app.set("trust proxy", 1);
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": ["'self'"],
+      "img-src": ["'self'", "data:", "blob:"],
+      "style-src": ["'self'", "'unsafe-inline'"],
+      "script-src": ["'self'"],
+      "connect-src": ["'self'"],
+      "font-src": ["'self'", "data:"]
+    }
+  }
+}));
+app.use(compression());
+app.use(morgan("tiny"));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+app.use(session({
+  store: new PgSession({ pool, createTableIfMissing: true }),
+  secret: process.env.SESSION_SECRET || "change-me-in-production",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 1000 * 60 * 60 * 12
+  }
+}));
+
+const ROLE = {
+  NCSF: "NCSF_ADMIN",
+  CLUB: "CLUB_ADMIN",
+  TEAM: "TEAM_ADMIN"
+};
+
+async function initDatabase() {
+  await pool.query(\`
+    CREATE TABLE IF NOT EXISTS seasons (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      start_date DATE,
+      end_date DATE,
+      active BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS clubs (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      short_name TEXT,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS divisions (
+      id SERIAL PRIMARY KEY,
+      season_id INTEGER NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(season_id, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS teams (
+      id SERIAL PRIMARY KEY,
+      club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      division_id INTEGER REFERENCES divisions(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      short_name TEXT,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(club_id, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS players (
+      id SERIAL PRIMARY KEY,
+      club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL,
+      ncsf_number TEXT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      suspended BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('NCSF_ADMIN','CLUB_ADMIN','TEAM_ADMIN')),
+      club_id INTEGER REFERENCES clubs(id) ON DELETE SET NULL,
+      team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS fixtures (
+      id SERIAL PRIMARY KEY,
+      division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
+      round_no INTEGER NOT NULL DEFAULT 1,
+      fixture_date TIMESTAMPTZ,
+      venue TEXT,
+      home_team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      away_team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'SCHEDULED'
+        CHECK (status IN ('SCHEDULED','IN_PROGRESS','SUBMITTED','CONFIRMED','APPROVED','POSTPONED','FORFEIT')),
+      notes TEXT,
+      home_confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      away_confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      approved_at TIMESTAMPTZ,
+      player_of_match_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+      break_run_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+      rack_run_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+      bonus_points INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (home_team_id <> away_team_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS fixture_lineups (
+      fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
+      side TEXT NOT NULL CHECK (side IN ('HOME','AWAY')),
+      slot INTEGER NOT NULL CHECK (slot BETWEEN 1 AND 5),
+      player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+      PRIMARY KEY(fixture_id, side, slot),
+      UNIQUE(fixture_id, side, player_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS frames (
+      id SERIAL PRIMARY KEY,
+      fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
+      round_no INTEGER NOT NULL CHECK (round_no BETWEEN 1 AND 5),
+      board_no INTEGER NOT NULL CHECK (board_no BETWEEN 1 AND 5),
+      home_slot INTEGER NOT NULL CHECK (home_slot BETWEEN 1 AND 5),
+      away_slot INTEGER NOT NULL CHECK (away_slot BETWEEN 1 AND 5),
+      home_player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+      away_player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+      winner_side TEXT CHECK (winner_side IN ('HOME','AWAY')),
+      winner_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(fixture_id, round_no, board_no)
+    );
+
+    CREATE TABLE IF NOT EXISTS substitutions (
+      id SERIAL PRIMARY KEY,
+      fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
+      side TEXT NOT NULL CHECK (side IN ('HOME','AWAY')),
+      out_player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+      in_player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+      effective_round INTEGER NOT NULL CHECK (effective_round BETWEEN 1 AND 5),
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS fixture_attachments (
+      id SERIAL PRIMARY KEY,
+      fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'SIGNED_SCORESHEET',
+      filename TEXT NOT NULL,
+      mimetype TEXT NOT NULL,
+      file_data BYTEA NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      fixture_id INTEGER REFERENCES fixtures(id) ON DELETE CASCADE,
+      action TEXT NOT NULL,
+      detail JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_fixtures_division_status ON fixtures(division_id, status);
+    CREATE INDEX IF NOT EXISTS idx_frames_fixture ON frames(fixture_id);
+    CREATE INDEX IF NOT EXISTS idx_frames_winner ON frames(winner_player_id);
+    CREATE INDEX IF NOT EXISTS idx_players_team ON players(team_id);
+  \`);
+}
+
+function cleanEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function safeUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    role: row.role,
+    clubId: row.club_id,
+    teamId: row.team_id,
+    clubName: row.club_name || null,
+    teamName: row.team_name || null
+  };
+}
+
+async function currentUserById(id) {
+  const { rows } = await pool.query(\`
+    SELECT u.*, c.name club_name, t.name team_name
+    FROM users u
+    LEFT JOIN clubs c ON c.id=u.club_id
+    LEFT JOIN teams t ON t.id=u.team_id
+    WHERE u.id=$1 AND u.active=TRUE
+  \`, [id]);
+  return rows[0] || null;
+}
+
+function requireAuth(req, res, next) {
+  if (!req.session.userId) return res.status(401).json({ error: "Please sign in." });
+  next();
+}
+
+function requireRoles(...roles) {
+  return async (req, res, next) => {
+    if (!req.session.userId) return res.status(401).json({ error: "Please sign in." });
+    const user = await currentUserById(req.session.userId);
+    if (!user || !roles.includes(user.role)) return res.status(403).json({ error: "You do not have access to this area." });
+    req.user = user;
+    next();
+  };
+}
+
+async function audit(userId, fixtureId, action, detail = {}) {
+  await pool.query(
+    "INSERT INTO audit_logs(user_id, fixture_id, action, detail) VALUES($1,$2,$3,$4)",
+    [userId || null, fixtureId || null, action, JSON.stringify(detail)]
+  );
+}
+
+async function fixtureById(id) {
+  const { rows } = await pool.query(\`
+    SELECT f.*, d.name division_name, s.name season_name,
+           ht.name home_team_name, at.name away_team_name,
+           hc.name home_club_name, ac.name away_club_name,
+           ht.club_id home_club_id, at.club_id away_club_id
+    FROM fixtures f
+    JOIN divisions d ON d.id=f.division_id
+    JOIN seasons s ON s.id=d.season_id
+    JOIN teams ht ON ht.id=f.home_team_id
+    JOIN teams at ON at.id=f.away_team_id
+    JOIN clubs hc ON hc.id=ht.club_id
+    JOIN clubs ac ON ac.id=at.club_id
+    WHERE f.id=$1
+  \`, [id]);
+  return rows[0] || null;
+}
+
+function canManageFixture(user, fixture) {
+  if (!user || !fixture) return false;
+  if (user.role === ROLE.NCSF) return true;
+  if (user.role === ROLE.CLUB) {
+    return user.club_id === fixture.home_club_id || user.club_id === fixture.away_club_id;
+  }
+  if (user.role === ROLE.TEAM) {
+    return user.team_id === fixture.home_team_id || user.team_id === fixture.away_team_id;
+  }
+  return false;
+}
+
+function sideForUser(user, fixture) {
+  if (!user || !fixture) return null;
+  if (user.role === ROLE.NCSF) return "NCSF";
+  if (user.role === ROLE.TEAM) {
+    if (user.team_id === fixture.home_team_id) return "HOME";
+    if (user.team_id === fixture.away_team_id) return "AWAY";
+  }
+  if (user.role === ROLE.CLUB) {
+    if (user.club_id === fixture.home_club_id) return "HOME";
+    if (user.club_id === fixture.away_club_id) return "AWAY";
+  }
+  return null;
+}
+
+async function teamBelongsToClub(teamId, clubId) {
+  const { rowCount } = await pool.query("SELECT 1 FROM teams WHERE id=$1 AND club_id=$2", [teamId, clubId]);
+  return rowCount > 0;
+}
+
+async function ensureFrames(fixtureId) {
+  const { rows: lineups } = await pool.query(
+    "SELECT side, slot, player_id FROM fixture_lineups WHERE fixture_id=$1 ORDER BY side, slot",
+    [fixtureId]
+  );
+  const home = new Map(lineups.filter(x => x.side === "HOME").map(x => [x.slot, x.player_id]));
+  const away = new Map(lineups.filter(x => x.side === "AWAY").map(x => [x.slot, x.player_id]));
+  if (home.size !== 5 || away.size !== 5) return false;
+
+  const shifts = [0, 1, 4, 2, 3];
+  for (let round = 1; round <= 5; round++) {
+    const shift = shifts[round - 1];
+    for (let board = 1; board <= 5; board++) {
+      const homeSlot = board;
+      const awaySlot = ((board - 1 + shift) % 5) + 1;
+      await pool.query(\`
+        INSERT INTO frames(fixture_id, round_no, board_no, home_slot, away_slot, home_player_id, away_player_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT(fixture_id, round_no, board_no) DO NOTHING
+      \`, [fixtureId, round, board, homeSlot, awaySlot, home.get(homeSlot), away.get(awaySlot)]);
+    }
+  }
+  return true;
+}
+
+async function getStandings(divisionId) {
+  const { rows } = await pool.query(\`
+    WITH match_scores AS (
+      SELECT f.id, f.home_team_id, f.away_team_id,
+             COUNT(*) FILTER (WHERE fr.winner_side='HOME')::int home_frames,
+             COUNT(*) FILTER (WHERE fr.winner_side='AWAY')::int away_frames
+      FROM fixtures f
+      JOIN frames fr ON fr.fixture_id=f.id
+      WHERE f.division_id=$1 AND f.status='APPROVED'
+      GROUP BY f.id
+    ),
+    team_rows AS (
+      SELECT home_team_id team_id, home_frames frames_for, away_frames frames_against,
+             CASE WHEN home_frames>away_frames THEN 1 ELSE 0 END wins,
+             CASE WHEN home_frames<away_frames THEN 1 ELSE 0 END losses
+      FROM match_scores
+      UNION ALL
+      SELECT away_team_id team_id, away_frames frames_for, home_frames frames_against,
+             CASE WHEN away_frames>home_frames THEN 1 ELSE 0 END wins,
+             CASE WHEN away_frames<home_frames THEN 1 ELSE 0 END losses
+      FROM match_scores
+    )
+    SELECT t.id team_id, t.name team_name, c.name club_name,
+           COUNT(tr.team_id)::int played,
+           COALESCE(SUM(tr.wins),0)::int wins,
+           COALESCE(SUM(tr.losses),0)::int losses,
+           COALESCE(SUM(tr.frames_for),0)::int frames_won,
+           COALESCE(SUM(tr.frames_against),0)::int frames_lost,
+           COALESCE(SUM(tr.frames_for-tr.frames_against),0)::int frame_difference
+    FROM teams t
+    JOIN clubs c ON c.id=t.club_id
+    LEFT JOIN team_rows tr ON tr.team_id=t.id
+    WHERE t.division_id=$1 AND t.active=TRUE
+    GROUP BY t.id,c.name
+    ORDER BY frames_won DESC, frame_difference DESC, wins DESC, team_name ASC
+  \`, [divisionId]);
+  return rows;
+}
+
+async function getIndividualRankings(divisionId) {
+  const { rows } = await pool.query(\`
+    SELECT p.id player_id,
+           p.first_name || ' ' || p.last_name player_name,
+           p.ncsf_number,
+           t.name team_name,
+           c.name club_name,
+           COUNT(fr.id)::int frames_played,
+           COUNT(fr.id) FILTER (WHERE fr.winner_player_id=p.id)::int frames_won,
+           COUNT(fr.id) FILTER (WHERE fr.winner_player_id IS NOT NULL AND fr.winner_player_id<>p.id)::int frames_lost,
+           CASE WHEN COUNT(fr.id)=0 THEN 0
+                ELSE ROUND((COUNT(fr.id) FILTER (WHERE fr.winner_player_id=p.id)::numeric / COUNT(fr.id)::numeric) * 100, 1)
+           END win_percentage
+    FROM players p
+    JOIN teams t ON t.id=p.team_id
+    JOIN clubs c ON c.id=p.club_id
+    LEFT JOIN frames fr ON (fr.home_player_id=p.id OR fr.away_player_id=p.id)
+    LEFT JOIN fixtures f ON f.id=fr.fixture_id AND f.status='APPROVED' AND f.division_id=$1
+    WHERE t.division_id=$1 AND p.active=TRUE
+    GROUP BY p.id,t.name,c.name
+    HAVING COUNT(f.id) > 0
+    ORDER BY frames_won DESC, win_percentage DESC, frames_played DESC, player_name ASC
+  \`, [divisionId]);
+  return rows;
+}
+
+async function fixturePayload(fixture) {
+  const [{ rows: lineups }, { rows: frames }, { rows: subs }, { rows: attachments }] = await Promise.all([
+    pool.query(\`
+      SELECT fl.side, fl.slot, p.id player_id, p.first_name, p.last_name, p.ncsf_number
+      FROM fixture_lineups fl
+      JOIN players p ON p.id=fl.player_id
+      WHERE fl.fixture_id=$1
+      ORDER BY fl.side, fl.slot
+    \`, [fixture.id]),
+    pool.query(\`
+      SELECT fr.*,
+             hp.first_name || ' ' || hp.last_name home_player_name,
+             ap.first_name || ' ' || ap.last_name away_player_name
+      FROM frames fr
+      JOIN players hp ON hp.id=fr.home_player_id
+      JOIN players ap ON ap.id=fr.away_player_id
+      WHERE fr.fixture_id=$1
+      ORDER BY fr.round_no, fr.board_no
+    \`, [fixture.id]),
+    pool.query(\`
+      SELECT s.*, op.first_name || ' ' || op.last_name out_player_name,
+             ip.first_name || ' ' || ip.last_name in_player_name
+      FROM substitutions s
+      JOIN players op ON op.id=s.out_player_id
+      JOIN players ip ON ip.id=s.in_player_id
+      WHERE s.fixture_id=$1
+      ORDER BY s.created_at
+    \`, [fixture.id]),
+    pool.query(\`
+      SELECT id, kind, filename, mimetype, created_at
+      FROM fixture_attachments
+      WHERE fixture_id=$1
+      ORDER BY created_at DESC
+    \`, [fixture.id])
+  ]);
+
+  const scored = frames.filter(f => f.winner_side);
+  const homeFrames = scored.filter(f => f.winner_side === "HOME").length;
+  const awayFrames = scored.filter(f => f.winner_side === "AWAY").length;
+
+  return {
+    fixture: {
+      id: fixture.id,
+      divisionId: fixture.division_id,
+      divisionName: fixture.division_name,
+      seasonName: fixture.season_name,
+      roundNo: fixture.round_no,
+      fixtureDate: fixture.fixture_date,
+      venue: fixture.venue,
+      homeTeamId: fixture.home_team_id,
+      awayTeamId: fixture.away_team_id,
+      homeTeamName: fixture.home_team_name,
+      awayTeamName: fixture.away_team_name,
+      homeClubName: fixture.home_club_name,
+      awayClubName: fixture.away_club_name,
+      status: fixture.status,
+      notes: fixture.notes,
+      homeConfirmed: Boolean(fixture.home_confirmed_by),
+      awayConfirmed: Boolean(fixture.away_confirmed_by),
+      approvedAt: fixture.approved_at,
+      playerOfMatchId: fixture.player_of_match_id,
+      breakRunPlayerId: fixture.break_run_player_id,
+      rackRunPlayerId: fixture.rack_run_player_id,
+      bonusPoints: fixture.bonus_points
+    },
+    lineups,
+    frames,
+    substitutions: subs,
+    attachments,
+    totals: {
+      completed: scored.length,
+      home: homeFrames,
+      away: awayFrames,
+      remaining: 25 - scored.length
+    }
+  };
+}
+
+app.get("/api/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
+});
+
+app.get("/api/setup/status", async (_req, res) => {
+  const { rows } = await pool.query("SELECT COUNT(*)::int count FROM users");
+  res.json({ needsSetup: rows[0].count === 0 });
+});
+
+app.post("/api/setup", async (req, res) => {
+  const { rows } = await pool.query("SELECT COUNT(*)::int count FROM users");
+  if (rows[0].count !== 0) return res.status(409).json({ error: "Initial setup has already been completed." });
+
+  const email = cleanEmail(req.body.email);
+  const name = String(req.body.displayName || "").trim();
+  const password = String(req.body.password || "");
+  if (!email || !name || password.length < 8) {
+    return res.status(400).json({ error: "Name, valid email and a password of at least 8 characters are required." });
+  }
+
+  const hash = await bcrypt.hash(password, 12);
+  const created = await pool.query(\`
+    INSERT INTO users(email,password_hash,display_name,role)
+    VALUES($1,$2,$3,'NCSF_ADMIN')
+    RETURNING *
+  \`, [email, hash, name]);
+
+  req.session.userId = created.rows[0].id;
+  res.status(201).json({ user: safeUser(created.rows[0]) });
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const email = cleanEmail(req.body.email);
+  const password = String(req.body.password || "");
+  const { rows } = await pool.query("SELECT * FROM users WHERE email=$1 AND active=TRUE", [email]);
+  const user = rows[0];
+  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    return res.status(401).json({ error: "Incorrect email or password." });
+  }
+  req.session.userId = user.id;
+  const hydrated = await currentUserById(user.id);
+  res.json({ user: safeUser(hydrated) });
+});
+
+app.post("/api/auth/logout", requireAuth, (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+app.get("/api/auth/me", async (req, res) => {
+  if (!req.session.userId) return res.json({ user: null });
+  const user = await currentUserById(req.session.userId);
+  if (!user) {
+    req.session.destroy(() => {});
+    return res.json({ user: null });
+  }
+  res.json({ user: safeUser(user) });
+});
+
+app.get("/api/public/meta", async (_req, res) => {
+  const [seasons, divisions, clubs] = await Promise.all([
+    pool.query("SELECT * FROM seasons ORDER BY active DESC, start_date DESC NULLS LAST, id DESC"),
+    pool.query(\`
+      SELECT d.*, s.name season_name
+      FROM divisions d JOIN seasons s ON s.id=d.season_id
+      WHERE d.active=TRUE ORDER BY s.active DESC, d.sort_order, d.name
+    \`),
+    pool.query("SELECT id,name,short_name FROM clubs WHERE active=TRUE ORDER BY name")
+  ]);
+  res.json({ seasons: seasons.rows, divisions: divisions.rows, clubs: clubs.rows });
+});
+
+app.get("/api/public/overview", async (_req, res) => {
+  const { rows: divRows } = await pool.query(\`
+    SELECT d.id,d.name,s.name season_name
+    FROM divisions d JOIN seasons s ON s.id=d.season_id
+    WHERE d.active=TRUE
+    ORDER BY s.active DESC,d.sort_order,d.id
+    LIMIT 1
+  \`);
+  const division = divRows[0] || null;
+  const { rows: fixtures } = await pool.query(\`
+    SELECT f.id,f.round_no,f.fixture_date,f.status,f.venue,
+           ht.name home_team_name,at.name away_team_name,
+           COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
+           COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+    FROM fixtures f
+    JOIN teams ht ON ht.id=f.home_team_id
+    JOIN teams at ON at.id=f.away_team_id
+    LEFT JOIN frames fr ON fr.fixture_id=f.id
+    GROUP BY f.id,ht.name,at.name
+    ORDER BY COALESCE(f.fixture_date, f.created_at) DESC
+    LIMIT 12
+  \`);
+  const standings = division ? await getStandings(division.id) : [];
+  const players = division ? await getIndividualRankings(division.id) : [];
+  res.json({ division, fixtures, standings: standings.slice(0, 8), topPlayers: players.slice(0, 10) });
+});
+
+app.get("/api/divisions/:id/standings", async (req, res) => {
+  res.json({ standings: await getStandings(Number(req.params.id)) });
+});
+
+app.get("/api/divisions/:id/individual-rankings", async (req, res) => {
+  res.json({ rankings: await getIndividualRankings(Number(req.params.id)) });
+});
+
+app.get("/api/fixtures", async (req, res) => {
+  const args = [];
+  const where = [];
+  if (req.query.divisionId) {
+    args.push(Number(req.query.divisionId));
+    where.push(\`f.division_id=$\${args.length}\`);
+  }
+  if (req.query.teamId) {
+    args.push(Number(req.query.teamId));
+    where.push(\`(f.home_team_id=$\${args.length} OR f.away_team_id=$\${args.length})\`);
+  }
+  const { rows } = await pool.query(\`
+    SELECT f.id,f.division_id,f.round_no,f.fixture_date,f.status,f.venue,
+           d.name division_name,s.name season_name,
+           ht.id home_team_id,ht.name home_team_name,
+           at.id away_team_id,at.name away_team_name,
+           COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
+           COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+    FROM fixtures f
+    JOIN divisions d ON d.id=f.division_id
+    JOIN seasons s ON s.id=d.season_id
+    JOIN teams ht ON ht.id=f.home_team_id
+    JOIN teams at ON at.id=f.away_team_id
+    LEFT JOIN frames fr ON fr.fixture_id=f.id
+    \${where.length ? "WHERE " + where.join(" AND ") : ""}
+    GROUP BY f.id,d.name,s.name,ht.id,at.id
+    ORDER BY f.fixture_date NULLS LAST,f.round_no,f.id
+  \`, args);
+  res.json({ fixtures: rows });
+});
+
+app.get("/api/teams/:id/players", async (req, res) => {
+  const { rows } = await pool.query(\`
+    SELECT id,ncsf_number,first_name,last_name,active,suspended
+    FROM players WHERE team_id=$1 AND active=TRUE
+    ORDER BY last_name,first_name
+  \`, [Number(req.params.id)]);
+  res.json({ players: rows });
+});
+
+app.get("/api/fixtures/:id", async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+
+  if (fixture.status !== "APPROVED") {
+    const user = req.session.userId ? await currentUserById(req.session.userId) : null;
+    if (!canManageFixture(user, fixture)) return res.status(403).json({ error: "This score sheet is not public yet." });
+  }
+  res.json(await fixturePayload(fixture));
+});
+
+app.get("/api/fixtures/:id/attachment/:attachmentId", async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  if (!fixture) return res.status(404).end();
+  if (fixture.status !== "APPROVED") {
+    const user = req.session.userId ? await currentUserById(req.session.userId) : null;
+    if (!canManageFixture(user, fixture)) return res.status(403).end();
+  }
+  const { rows } = await pool.query(
+    "SELECT filename,mimetype,file_data FROM fixture_attachments WHERE id=$1 AND fixture_id=$2",
+    [Number(req.params.attachmentId), fixture.id]
+  );
+  if (!rows[0]) return res.status(404).end();
+  res.setHeader("Content-Type", rows[0].mimetype);
+  res.setHeader("Content-Disposition", \`inline; filename="\${rows[0].filename.replace(/"/g, "")}"\`);
+  res.send(rows[0].file_data);
+});
+
+app.get("/api/my/fixtures", requireAuth, async (req, res) => {
+  const user = await currentUserById(req.session.userId);
+  let condition = "TRUE";
+  const args = [];
+  if (user.role === ROLE.CLUB) {
+    args.push(user.club_id);
+    condition = \`(ht.club_id=$1 OR at.club_id=$1)\`;
+  } else if (user.role === ROLE.TEAM) {
+    args.push(user.team_id);
+    condition = \`(f.home_team_id=$1 OR f.away_team_id=$1)\`;
+  }
+  const { rows } = await pool.query(\`
+    SELECT f.id,f.round_no,f.fixture_date,f.status,f.venue,d.name division_name,
+           ht.name home_team_name,at.name away_team_name,
+           COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
+           COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+    FROM fixtures f
+    JOIN divisions d ON d.id=f.division_id
+    JOIN teams ht ON ht.id=f.home_team_id
+    JOIN teams at ON at.id=f.away_team_id
+    LEFT JOIN frames fr ON fr.fixture_id=f.id
+    WHERE \${condition}
+    GROUP BY f.id,d.name,ht.name,at.name
+    ORDER BY f.fixture_date NULLS LAST,f.id
+  \`, args);
+  res.json({ fixtures: rows });
+});
+
+app.get("/api/admin/meta", requireRoles(ROLE.NCSF, ROLE.CLUB, ROLE.TEAM), async (req, res) => {
+  const user = req.user;
+  if (user.role === ROLE.NCSF) {
+    const [seasons, divisions, clubs, teams, players, users] = await Promise.all([
+      pool.query("SELECT * FROM seasons ORDER BY id DESC"),
+      pool.query("SELECT d.*,s.name season_name FROM divisions d JOIN seasons s ON s.id=d.season_id ORDER BY d.id DESC"),
+      pool.query("SELECT * FROM clubs ORDER BY name"),
+      pool.query("SELECT t.*,c.name club_name,d.name division_name FROM teams t JOIN clubs c ON c.id=t.club_id LEFT JOIN divisions d ON d.id=t.division_id ORDER BY t.name"),
+      pool.query("SELECT p.*,c.name club_name,t.name team_name FROM players p JOIN clubs c ON c.id=p.club_id LEFT JOIN teams t ON t.id=p.team_id ORDER BY p.last_name,p.first_name"),
+      pool.query("SELECT u.id,u.email,u.display_name,u.role,u.club_id,u.team_id,u.active,c.name club_name,t.name team_name FROM users u LEFT JOIN clubs c ON c.id=u.club_id LEFT JOIN teams t ON t.id=u.team_id ORDER BY u.display_name")
+    ]);
+    return res.json({ seasons: seasons.rows, divisions: divisions.rows, clubs: clubs.rows, teams: teams.rows, players: players.rows, users: users.rows });
+  }
+
+  const clubId = user.club_id;
+  const [divisions, clubs, teams, players, users] = await Promise.all([
+    pool.query("SELECT d.*,s.name season_name FROM divisions d JOIN seasons s ON s.id=d.season_id WHERE d.active=TRUE ORDER BY d.name"),
+    pool.query("SELECT * FROM clubs WHERE id=$1", [clubId]),
+    pool.query("SELECT t.*,c.name club_name,d.name division_name FROM teams t JOIN clubs c ON c.id=t.club_id LEFT JOIN divisions d ON d.id=t.division_id WHERE t.club_id=$1 ORDER BY t.name", [clubId]),
+    pool.query("SELECT p.*,c.name club_name,t.name team_name FROM players p JOIN clubs c ON c.id=p.club_id LEFT JOIN teams t ON t.id=p.team_id WHERE p.club_id=$1 ORDER BY p.last_name,p.first_name", [clubId]),
+    pool.query("SELECT u.id,u.email,u.display_name,u.role,u.club_id,u.team_id,u.active,c.name club_name,t.name team_name FROM users u LEFT JOIN clubs c ON c.id=u.club_id LEFT JOIN teams t ON t.id=u.team_id WHERE u.club_id=$1 ORDER BY u.display_name", [clubId])
+  ]);
+  const filteredTeams = user.role === ROLE.TEAM ? teams.rows.filter(t => t.id === user.team_id) : teams.rows;
+  const filteredPlayers = user.role === ROLE.TEAM ? players.rows.filter(p => p.team_id === user.team_id) : players.rows;
+  res.json({ seasons: [], divisions: divisions.rows, clubs: clubs.rows, teams: filteredTeams, players: filteredPlayers, users: users.rows });
+});
+
+app.post("/api/admin/seasons", requireRoles(ROLE.NCSF), async (req, res) => {
+  const name = String(req.body.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Season name is required." });
+  if (req.body.active) await pool.query("UPDATE seasons SET active=FALSE");
+  const { rows } = await pool.query(
+    "INSERT INTO seasons(name,start_date,end_date,active) VALUES($1,$2,$3,$4) RETURNING *",
+    [name, req.body.startDate || null, req.body.endDate || null, Boolean(req.body.active)]
+  );
+  res.status(201).json({ season: rows[0] });
+});
+
+app.post("/api/admin/divisions", requireRoles(ROLE.NCSF), async (req, res) => {
+  const { rows } = await pool.query(
+    "INSERT INTO divisions(season_id,name,sort_order) VALUES($1,$2,$3) RETURNING *",
+    [Number(req.body.seasonId), String(req.body.name || "").trim(), Number(req.body.sortOrder || 0)]
+  );
+  res.status(201).json({ division: rows[0] });
+});
+
+app.post("/api/admin/clubs", requireRoles(ROLE.NCSF), async (req, res) => {
+  const name = String(req.body.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Club name is required." });
+  const { rows } = await pool.query(
+    "INSERT INTO clubs(name,short_name) VALUES($1,$2) RETURNING *",
+    [name, String(req.body.shortName || "").trim() || null]
+  );
+  res.status(201).json({ club: rows[0] });
+});
+
+app.post("/api/admin/teams", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
+  const clubId = req.user.role === ROLE.CLUB ? req.user.club_id : Number(req.body.clubId);
+  const name = String(req.body.name || "").trim();
+  if (!clubId || !name) return res.status(400).json({ error: "Club and team name are required." });
+  const { rows } = await pool.query(
+    "INSERT INTO teams(club_id,division_id,name,short_name) VALUES($1,$2,$3,$4) RETURNING *",
+    [clubId, req.body.divisionId ? Number(req.body.divisionId) : null, name, String(req.body.shortName || "").trim() || null]
+  );
+  res.status(201).json({ team: rows[0] });
+});
+
+app.post("/api/admin/players", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
+  const clubId = req.user.role === ROLE.CLUB ? req.user.club_id : Number(req.body.clubId);
+  const teamId = req.body.teamId ? Number(req.body.teamId) : null;
+  if (teamId && !(await teamBelongsToClub(teamId, clubId))) return res.status(400).json({ error: "That team does not belong to the selected club." });
+
+  const firstName = String(req.body.firstName || "").trim();
+  const lastName = String(req.body.lastName || "").trim();
+  if (!clubId || !firstName || !lastName) return res.status(400).json({ error: "Club, first name and last name are required." });
+
+  const { rows } = await pool.query(\`
+    INSERT INTO players(club_id,team_id,ncsf_number,first_name,last_name)
+    VALUES($1,$2,$3,$4,$5) RETURNING *
+  \`, [clubId, teamId, String(req.body.ncsfNumber || "").trim() || null, firstName, lastName]);
+  res.status(201).json({ player: rows[0] });
+});
+
+app.patch("/api/admin/players/:id", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
+  const playerId = Number(req.params.id);
+  const { rows: existingRows } = await pool.query("SELECT * FROM players WHERE id=$1", [playerId]);
+  const existing = existingRows[0];
+  if (!existing) return res.status(404).json({ error: "Player not found." });
+  if (req.user.role === ROLE.CLUB && existing.club_id !== req.user.club_id) return res.status(403).json({ error: "Not your club." });
+
+  const teamId = req.body.teamId === null || req.body.teamId === "" ? null : Number(req.body.teamId);
+  if (teamId && !(await teamBelongsToClub(teamId, existing.club_id))) return res.status(400).json({ error: "Team must belong to the player's club." });
+
+  const { rows } = await pool.query(\`
+    UPDATE players
+    SET team_id=$2,
+        ncsf_number=COALESCE($3,ncsf_number),
+        active=COALESCE($4,active),
+        suspended=COALESCE($5,suspended)
+    WHERE id=$1 RETURNING *
+  \`, [
+    playerId,
+    teamId,
+    req.body.ncsfNumber === undefined ? null : String(req.body.ncsfNumber || "").trim(),
+    req.body.active === undefined ? null : Boolean(req.body.active),
+    req.body.suspended === undefined ? null : Boolean(req.body.suspended)
+  ]);
+  res.json({ player: rows[0] });
+});
+
+app.post("/api/admin/users", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
+  const email = cleanEmail(req.body.email);
+  const displayName = String(req.body.displayName || "").trim();
+  const password = String(req.body.password || "");
+  let role = String(req.body.role || ROLE.TEAM);
+  let clubId = req.body.clubId ? Number(req.body.clubId) : null;
+  let teamId = req.body.teamId ? Number(req.body.teamId) : null;
+
+  if (req.user.role === ROLE.CLUB) {
+    role = ROLE.TEAM;
+    clubId = req.user.club_id;
+    if (!teamId || !(await teamBelongsToClub(teamId, clubId))) return res.status(400).json({ error: "Choose one of your club teams." });
+  }
+  if (![ROLE.NCSF, ROLE.CLUB, ROLE.TEAM].includes(role)) return res.status(400).json({ error: "Invalid role." });
+  if (!email || !displayName || password.length < 8) return res.status(400).json({ error: "Name, email and an 8+ character password are required." });
+  if (role === ROLE.TEAM && (!teamId || !clubId)) return res.status(400).json({ error: "Team admins need a club and team." });
+  if (role === ROLE.CLUB && !clubId) return res.status(400).json({ error: "Club admins need a club." });
+  if (teamId && clubId && !(await teamBelongsToClub(teamId, clubId))) return res.status(400).json({ error: "Team does not belong to that club." });
+
+  const hash = await bcrypt.hash(password, 12);
+  const { rows } = await pool.query(\`
+    INSERT INTO users(email,password_hash,display_name,role,club_id,team_id)
+    VALUES($1,$2,$3,$4,$5,$6)
+    RETURNING id,email,display_name,role,club_id,team_id,active
+  \`, [email, hash, displayName, role, clubId, teamId]);
+  res.status(201).json({ user: safeUser(rows[0]) });
+});
+
+app.post("/api/admin/fixtures", requireRoles(ROLE.NCSF), async (req, res) => {
+  const divisionId = Number(req.body.divisionId);
+  const homeTeamId = Number(req.body.homeTeamId);
+  const awayTeamId = Number(req.body.awayTeamId);
+  const valid = await pool.query(
+    "SELECT COUNT(*)::int count FROM teams WHERE id IN ($1,$2) AND division_id=$3",
+    [homeTeamId, awayTeamId, divisionId]
+  );
+  if (valid.rows[0].count !== 2) return res.status(400).json({ error: "Both teams must belong to the selected division." });
+
+  const { rows } = await pool.query(\`
+    INSERT INTO fixtures(division_id,round_no,fixture_date,venue,home_team_id,away_team_id)
+    VALUES($1,$2,$3,$4,$5,$6) RETURNING *
+  \`, [
+    divisionId,
+    Number(req.body.roundNo || 1),
+    req.body.fixtureDate || null,
+    String(req.body.venue || "").trim() || null,
+    homeTeamId,
+    awayTeamId
+  ]);
+  res.status(201).json({ fixture: rows[0] });
+});
+
+app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF), async (req, res) => {
+  const divisionId = Number(req.params.id);
+  const { rows: existing } = await pool.query("SELECT COUNT(*)::int count FROM fixtures WHERE division_id=$1", [divisionId]);
+  if (existing[0].count > 0 && !req.body.force) {
+    return res.status(409).json({ error: "This division already has fixtures. Send force=true only if you intentionally want to add another schedule." });
+  }
+  const { rows: teams } = await pool.query("SELECT id FROM teams WHERE division_id=$1 AND active=TRUE ORDER BY id", [divisionId]);
+  if (teams.length < 2) return res.status(400).json({ error: "At least two teams are required." });
+
+  let ids = teams.map(t => t.id);
+  if (ids.length % 2) ids.push(null);
+  const n = ids.length;
+  const rounds = n - 1;
+  const firstDate = req.body.firstDate ? new Date(req.body.firstDate) : new Date();
+  const dayMs = 7 * 24 * 60 * 60 * 1000;
+
+  const created = [];
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    let rotating = [...ids];
+    for (let r = 0; r < rounds; r++) {
+      for (let i = 0; i < n / 2; i++) {
+        const a = rotating[i];
+        const b = rotating[n - 1 - i];
+        if (!a || !b) continue;
+        const home = r % 2 === 0 ? a : b;
+        const away = r % 2 === 0 ? b : a;
+        const d1 = new Date(firstDate.getTime() + r * dayMs);
+        const q1 = await client.query(\`
+          INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
+          VALUES($1,$2,$3,$4,$5) RETURNING id
+        \`, [divisionId, r + 1, d1.toISOString(), home, away]);
+        created.push(q1.rows[0].id);
+
+        const d2 = new Date(firstDate.getTime() + (r + rounds) * dayMs);
+        const q2 = await client.query(\`
+          INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
+          VALUES($1,$2,$3,$4,$5) RETURNING id
+        \`, [divisionId, r + 1 + rounds, d2.toISOString(), away, home]);
+        created.push(q2.rows[0].id);
+      }
+      rotating = [rotating[0], rotating[n - 1], ...rotating.slice(1, n - 1)];
+    }
+    await client.query("COMMIT");
+    res.status(201).json({ created: created.length, fixtureIds: created });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+app.put("/api/fixtures/:id/lineup", requireAuth, async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  const user = await currentUserById(req.session.userId);
+  if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if (["SUBMITTED","CONFIRMED","APPROVED"].includes(fixture.status) && user.role !== ROLE.NCSF) return res.status(409).json({ error: "This score sheet is locked." });
+
+  const side = String(req.body.side || "").toUpperCase();
+  if (!["HOME","AWAY"].includes(side)) return res.status(400).json({ error: "Invalid side." });
+  const userSide = sideForUser(user, fixture);
+  if (user.role === ROLE.TEAM && userSide !== side) return res.status(403).json({ error: "Team admins can only set their own lineup." });
+  if (user.role === ROLE.CLUB && userSide !== side) return res.status(403).json({ error: "Club admins can only set their club lineup." });
+
+  const playerIds = Array.isArray(req.body.playerIds) ? req.body.playerIds.map(Number) : [];
+  if (playerIds.length !== 5 || new Set(playerIds).size !== 5) return res.status(400).json({ error: "Exactly five different starting players are required." });
+  const teamId = side === "HOME" ? fixture.home_team_id : fixture.away_team_id;
+  const { rows: validRows } = await pool.query(
+    "SELECT id FROM players WHERE id=ANY($1::int[]) AND team_id=$2 AND active=TRUE AND suspended=FALSE",
+    [playerIds, teamId]
+  );
+  if (validRows.length !== 5) return res.status(400).json({ error: "All starters must be active, eligible players from this team." });
+
+  const { rows: scoredRows } = await pool.query("SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND winner_side IS NOT NULL", [fixture.id]);
+  if (scoredRows[0].count > 0) return res.status(409).json({ error: "Lineups cannot be changed after scoring starts. Use a substitution instead." });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM frames WHERE fixture_id=$1", [fixture.id]);
+    await client.query("DELETE FROM fixture_lineups WHERE fixture_id=$1 AND side=$2", [fixture.id, side]);
+    for (let i = 0; i < 5; i++) {
+      await client.query(
+        "INSERT INTO fixture_lineups(fixture_id,side,slot,player_id) VALUES($1,$2,$3,$4)",
+        [fixture.id, side, i + 1, playerIds[i]]
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  await ensureFrames(fixture.id);
+  await audit(user.id, fixture.id, "LINEUP_SAVED", { side, playerIds });
+  res.json(await fixturePayload(await fixtureById(fixture.id)));
+});
+
+app.post("/api/fixtures/:id/substitutions", requireAuth, async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  const user = await currentUserById(req.session.userId);
+  if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if (["SUBMITTED","CONFIRMED","APPROVED"].includes(fixture.status) && user.role !== ROLE.NCSF) return res.status(409).json({ error: "This score sheet is locked." });
+
+  const side = String(req.body.side || "").toUpperCase();
+  const outPlayerId = Number(req.body.outPlayerId);
+  const inPlayerId = Number(req.body.inPlayerId);
+  const effectiveRound = Number(req.body.effectiveRound);
+  if (!["HOME","AWAY"].includes(side) || !outPlayerId || !inPlayerId || effectiveRound < 1 || effectiveRound > 5) {
+    return res.status(400).json({ error: "Side, players and effective round are required." });
+  }
+  const userSide = sideForUser(user, fixture);
+  if ([ROLE.TEAM, ROLE.CLUB].includes(user.role) && userSide !== side) return res.status(403).json({ error: "You can only substitute your own side." });
+
+  const teamId = side === "HOME" ? fixture.home_team_id : fixture.away_team_id;
+  const { rows: eligible } = await pool.query(
+    "SELECT id FROM players WHERE id=ANY($1::int[]) AND team_id=$2 AND active=TRUE AND suspended=FALSE",
+    [[outPlayerId, inPlayerId], teamId]
+  );
+  if (eligible.length !== 2) return res.status(400).json({ error: "Both players must be eligible members of this team." });
+
+  const field = side === "HOME" ? "home_player_id" : "away_player_id";
+  const { rows: alreadyScored } = await pool.query(
+    \`SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND round_no >= $2 AND \${field}=$3 AND winner_side IS NOT NULL\`,
+    [fixture.id, effectiveRound, outPlayerId]
+  );
+  if (alreadyScored[0].count > 0 && user.role !== ROLE.NCSF) return res.status(409).json({ error: "A substitution cannot rewrite frames that are already scored." });
+
+  await pool.query(
+    "INSERT INTO substitutions(fixture_id,side,out_player_id,in_player_id,effective_round,created_by) VALUES($1,$2,$3,$4,$5,$6)",
+    [fixture.id, side, outPlayerId, inPlayerId, effectiveRound, user.id]
+  );
+  await pool.query(
+    \`UPDATE frames SET \${field}=$1, updated_by=$2, updated_at=NOW()
+     WHERE fixture_id=$3 AND round_no >= $4 AND \${field}=$5 AND winner_side IS NULL\`,
+    [inPlayerId, user.id, fixture.id, effectiveRound, outPlayerId]
+  );
+  await audit(user.id, fixture.id, "SUBSTITUTION", { side, outPlayerId, inPlayerId, effectiveRound });
+  res.json(await fixturePayload(await fixtureById(fixture.id)));
+});
+
+app.put("/api/fixtures/:id/frames/:frameId", requireAuth, async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  const user = await currentUserById(req.session.userId);
+  if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if (["SUBMITTED","CONFIRMED","APPROVED"].includes(fixture.status) && user.role !== ROLE.NCSF) return res.status(409).json({ error: "This score sheet is locked." });
+
+  const winnerSide = req.body.winnerSide === null ? null : String(req.body.winnerSide || "").toUpperCase();
+  if (winnerSide !== null && !["HOME","AWAY"].includes(winnerSide)) return res.status(400).json({ error: "Winner must be HOME or AWAY." });
+
+  const { rows: frameRows } = await pool.query("SELECT * FROM frames WHERE id=$1 AND fixture_id=$2", [Number(req.params.frameId), fixture.id]);
+  const frame = frameRows[0];
+  if (!frame) return res.status(404).json({ error: "Frame not found." });
+  const winnerPlayerId = winnerSide === "HOME" ? frame.home_player_id : winnerSide === "AWAY" ? frame.away_player_id : null;
+
+  await pool.query(
+    "UPDATE frames SET winner_side=$1,winner_player_id=$2,updated_by=$3,updated_at=NOW() WHERE id=$4",
+    [winnerSide, winnerPlayerId, user.id, frame.id]
+  );
+  if (fixture.status === "SCHEDULED") await pool.query("UPDATE fixtures SET status='IN_PROGRESS' WHERE id=$1", [fixture.id]);
+  await audit(user.id, fixture.id, "FRAME_RESULT", { frameId: frame.id, round: frame.round_no, board: frame.board_no, winnerSide });
+  res.json(await fixturePayload(await fixtureById(fixture.id)));
+});
+
+app.patch("/api/fixtures/:id/extras", requireAuth, async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  const user = await currentUserById(req.session.userId);
+  if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if (fixture.status === "APPROVED" && user.role !== ROLE.NCSF) return res.status(409).json({ error: "Approved fixtures are locked." });
+
+  await pool.query(\`
+    UPDATE fixtures SET
+      player_of_match_id=$2,
+      break_run_player_id=$3,
+      rack_run_player_id=$4,
+      bonus_points=$5,
+      notes=$6
+    WHERE id=$1
+  \`, [
+    fixture.id,
+    req.body.playerOfMatchId ? Number(req.body.playerOfMatchId) : null,
+    req.body.breakRunPlayerId ? Number(req.body.breakRunPlayerId) : null,
+    req.body.rackRunPlayerId ? Number(req.body.rackRunPlayerId) : null,
+    Number(req.body.bonusPoints || 0),
+    String(req.body.notes || "").trim() || null
+  ]);
+  await audit(user.id, fixture.id, "MATCH_EXTRAS_UPDATED", req.body);
+  res.json(await fixturePayload(await fixtureById(fixture.id)));
+});
+
+app.post("/api/fixtures/:id/upload", requireAuth, upload.single("scoresheet"), async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  const user = await currentUserById(req.session.userId);
+  if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if (!req.file) return res.status(400).json({ error: "Choose a score sheet image or PDF." });
+
+  const { rows } = await pool.query(\`
+    INSERT INTO fixture_attachments(fixture_id,filename,mimetype,file_data,uploaded_by)
+    VALUES($1,$2,$3,$4,$5)
+    RETURNING id,kind,filename,mimetype,created_at
+  \`, [fixture.id, req.file.originalname, req.file.mimetype, req.file.buffer, user.id]);
+  await audit(user.id, fixture.id, "SIGNED_SCORESHEET_UPLOADED", { attachmentId: rows[0].id, filename: rows[0].filename });
+  res.status(201).json({ attachment: rows[0] });
+});
+
+app.post("/api/fixtures/:id/submit", requireAuth, async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  const user = await currentUserById(req.session.userId);
+  if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  const userSide = sideForUser(user, fixture);
+  if (user.role !== ROLE.NCSF && userSide !== "HOME") return res.status(403).json({ error: "The home team submits the completed match sheet." });
+
+  const payload = await fixturePayload(fixture);
+  if (payload.frames.length !== 25 || payload.totals.completed !== 25) return res.status(409).json({ error: "All 25 frames must be completed before submission." });
+  if (payload.lineups.length !== 10) return res.status(409).json({ error: "Both five-player lineups are required." });
+
+  await pool.query(
+    "UPDATE fixtures SET status='SUBMITTED',home_confirmed_by=$2 WHERE id=$1",
+    [fixture.id, user.id]
+  );
+  await audit(user.id, fixture.id, "MATCH_SUBMITTED", { totals: payload.totals });
+  res.json(await fixturePayload(await fixtureById(fixture.id)));
+});
+
+app.post("/api/fixtures/:id/confirm", requireAuth, async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  const user = await currentUserById(req.session.userId);
+  if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  const userSide = sideForUser(user, fixture);
+  if (user.role !== ROLE.NCSF && userSide !== "AWAY") return res.status(403).json({ error: "The away team confirms the submitted score sheet." });
+  if (!["SUBMITTED","CONFIRMED"].includes(fixture.status) && user.role !== ROLE.NCSF) return res.status(409).json({ error: "The match has not been submitted by the home team." });
+
+  await pool.query(
+    "UPDATE fixtures SET away_confirmed_by=$2,status='CONFIRMED' WHERE id=$1",
+    [fixture.id, user.id]
+  );
+  await audit(user.id, fixture.id, "MATCH_CONFIRMED", {});
+  res.json(await fixturePayload(await fixtureById(fixture.id)));
+});
+
+app.post("/api/fixtures/:id/approve", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  if (!fixture || !canManageFixture(req.user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if (fixture.status !== "CONFIRMED" && req.user.role !== ROLE.NCSF) return res.status(409).json({ error: "Both teams must confirm the result before approval." });
+
+  const payload = await fixturePayload(fixture);
+  if (payload.totals.completed !== 25) return res.status(409).json({ error: "All 25 frames must be scored." });
+
+  await pool.query(
+    "UPDATE fixtures SET status='APPROVED',approved_by=$2,approved_at=NOW() WHERE id=$1",
+    [fixture.id, req.user.id]
+  );
+  await audit(req.user.id, fixture.id, "MATCH_APPROVED", { totals: payload.totals });
+  res.json(await fixturePayload(await fixtureById(fixture.id)));
+});
+
+app.get("/api/fixtures/:id/audit", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  if (!fixture || !canManageFixture(req.user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  const { rows } = await pool.query(\`
+    SELECT a.id,a.action,a.detail,a.created_at,u.display_name
+    FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id
+    WHERE a.fixture_id=$1
+    ORDER BY a.created_at DESC
+  \`, [fixture.id]);
+  res.json({ audit: rows });
+});
+
+app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  if (err.code === "23505") return res.status(409).json({ error: "That record already exists." });
+  if (err.code === "23503") return res.status(400).json({ error: "This item is linked to another record and cannot be used that way." });
+  if (err instanceof multer.MulterError) return res.status(400).json({ error: err.message });
+  res.status(500).json({ error: err.message || "Unexpected server error." });
+});
+
+initDatabase()
+  .then(() => app.listen(port, () => console.log(\`NCSF League Manager listening on port \${port}\`)))
+  .catch(error => {
+    console.error("Database initialization failed:", error);
+    process.exit(1);
+  });
