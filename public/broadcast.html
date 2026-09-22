@@ -46,8 +46,11 @@
       </div>
       <div class="broadcast-viewer-list hidden" id="broadcastViewerList"></div>
 
+    </div>
+
+    <div class="live-chat-inline-host broadcaster-chat-host" id="liveChatInlineHost">
       <aside class="live-chat-drawer broadcaster-chat" id="liveChatDrawer" aria-label="Live stream chat">
-        <button class="live-chat-handle" id="liveChatHandle" type="button" aria-expanded="false">
+        <button class="live-chat-handle" id="liveChatHandle" type="button" aria-expanded="true">
           <span class="live-chat-grip"></span>
           <strong>Live Chat</strong>
           <span class="live-chat-badge hidden" id="liveChatBadge">0</span>
@@ -55,7 +58,7 @@
         </button>
         <div class="live-chat-body">
           <div class="live-chat-head">
-            <div><strong>Match Chat</strong><small>Comments from live viewers</small></div>
+            <div><strong>Live Chat</strong><small>Comments from live viewers</small></div>
             <button class="live-chat-close" id="liveChatClose" type="button" aria-label="Hide chat">×</button>
           </div>
           <div class="live-chat-messages" id="liveChatMessages">
@@ -69,6 +72,7 @@
         </div>
       </aside>
     </div>
+
     <div class="broadcast-controls">
       <button class="btn primary" id="startBroadcast">Start Live</button>
       <button class="btn danger hidden" id="stopBroadcast">Stop Live</button>
