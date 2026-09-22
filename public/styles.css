@@ -438,3 +438,40 @@ body[data-page="scoresheet"] .page{max-width:1120px}
   .news-layout{grid-template-columns:1fr!important}
   .timeline-item{grid-template-columns:1fr;gap:7px}
 }
+
+
+/* Portrait account identity: always show the signed-in user. */
+@media(max-width:620px){
+  .user-actions{
+    display:flex!important;
+    flex-wrap:wrap!important;
+    align-items:center;
+    gap:6px;
+  }
+  .user-actions .who{
+    display:flex!important;
+    flex:0 0 100%;
+    width:100%;
+    align-items:center;
+    min-width:0;
+    color:#dbe7f3;
+    font-size:11px;
+    line-height:1.2;
+    padding:1px 2px 3px;
+    order:-1;
+  }
+  .user-actions .who::before{
+    content:"Signed in: ";
+    color:#91a8bf;
+    font-weight:700;
+    margin-right:4px;
+  }
+  .user-actions .who strong{
+    color:#fff;
+    font-size:12px;
+    font-weight:850;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+}
