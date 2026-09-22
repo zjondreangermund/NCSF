@@ -152,35 +152,62 @@
     const map=new Map(state.fixture.lineups.filter(x=>x.side===side).map(x=>[x.slot,x]));
     return [1,2,3,4,5].map(slot=>map.get(slot)||null);
   }
+  function reservesFor(side){
+    const map=new Map((state.fixture.reserves||[]).filter(x=>x.side===side).map(x=>[x.reserve_slot,x]));
+    return [1,2].map(slot=>map.get(slot)||null);
+  }
+  function scorePlayerLabel(p){
+    if(!p)return '— Blank —';
+    return (p.first_name+' '+p.last_name).trim()+(p.ncsf_number?' • '+p.ncsf_number:'');
+  }
   function lineupEditor(side){
-    const players=(state.teamPlayers[side]||[]).filter(p=>!p.suspended), lineup=lineupFor(side);
+    const players=(state.teamPlayers[side]||[]).filter(p=>!p.suspended);
+    const lineup=lineupFor(side), reserves=reservesFor(side);
     const editable=canEditSide(side)&&!['SUBMITTED','CONFIRMED','APPROVED'].includes(state.fixture.fixture.status);
-    return `<div class="sheet-team ${side==='AWAY'?'away':''}">
-      <div class="kicker">${side} TEAM — STARTING FIVE</div>
-      <h2>${esc(side==='HOME'?state.fixture.fixture.homeTeamName:state.fixture.fixture.awayTeamName)}</h2>
-      <div class="lineup-list" style="margin-top:12px">
-        ${lineup.map((row,i)=>`<div class="lineup-row"><span class="slot">${i+1}</span>${editable?`<select class="lineup-select" data-side="${side}" data-slot="${i+1}">${options(players,'id',p=>p.first_name+' '+p.last_name+(p.ncsf_number?' ('+p.ncsf_number+')':''),row?.player_id,'Select player')}</select>`:`<div><strong>${esc(row?row.first_name+' '+row.last_name:'Not selected')}</strong></div>`}</div>`).join('')}
+    const startLabels=side==='HOME'?['1','2','3','4','5']:['A','B','C','D','E'];
+    const reserveLabels=side==='HOME'?['6','7']:['F','G'];
+    const selectedIds=new Set([...lineup,...reserves].filter(Boolean).map(x=>x.player_id));
+    const playerOptions=(selected)=>{
+      const usable=players.filter(p=>p.id===selected||!selectedIds.has(p.id));
+      return options(usable,'id',p=>scorePlayerLabel(p),selected,'— Blank —');
+    };
+    return `<section class="match-roster ${side==='AWAY'?'away':''}">
+      <div class="roster-heading">
+        <div><span class="eyebrow">${side} TEAM</span><h3>${esc(side==='HOME'?state.fixture.fixture.homeTeamName:state.fixture.fixture.awayTeamName)}</h3></div>
+        <span class="roster-note">5 starters + 2 reserves</span>
       </div>
-      ${editable?`<button class="btn primary small save-lineup" data-side="${side}" style="margin-top:12px">Save ${side.toLowerCase()} lineup</button>`:''}
-    </div>`;
+      <div class="roster-grid">
+        ${lineup.map((row,i)=>`<label class="roster-slot"><span class="roster-code">${startLabels[i]}</span><span class="roster-role">${i===0?'STARTERS':''}</span>${editable?`<select class="lineup-select" data-side="${side}" data-slot="${i+1}">${playerOptions(row?.player_id)}</select>`:`<span class="roster-name">${esc(scorePlayerLabel(row))}</span>`}</label>`).join('')}
+        <div class="reserve-divider">RESERVES</div>
+        ${reserves.map((row,i)=>`<label class="roster-slot reserve"><span class="roster-code">${reserveLabels[i]}</span><span class="roster-role">R${i+1}</span>${editable?`<select class="reserve-select" data-side="${side}" data-slot="${i+1}">${playerOptions(row?.player_id)}</select>`:`<span class="roster-name">${esc(scorePlayerLabel(row))}</span>`}</label>`).join('')}
+      </div>
+      ${editable?`<button class="btn primary save-lineup" data-side="${side}" type="button">Save ${side==='HOME'?'Home':'Away'} Match Roster</button>`:''}
+    </section>`;
   }
   function roundHtml(round){
     const frames=state.fixture.frames.filter(f=>f.round_no===round);
     const home=frames.filter(f=>f.winner_side==='HOME').length;
     const away=frames.filter(f=>f.winner_side==='AWAY').length;
+    const pHome=state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='HOME').length;
+    const pAway=state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='AWAY').length;
     const editable=Boolean(state.user)&&!['SUBMITTED','CONFIRMED','APPROVED'].includes(state.fixture.fixture.status);
-    return `<section class="round">
-      <div class="round-title">ROUND ${round}</div>
-      ${frames.map(fr=>`<div class="frame-row">
-        <div class="frame-num">${fr.board_no}</div>
-        <div class="frame-player">${esc(fr.home_player_name)}</div>
-        <button class="win-btn frame-win ${fr.winner_side==='HOME'?'selected':''}" data-frame="${fr.id}" data-winner="HOME" ${editable?'':'disabled'}>${fr.winner_side==='HOME'?'1':'0'}</button>
-        <div class="frame-vs">vs</div>
-        <button class="win-btn frame-win ${fr.winner_side==='AWAY'?'selected':''}" data-frame="${fr.id}" data-winner="AWAY" ${editable?'':'disabled'}>${fr.winner_side==='AWAY'?'1':'0'}</button>
-        <div class="frame-player away">${esc(fr.away_player_name)}</div>
+    const letters=['A','B','C','D','E'];
+    return `<section class="score-round">
+      <div class="score-round-title"><span></span><strong>ROUND ${round}</strong><span>${home} — ${away}</span></div>
+      <div class="score-grid score-grid-head">
+        <div>#</div><div>HOME TEAM</div><div></div><div>VS</div><div></div><div>AWAY TEAM</div><div>#</div>
+      </div>
+      ${frames.map(fr=>`<div class="score-grid">
+        <div class="score-slot-no">${fr.home_slot}</div>
+        <div class="score-player">${esc(fr.home_player_name)}</div>
+        <button class="score-cell frame-win ${fr.winner_side==='HOME'?'selected':''}" data-frame="${fr.id}" data-winner="HOME" ${editable?'':'disabled'}>${fr.winner_side==='HOME'?'1':'0'}</button>
+        <div class="score-vs">vs</div>
+        <button class="score-cell frame-win ${fr.winner_side==='AWAY'?'selected':''}" data-frame="${fr.id}" data-winner="AWAY" ${editable?'':'disabled'}>${fr.winner_side==='AWAY'?'1':'0'}</button>
+        <div class="score-player away">${esc(fr.away_player_name)}</div>
+        <div class="score-slot-no">${letters[(fr.away_slot||1)-1]}</div>
       </div>`).join('')}
-      <div class="round-total"><div>TOTAL ${home}</div><div>${home} — ${away}</div><div>${away} TOTAL</div></div>
-      <div class="round-total"><div>Progressive Total ${state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='HOME').length}</div><div>${state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='HOME').length} — ${state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='AWAY').length}</div><div>${state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='AWAY').length} Progressive Total</div></div>
+      <div class="score-total-row"><strong>TOTAL</strong><strong>${home}</strong><span></span><strong>${away}</strong><strong>TOTAL</strong></div>
+      <div class="score-progressive-row"><em>Progressive Total</em><strong>${pHome}</strong><span></span><strong>${pAway}</strong><em>Progressive Total</em></div>
     </section>`;
   }
   function allMatchPlayers(){
@@ -188,9 +215,33 @@
     [...state.teamPlayers.HOME,...state.teamPlayers.AWAY].forEach(p=>ids.set(p.id,p));
     return [...ids.values()];
   }
+  function selectedRoster(side){
+    return [...lineupFor(side),...reservesFor(side)].filter(Boolean);
+  }
   function reserveOptions(side){
-    const starters=new Set(lineupFor(side).filter(Boolean).map(x=>x.player_id));
-    return state.teamPlayers[side].filter(p=>!p.suspended&&!starters.has(p.id));
+    const selected=reservesFor(side).filter(Boolean).map(x=>x.player_id);
+    return state.teamPlayers[side].filter(p=>selected.includes(p.id));
+  }
+  function playerStats(playerId){
+    const frames=state.fixture.frames.filter(fr=>fr.home_player_id===playerId||fr.away_player_id===playerId);
+    return {
+      played:frames.filter(fr=>fr.winner_side).length,
+      won:frames.filter(fr=>fr.winner_player_id===playerId).length
+    };
+  }
+  function rosterSummary(side){
+    const roster=selectedRoster(side);
+    const labels=side==='HOME'?['1','2','3','4','5','6','7']:['A','B','C','D','E','F','G'];
+    const rows=[0,1,2,3,4,5,6].map(i=>{
+      const p=roster[i], st=p?playerStats(p.player_id):{played:0,won:0};
+      return `<tr class="${i===5?'reserve-start':''}"><td>${labels[i]}</td><td>${p?esc((p.first_name+' '+p.last_name).trim()):'—'}</td><td>${st.played}</td><td><strong>${st.won}</strong></td></tr>`;
+    }).join('');
+    const totalP=roster.reduce((s,p)=>s+playerStats(p.player_id).played,0);
+    const totalW=side==='HOME'?state.fixture.totals.home:state.fixture.totals.away;
+    return `<div class="roster-summary">
+      <table><thead><tr><th colspan="2">${side} TEAM</th><th>P</th><th>W</th></tr></thead>
+      <tbody>${rows}<tr class="summary-total"><td colspan="2">TOTAL</td><td>${totalP}</td><td>${totalW}</td></tr></tbody></table>
+    </div>`;
   }
   function renderScoresheet(){
     const data=state.fixture,f=data.fixture,t=data.totals;
@@ -200,51 +251,77 @@
     const players=allMatchPlayers();
     const currentHome=lineupFor('HOME').filter(Boolean);
     const currentAway=lineupFor('AWAY').filter(Boolean);
+    const homeRoster=selectedRoster('HOME');
+    const awayRoster=selectedRoster('AWAY');
     const side=userSide(f);
     const subSides=state.user?.role==='NCSF_ADMIN'?['HOME','AWAY']:(side&&side!=='NCSF'?[side]:[]);
+    const date=f.fixtureDate?new Date(f.fixtureDate):null;
+    const dateText=date?date.toLocaleDateString([], {year:'numeric',month:'2-digit',day:'2-digit'}):'TBA';
+    const timeText=date?date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'TBA';
+    const matchResult=t.completed<25?'IN PROGRESS':t.home>t.away?f.homeTeamName+' WON':t.away>t.home?f.awayTeamName+' WON':'DRAW';
+    const matchComplete=t.completed===25;
+    const homeCaptain=homeRoster.find(p=>p.player_id===f.homeCaptainId);
+    const awayCaptain=awayRoster.find(p=>p.player_id===f.awayCaptainId);
+    const hWin=matchComplete&&t.home>t.away?1:0, aWin=matchComplete&&t.away>t.home?1:0, draw=matchComplete&&t.home===t.away?1:0;
     $('#scoreSheetRoot').innerHTML=`
-      <div class="sheet-header">
-        <div class="sheet-team"><div class="kicker">HOME</div><h2>${esc(f.homeTeamName)}</h2><div class="muted">${esc(f.homeClubName)}</div></div>
-        <div style="text-align:center"><div class="big-score">${t.home} — ${t.away}</div><div class="muted">${t.completed}/25 frames</div></div>
-        <div class="sheet-team away"><div class="kicker">AWAY</div><h2>${esc(f.awayTeamName)}</h2><div class="muted">${esc(f.awayClubName)}</div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head"><div><div class="kicker">${esc(f.seasonName)} • ${esc(f.divisionName)}</div><h3>Round ${esc(f.roundNo)} • ${esc(fmtDate(f.fixtureDate))}</h3></div>${statusPill(f.status)}</div>
-        <div class="muted">${esc(f.venue||'Venue TBA')}</div>
-        <div class="progress-bar"><span style="width:${progress}%"></span></div>
-      </div>
-      <div class="lineup-boxes" style="margin-top:16px">${lineupEditor('HOME')}${lineupEditor('AWAY')}</div>
-      ${data.frames.length===25?[1,2,3,4,5].map(roundHtml).join('')+`<div class="panel" style="margin:18px 0"><div class="round-total"><div>FINAL TOTAL</div><div>${t.home} — ${t.away}</div><div>FINAL TOTAL</div></div><div class="notice ${t.completed===25?'success':'warn'}" style="margin-top:10px">Match Result: ${t.completed<25?'IN PROGRESS':t.home>t.away?esc(f.homeTeamName)+' WIN':esc(f.awayTeamName)+' WIN'}</div></div>`:'<div class="notice warn" style="margin-top:18px">Both teams must save five starting players before the 25-frame sheet is generated.</div>'}
-      <div class="sheet-bottom">
-        <section class="panel">
-          <div class="panel-head"><div><div class="kicker">Signed match sheet</div><h3>Uploads</h3></div></div>
-          <div class="upload-box">
-            ${data.attachments.length?data.attachments.map(a=>`<div class="uploaded-file"><span><strong>${esc(a.filename)}</strong><br><small class="muted">${esc(new Date(a.created_at).toLocaleString())}</small></span><a class="btn small" target="_blank" href="/api/fixtures/${f.id}/attachment/${a.id}">Open</a></div>`).join(''):'<div class="muted">Upload a photo or PDF of the signed score sheet from the toolbar.</div>'}
-          </div>
-        </section>
-        <section class="panel">
-          <div class="kicker">Match details</div><h3>Extras</h3>
-          <form id="extrasForm" class="form-grid">
-            <label class="full">Player of Match<select name="playerOfMatchId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.playerOfMatchId,'— Blank —')}</select></label>
-            <label class="full">Break & Run<select name="breakRunPlayerId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.breakRunPlayerId,'— Blank —')}</select></label>
-            <label class="full">Rack & Run<select name="rackRunPlayerId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.rackRunPlayerId,'— Blank —')}</select></label>
-            <label>Bonus point<input name="bonusPoints" type="number" value="${esc(f.bonusPoints||0)}"></label>
-            <label class="full">Notes<textarea name="notes" rows="2">${esc(f.notes||'')}</textarea></label>
-            ${state.user?'<button class="btn secondary full" type="submit">Save Match Details</button>':''}
-          </form>
-        </section>
-      </div>
-      ${subSides.length?`<section class="panel no-print" style="margin-top:16px">
-        <div class="kicker">Reserves</div><h3>Substitution</h3>
+      <section class="official-sheet-head">
+        <img class="js-score-logo" src="/ncsf-logo.svg" alt="NCSF">
+        <div><span class="eyebrow">NAMIBIA CUE SPORTS FEDERATION</span><h1>Blackball League Scoresheet</h1><p>${esc(f.seasonName)} • ${esc(f.divisionName)} • Round ${esc(f.roundNo)}</p></div>
+        <div class="sheet-meta"><span>STARTING TIME<strong>${esc(timeText)}</strong></span><span>DATE<strong>${esc(dateText)}</strong></span><span>VENUE<strong>${esc(f.venue||'TBA')}</strong></span></div>
+      </section>
+      <section class="fixture-score-hero">
+        <div><span class="eyebrow">HOME TEAM</span><h2>${esc(f.homeTeamName)}</h2><small>${esc(f.homeClubName)}</small></div>
+        <div class="fixture-live-score"><strong>${t.home}</strong><span>VS</span><strong>${t.away}</strong><small>${t.completed}/25 frames</small></div>
+        <div class="away"><span class="eyebrow">AWAY TEAM</span><h2>${esc(f.awayTeamName)}</h2><small>${esc(f.awayClubName)}</small></div>
+      </section>
+      <div class="score-progress"><span style="width:${progress}%"></span></div>
+      <div class="match-rosters">${lineupEditor('HOME')}${lineupEditor('AWAY')}</div>
+      ${data.frames.length===25?[1,2,3,4,5].map(roundHtml).join(''):'<div class="notice warn">Save both starting fives to generate the official 25-frame rotation.</div>'}
+      <section class="final-score-card">
+        <div><span>FINAL TOTAL</span><strong>${t.home}</strong></div>
+        <div class="match-result"><span>MATCH RESULT</span><strong>${esc(matchResult)}</strong></div>
+        <div><strong>${t.away}</strong><span>FINAL TOTAL</span></div>
+      </section>
+      <section class="match-extras-card">
+        <form id="extrasForm">
+          <label>Player of Match<select name="playerOfMatchId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.playerOfMatchId,'— Select player —')}</select></label>
+          <label>Break & Run<select name="breakRunPlayerId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.breakRunPlayerId,'— Blank —')}</select></label>
+          <label>Rack & Run<select name="rackRunPlayerId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.rackRunPlayerId,'— Blank —')}</select></label>
+          <label>Bonus Point<input name="bonusPoints" type="number" value="${esc(f.bonusPoints||0)}"></label>
+          <label>Home Captain<select name="homeCaptainId">${options(homeRoster,'player_id',p=>(p.first_name+' '+p.last_name).trim(),f.homeCaptainId,'— Select captain —')}</select></label>
+          <label>Away Captain<select name="awayCaptainId">${options(awayRoster,'player_id',p=>(p.first_name+' '+p.last_name).trim(),f.awayCaptainId,'— Select captain —')}</select></label>
+          <label class="wide">Match Notes<textarea name="notes" rows="2">${esc(f.notes||'')}</textarea></label>
+          ${state.user?'<button class="btn primary wide" type="submit">Save Match Details</button>':''}
+        </form>
+      </section>
+      <div class="roster-summary-grid">${rosterSummary('HOME')}${rosterSummary('AWAY')}</div>
+      <section class="signature-grid">
+        <div><span>CAPTAIN SIGNATURE (HOME)</span><strong>${esc(homeCaptain?(homeCaptain.first_name+' '+homeCaptain.last_name).trim():'Selected captain')}</strong><i></i></div>
+        <div><span>CAPTAIN SIGNATURE (AWAY)</span><strong>${esc(awayCaptain?(awayCaptain.first_name+' '+awayCaptain.last_name).trim():'Selected captain')}</strong><i></i></div>
+      </section>
+      <section class="league-calculations">
+        <div class="section-head"><div><span class="eyebrow">CURRENT FIXTURE</span><h3>League Calculations</h3></div><small>Official standings update after approval.</small></div>
+        <div class="table-wrap"><table><thead><tr><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>For</th><th>Against</th></tr></thead>
+        <tbody>
+          <tr><td><strong>${esc(f.homeTeamName)}</strong></td><td>${matchComplete?1:0}</td><td>${hWin}</td><td>${draw}</td><td>${matchComplete&&!hWin&&!draw?1:0}</td><td>${t.home}</td><td>${t.away}</td></tr>
+          <tr><td><strong>${esc(f.awayTeamName)}</strong></td><td>${matchComplete?1:0}</td><td>${aWin}</td><td>${draw}</td><td>${matchComplete&&!aWin&&!draw?1:0}</td><td>${t.away}</td><td>${t.home}</td></tr>
+        </tbody></table></div>
+      </section>
+      ${subSides.length?`<section class="substitution-card no-print">
+        <div class="section-head"><div><span class="eyebrow">RESERVES</span><h3>Record a Substitution</h3></div></div>
         <form id="subForm" class="form-grid">
           <label>Side<select name="side" id="subSide">${subSides.map(s=>`<option value="${s}">${s}</option>`).join('')}</select></label>
-          <label>Effective round<select name="effectiveRound">${[1,2,3,4,5].map(r=>`<option value="${r}">${r}</option>`).join('')}</select></label>
-          <label>Player out<select name="outPlayerId" id="subOut"></select></label>
-          <label>Reserve in<select name="inPlayerId" id="subIn"></select></label>
-          <button class="btn secondary full" type="submit">Apply substitution</button>
+          <label>Effective Round<select name="effectiveRound">${[1,2,3,4,5].map(r=>`<option value="${r}">${r}</option>`).join('')}</select></label>
+          <label>Player Out<select name="outPlayerId" id="subOut"></select></label>
+          <label>Reserve In<select name="inPlayerId" id="subIn"></select></label>
+          <button class="btn secondary full" type="submit">Apply Substitution</button>
         </form>
-        ${data.substitutions.length?'<div class="card-list" style="margin-top:14px">'+data.substitutions.map(s=>`<div class="card-row"><span><strong>${esc(s.side)}: ${esc(s.out_player_name)} → ${esc(s.in_player_name)}</strong><small>From round ${s.effective_round}</small></span></div>`).join('')+'</div>':''}
+        ${data.substitutions.length?'<div class="card-list">'+data.substitutions.map(s=>`<div class="card-row"><span><strong>${esc(s.side)}: ${esc(s.out_player_name)} → ${esc(s.in_player_name)}</strong><small>From round ${s.effective_round}</small></span></div>`).join('')+'</div>':''}
       </section>`:''}
+      <section class="signed-sheet-card">
+        <div class="section-head"><div><span class="eyebrow">MATCH RECORD</span><h3>Signed Scoresheet</h3></div></div>
+        <div class="upload-box">${data.attachments.length?data.attachments.map(a=>`<div class="uploaded-file"><span><strong>${esc(a.filename)}</strong><br><small>${esc(new Date(a.created_at).toLocaleString())}</small></span><a class="btn small" target="_blank" href="/api/fixtures/${f.id}/attachment/${a.id}">Open</a></div>`).join(''):'<div class="muted">Upload the signed paper sheet or PDF from the toolbar.</div>'}</div>
+      </section>
     `;
     bindSheetControls();
     updateActionButtons();
@@ -254,17 +331,18 @@
       const s=$('#subSide')?.value;if(!s)return;
       const starters=s==='HOME'?currentHome:currentAway;
       $('#subOut').innerHTML=options(starters,'player_id',p=>p.first_name+' '+p.last_name,null,'Select player out');
-      $('#subIn').innerHTML=options(reserveOptions(s),'id',p=>p.first_name+' '+p.last_name,null,'Select reserve');
+      $('#subIn').innerHTML=options(reserveOptions(s),'id',p=>p.first_name+' '+p.last_name,null,'Select selected reserve');
     }
     $('#subSide')?.addEventListener('change',fillSubs); fillSubs();
   }
   function bindSheetControls(){
     $$('.save-lineup').forEach(btn=>btn.addEventListener('click',async()=>{
       const side=btn.dataset.side;
-      const values=$$('.lineup-select[data-side="'+side+'"]').map(s=>Number(s.value)).filter(Boolean);
+      const values=$('.lineup-select[data-side="'+side+'"]').map(s=>Number(s.value)).filter(Boolean);
+      const reserveIds=$('.reserve-select[data-side="'+side+'"]').map(s=>Number(s.value)).filter(Boolean);
       try{
         $('#saveState').textContent='Saving…';
-        state.fixture=await api('/api/fixtures/'+state.fixture.fixture.id+'/lineup',{method:'PUT',body:{side,playerIds:values}});
+        state.fixture=await api('/api/fixtures/'+state.fixture.fixture.id+'/lineup',{method:'PUT',body:{side,playerIds:values,reserveIds}});
         renderScoresheet(); $('#saveState').textContent='Saved'; toast(side+' lineup saved');
       }catch(err){$('#saveState').textContent='Not saved';toast(err.message,true)}
     }));
