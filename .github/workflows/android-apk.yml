@@ -1,0 +1,74 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "public/ncsf-logo.svg"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Create Android logo resource
+        run: |
+          python3 - <<'PY'
+          import base64, pathlib, re
+          svg = pathlib.Path("public/ncsf-logo.svg").read_text(encoding="utf-8")
+          match = re.search(r"base64,([^\"]+)", svg)
+          if not match:
+              raise SystemExit("Embedded NCSF logo not found")
+          target = pathlib.Path("android/app/src/main/res/drawable/ncsf_logo.jpg")
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(base64.b64decode(match.group(1)))
+          print(f"Wrote {target}")
+          PY
+
+      - name: Build installable APK
+        run: gradle -p android assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk NCSF.apk
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NCSF-Android
+          path: NCSF.apk
+          retention-days: 30
+
+      - name: Publish stable APK download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view android-latest >/dev/null 2>&1; then
+            gh release upload android-latest NCSF.apk --clobber
+          else
+            gh release create android-latest NCSF.apk --target main --title "NCSF Android App" --notes "Installable NCSF Blackball League Android app. This build uses the official NCSF logo and connects to the live league platform."
+          fi
