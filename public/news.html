@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b223f">
+  <title>NCSF News & Events</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-page="news-page">
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <img class="js-logo" src="/ncsf-logo.jpg" alt="NCSF logo">
+      <span><strong>Namibia Cue Sports Federation</strong><small>League Manager</small></span>
+    </a>
+    <nav class="nav">
+      <a href="/">Home</a>
+      <a href="/fixtures">Fixtures</a>
+      <a href="/results">Results</a>
+      <a href="/teams">Teams</a>
+      <a href="/players">Players</a>
+      <a href="/news" class="active">News & Events</a>
+      <a href="/rankings">Rankings</a>
+    </nav>
+    <div class="user-actions" id="userActions"></div>
+  </div>
+</header>
+<main class="page">
+  <div class="section-title">
+    <div><div class="kicker">Federation updates</div><h1>News & Events</h1></div>
+  </div>
+  <div class="grid two news-layout">
+    <section class="panel">
+      <div class="panel-head"><div><div class="kicker">Calendar</div><h2>Upcoming Events</h2></div></div>
+      <div id="publicEvents" class="empty">Loading events…</div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><div><div class="kicker">Official updates</div><h2>Announcements & News</h2></div></div>
+      <div id="publicNews" class="empty">Loading updates…</div>
+    </section>
+  </div>
+</main>
+<div class="footer">Namibia Cue Sports Federation • Digital League Manager</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+</body>
+</html>
