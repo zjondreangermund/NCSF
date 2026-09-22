@@ -1271,7 +1271,7 @@ app.get("/api/fixtures", async (req, res) => {
   const args = [];
   const where = [];
   if (!req.session.userId) {
-    where.push("f.status IN ('SCHEDULED','POSTPONED','APPROVED')");
+    where.push("(f.status IN ('SCHEDULED','POSTPONED','APPROVED') OR (f.stream_active=TRUE AND f.stream_url IS NOT NULL))");
   }
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
@@ -1376,7 +1376,8 @@ app.get("/api/my/fixtures", requireAuth, async (req, res) => {
     condition = `(f.home_team_id=$1 OR f.away_team_id=$1)`;
   }
   const { rows } = await pool.query(`
-    SELECT f.id,f.round_no,f.fixture_date,f.status,f.venue,d.name division_name,
+    SELECT f.id,f.round_no,f.fixture_date,f.status,f.venue,
+           f.stream_url,f.stream_title,f.stream_active,d.name division_name,
            ht.name home_team_name,at.name away_team_name,
            COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
            COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
