@@ -29,13 +29,36 @@
     <a class="btn secondary" href="/team.html">Match Centre</a>
   </div>
   <div class="admin-tabs">
-    <button class="btn active" data-admin-tab="setup">League Setup</button>
+    <button class="btn active" data-admin-tab="dashboard">Dashboard</button>
+    <button class="btn" data-admin-tab="setup">League Setup</button>
     <button class="btn" data-admin-tab="clubs">Clubs & Teams</button>
     <button class="btn" data-admin-tab="fixtures">Fixtures</button>
     <button class="btn" data-admin-tab="access">Access</button>
   </div>
 
-  <section class="admin-pane" data-pane="setup">
+  <section class="admin-pane" data-pane="dashboard">
+    <div class="grid three" id="adminStats">
+      <div class="panel"><div class="kicker">Clubs</div><div class="big-score" id="statClubs">0</div></div>
+      <div class="panel"><div class="kicker">Teams</div><div class="big-score" id="statTeams">0</div></div>
+      <div class="panel"><div class="kicker">Players</div><div class="big-score" id="statPlayers">0</div></div>
+    </div>
+    <div class="grid two" style="margin-top:18px">
+      <div class="panel">
+        <div class="panel-head"><div><div class="kicker">Needs attention</div><h2>Submitted / Confirmed Results</h2></div><span class="pill" id="pendingCount">0</span></div>
+        <div id="pendingResults" class="empty">No results waiting for approval.</div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="kicker">Access control</div><h2>Teams Without Login</h2></div><span class="pill" id="missingAccessCount">0</span></div>
+        <div id="missingTeamAccess" class="empty">Every team has an active login.</div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>Fixture Status</h2>
+      <div id="fixtureStatusSummary" class="filters"></div>
+    </div>
+  </section>
+
+  <section class="admin-pane hidden" data-pane="setup">
     <div class="grid two">
       <div class="panel">
         <h2>Create season</h2>
