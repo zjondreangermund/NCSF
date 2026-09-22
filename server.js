@@ -1829,6 +1829,7 @@ const pageRoutes = {
   "/results": "results.html",
   "/teams": "teams.html",
   "/players": "players.html",
+  "/news": "news.html",
   "/rankings": "rankings.html",
   "/admin": "admin.html",
   "/club-admin": "club-admin.html",
