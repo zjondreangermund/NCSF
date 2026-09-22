@@ -213,7 +213,7 @@
         <div class="progress-bar"><span style="width:${progress}%"></span></div>
       </div>
       <div class="lineup-boxes" style="margin-top:16px">${lineupEditor('HOME')}${lineupEditor('AWAY')}</div>
-      ${data.frames.length===25?[1,2,3,4,5].map(roundHtml).join(''):'<div class="notice warn" style="margin-top:18px">Both teams must save five starting players before the 25-frame sheet is generated.</div>'}
+      ${data.frames.length===25?[1,2,3,4,5].map(roundHtml).join('')+`<div class="panel" style="margin:18px 0"><div class="round-total"><div>FINAL TOTAL</div><div>${t.home} — ${t.away}</div><div>FINAL TOTAL</div></div><div class="notice ${t.completed===25?'success':'warn'}" style="margin-top:10px">Match Result: ${t.completed<25?'IN PROGRESS':t.home>t.away?esc(f.homeTeamName)+' WIN':esc(f.awayTeamName)+' WIN'}</div></div>`:'<div class="notice warn" style="margin-top:18px">Both teams must save five starting players before the 25-frame sheet is generated.</div>'}
       <div class="sheet-bottom">
         <section class="panel">
           <div class="panel-head"><div><div class="kicker">Signed match sheet</div><h3>Uploads</h3></div></div>
@@ -355,9 +355,12 @@
     $('#playerTeamSelect').innerHTML=options(teams,'id',t=>t.name,null,'Unassigned / reserve pool');
     $('#userTeamSelect').innerHTML=options(teams,'id',t=>t.name,null,'Select team');
     $('#playerCount').textContent=state.meta.players.length;
-    $('#clubPlayers').innerHTML=state.meta.players.length?`<div class="table-wrap"><table><thead><tr><th>Player</th><th>NCSF #</th><th>Team</th><th>Status</th></tr></thead><tbody>${state.meta.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td><select class="player-team-change" data-player="${p.id}">${options(teams,'id',t=>t.name,p.team_id,'Unassigned')}</select></td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No players registered.</div>';
-    $$('.player-team-change').forEach(sel=>sel.addEventListener('change',async()=>{
+    $('#clubPlayers').innerHTML=state.meta.players.length?`<div class="table-wrap"><table><thead><tr><th>Player</th><th>NCSF #</th><th>Team</th><th>Status</th></tr></thead><tbody>${state.meta.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td><select class="player-team-change" data-player="${p.id}">${options(teams,'id',t=>t.name,p.team_id,'Unassigned')}</select></td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}<br><button class="btn small player-suspend" data-player="${p.id}" data-suspended="${p.suspended}">${p.suspended?'Reactivate':'Suspend'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No players registered.</div>';
+    $('.player-team-change').forEach(sel=>sel.addEventListener('change',async()=>{
       try{await api('/api/admin/players/'+sel.dataset.player,{method:'PATCH',body:{teamId:sel.value||null}});toast('Player assignment updated');await reloadClub()}catch(err){toast(err.message,true)}
+    }));
+    $('.player-suspend').forEach(btn=>btn.addEventListener('click',async()=>{
+      try{await api('/api/admin/players/'+btn.dataset.player,{method:'PATCH',body:{suspended:btn.dataset.suspended!=='true'}});toast('Player eligibility updated');await reloadClub()}catch(err){toast(err.message,true)}
     }));
     $('#clubTeams').innerHTML=teams.length?'<div class="card-list">'+teams.map(t=>{
       const access=state.meta.users.filter(u=>u.team_id===t.id&&u.role==='TEAM_ADMIN');
@@ -389,7 +392,8 @@
     $('#adminClubList').innerHTML=m.clubs.length?'<div class="card-list">'+m.clubs.map(c=>`<div class="card-row"><span><strong>${esc(c.name)}</strong><small>${m.teams.filter(t=>t.club_id===c.id).map(t=>t.name).join(', ')||'No teams'}</small></span></div>`).join('')+'</div>':'<div class="empty">No clubs yet.</div>';
     api('/api/fixtures').then(d=>{$('#adminFixtures').innerHTML=fixtureCards(d.fixtures,true)}).catch(()=>{});
     $('#adminUsers').innerHTML=m.users.length?'<div class="card-list">'+m.users.map(u=>`<div class="card-row"><span><strong>${esc(u.display_name)}</strong><small>${esc(u.email)} • ${esc(u.role.replaceAll('_',' '))}</small></span><span class="muted">${esc(u.team_name||u.club_name||'NCSF')}</span></div>`).join('')+'</div>':'<div class="empty">No users.</div>';
-    $('#adminPlayers').innerHTML=m.players.length?'<div class="table-wrap"><table><thead><tr><th>Player</th><th>Club</th><th>Team</th><th>Frames</th><th>Status</th></tr></thead><tbody>'+m.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong><br><small class="muted">${esc(p.ncsf_number||'—')}</small></td><td>${esc(p.club_name)}</td><td>${esc(p.team_name||'Unassigned')}</td><td>—</td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}</td></tr>`).join('')+'</tbody></table></div>':'<div class="empty">No players registered.</div>';
+    $('#adminPlayers').innerHTML=m.players.length?'<div class="table-wrap"><table><thead><tr><th>Player</th><th>Club</th><th>Team</th><th>Frames</th><th>Status</th></tr></thead><tbody>'+m.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong><br><small class="muted">${esc(p.ncsf_number||'—')}</small></td><td>${esc(p.club_name)}</td><td>${esc(p.team_name||'Unassigned')}</td><td>—</td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}<br><button class="btn small admin-player-suspend" data-player="${p.id}" data-suspended="${p.suspended}">${p.suspended?'Reactivate':'Suspend'}</button></td></tr>`).join('')+'</tbody></table></div>':'<div class="empty">No players registered.</div>';
+    $('.admin-player-suspend').forEach(btn=>btn.addEventListener('click',async()=>{try{await api('/api/admin/players/'+btn.dataset.player,{method:'PATCH',body:{suspended:btn.dataset.suspended!=='true'}});toast('Player eligibility updated');await reloadAdmin()}catch(err){toast(err.message,true)}}));
   }
   function syncFixtureTeams(){
     const div=Number($('#fixtureDivision')?.value||0);
