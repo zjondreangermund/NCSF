@@ -1489,3 +1489,89 @@ body[data-page="scoresheet"] .page{max-width:1120px}
     z-index:20;
   }
 }
+
+
+/* Keep native video controls fully tappable on mobile */
+.live-waiting{pointer-events:none!important}
+
+@media(max-width:760px){
+  .live-chat-drawer:not(.open){
+    top:8px!important;
+    right:8px!important;
+    bottom:auto!important;
+    width:150px!important;
+    height:42px!important;
+    min-height:42px!important;
+    max-height:42px!important;
+    transform:none!important;
+    border-radius:14px!important;
+    overflow:visible!important;
+    background:transparent!important;
+    pointer-events:none!important;
+  }
+
+  .live-chat-drawer:not(.open) .live-chat-handle{
+    position:relative!important;
+    left:0!important;
+    top:0!important;
+    transform:none!important;
+    width:150px!important;
+    height:42px!important;
+    min-height:42px!important;
+    margin:0!important;
+    border-radius:14px!important;
+    pointer-events:auto!important;
+    background:rgba(7,24,44,.78)!important;
+  }
+
+  .live-chat-drawer:not(.open) .live-chat-body{
+    display:none!important;
+    pointer-events:none!important;
+  }
+
+  .live-chat-drawer.open{
+    top:0!important;
+    right:0!important;
+    bottom:auto!important;
+    width:100%!important;
+    height:100%!important;
+    max-height:none!important;
+    transform:none!important;
+    border-radius:0!important;
+    overflow:hidden!important;
+    pointer-events:none!important;
+  }
+
+  .live-chat-drawer.open .live-chat-handle,
+  .live-chat-drawer.open .live-chat-body{
+    pointer-events:auto!important;
+  }
+
+  .live-chat-drawer.open .live-chat-handle{
+    width:160px!important;
+    height:42px!important;
+    min-height:42px!important;
+    margin:0 auto!important;
+    border-radius:0 0 14px 14px!important;
+  }
+
+  .video-frame,
+  .broadcast-video-shell{
+    position:relative!important;
+  }
+
+  .video-frame video,
+  .broadcast-video-shell video{
+    position:relative!important;
+    z-index:2!important;
+  }
+
+  .live-chat-drawer{
+    z-index:12!important;
+  }
+
+  .broadcast-overlay,
+  .live-waiting{
+    z-index:8!important;
+  }
+}
