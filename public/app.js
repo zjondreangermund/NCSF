@@ -378,8 +378,9 @@
     const m=state.meta;
     $('#divisionSeason').innerHTML=options(m.seasons,'id',s=>s.name,null,'Select season');
     ['teamDivision','fixtureDivision','scheduleDivision'].forEach(id=>$('#'+id).innerHTML=options(m.divisions,'id',d=>d.season_name+' — '+d.name,null,'Select division'));
-    ['teamClub','adminUserClub'].forEach(id=>$('#'+id).innerHTML=options(m.clubs,'id',c=>c.name,null,'Select club'));
+    ['teamClub','adminUserClub','adminPlayerClub'].forEach(id=>$('#'+id).innerHTML=options(m.clubs,'id',c=>c.name,null,'Select club'));
     $('#adminUserTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Select team');
+    $('#adminPlayerTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Unassigned');
     renderAdminLists();
     syncFixtureTeams();
   }
@@ -388,6 +389,7 @@
     $('#adminClubList').innerHTML=m.clubs.length?'<div class="card-list">'+m.clubs.map(c=>`<div class="card-row"><span><strong>${esc(c.name)}</strong><small>${m.teams.filter(t=>t.club_id===c.id).map(t=>t.name).join(', ')||'No teams'}</small></span></div>`).join('')+'</div>':'<div class="empty">No clubs yet.</div>';
     api('/api/fixtures').then(d=>{$('#adminFixtures').innerHTML=fixtureCards(d.fixtures,true)}).catch(()=>{});
     $('#adminUsers').innerHTML=m.users.length?'<div class="card-list">'+m.users.map(u=>`<div class="card-row"><span><strong>${esc(u.display_name)}</strong><small>${esc(u.email)} • ${esc(u.role.replaceAll('_',' '))}</small></span><span class="muted">${esc(u.team_name||u.club_name||'NCSF')}</span></div>`).join('')+'</div>':'<div class="empty">No users.</div>';
+    $('#adminPlayers').innerHTML=m.players.length?'<div class="table-wrap"><table><thead><tr><th>Player</th><th>Club</th><th>Team</th><th>Frames</th><th>Status</th></tr></thead><tbody>'+m.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong><br><small class="muted">${esc(p.ncsf_number||'—')}</small></td><td>${esc(p.club_name)}</td><td>${esc(p.team_name||'Unassigned')}</td><td>—</td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}</td></tr>`).join('')+'</tbody></table></div>':'<div class="empty">No players registered.</div>';
   }
   function syncFixtureTeams(){
     const div=Number($('#fixtureDivision')?.value||0);
@@ -402,6 +404,7 @@
       ['divisionForm','/api/admin/divisions','Division created'],
       ['clubForm','/api/admin/clubs','Club created'],
       ['teamForm','/api/admin/teams','Team created'],
+      ['adminPlayerForm','/api/admin/players','Player registered'],
       ['fixtureForm','/api/admin/fixtures','Fixture created'],
       ['adminUserForm','/api/admin/users','Login created']
     ];
