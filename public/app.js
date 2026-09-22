@@ -654,7 +654,7 @@ function formatEventDate(value){
       return;
     }
 
-    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" controls autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
+    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" controls autoplay></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
     const video=$('#internalLiveVideo');
     const waiting=$('#liveWaiting');
     let socket=null,pc=null,retryTimer=null,offerTimer=null,ended=false,pendingIce=[];
