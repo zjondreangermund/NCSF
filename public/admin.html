@@ -78,6 +78,23 @@
         </form>
       </div>
     </div>
+    <div class="grid two" style="margin-top:18px">
+      <div class="panel">
+        <h2>Register player</h2>
+        <form id="adminPlayerForm" class="form-grid">
+          <label>Club<select name="clubId" id="adminPlayerClub" required></select></label>
+          <label>Team<select name="teamId" id="adminPlayerTeam"></select></label>
+          <label>First name<input name="firstName" required></label>
+          <label>Last name<input name="lastName" required></label>
+          <label class="full">NCSF number<input name="ncsfNumber"></label>
+          <button class="btn primary full" type="submit">Register Player</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Players</h2>
+        <div id="adminPlayers" class="empty">No players registered.</div>
+      </div>
+    </div>
     <div class="panel" style="margin-top:18px"><h2>Registered clubs & teams</h2><div id="adminClubList"></div></div>
   </section>
 
