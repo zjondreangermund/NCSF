@@ -2495,16 +2495,37 @@ liveWss.on("connection", async (ws, req) => {
         let msg;
         try { msg = JSON.parse(data.toString()); } catch { return; }
 
-        if (msg.type === "webrtc-offer" && msg.viewerId && msg.sdp) {
+        if (msg.type === "publisher-stop") {
+          ws.intentionalStop = true;
+        } else if (msg.type === "webrtc-offer" && msg.viewerId && msg.sdp) {
           relayToViewer(state, msg.viewerId, { type: "webrtc-offer", sdp: msg.sdp });
         } else if (msg.type === "webrtc-ice" && msg.viewerId && msg.candidate) {
           relayToViewer(state, msg.viewerId, { type: "webrtc-ice", candidate: msg.candidate });
         }
       });
 
-      ws.on("close", () => {
+      ws.on("close", async () => {
         if (state.publisher !== ws) return;
         state.publisher = null;
+
+        if (ws.intentionalStop) {
+          if (state.publisherGraceTimer) {
+            clearTimeout(state.publisherGraceTimer);
+            state.publisherGraceTimer = null;
+          }
+          for (const viewer of state.viewers.values()) {
+            sendLiveControl(viewer, { type: "ended" });
+          }
+          try {
+            await pool.query(
+              "UPDATE fixtures SET stream_active=FALSE,stream_url=NULL WHERE id=$1 AND stream_url=$2",
+              [fixtureId, "internal://fixture/" + fixtureId]
+            );
+          } catch (error) {
+            console.error("Failed to clear intentionally stopped live stream:", error);
+          }
+          return;
+        }
 
         for (const viewer of state.viewers.values()) {
           sendLiveControl(viewer, { type: "reconnecting" });
@@ -2527,7 +2548,7 @@ liveWss.on("connection", async (ws, req) => {
           } catch (error) {
             console.error("Failed to clear live stream after reconnect grace:", error);
           }
-        }, 30000);
+        }, 60000);
       });
       return;
     }
