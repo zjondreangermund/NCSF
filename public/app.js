@@ -639,87 +639,133 @@ function formatEventDate(value){
     return protocol+'//'+location.host+'/live-socket?'+new URLSearchParams(params).toString();
   }
 
+  const LIVE_RTC_CONFIG={
+    iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'}
+    ]
+  };
+
   function startInternalLiveViewer(fixtureId){
     const box=$('#livePlayer');
     if(!box)return;
-    if(!window.MediaSource){
+    if(!window.RTCPeerConnection){
       box.innerHTML='<div class="empty">Live playback is not supported on this device.</div>';
       return;
     }
+
     box.innerHTML='<div class="video-frame internal-live"><video id="internalLiveVideo" controls autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
     const video=$('#internalLiveVideo');
     const waiting=$('#liveWaiting');
-    let mediaSource=null,sourceBuffer=null,queue=[],socket=null,retryTimer=null,ended=false;
+    let socket=null,pc=null,retryTimer=null,ended=false,pendingIce=[];
 
-    const pump=()=>{
-      if(!sourceBuffer||sourceBuffer.updating||!queue.length)return;
-      const item=queue.shift();
-      try{sourceBuffer.appendBuffer(item)}catch(_e){queue.unshift(item)}
-    };
-
-    const setup=(mimeType)=>{
-      if(!MediaSource.isTypeSupported(mimeType)){
-        waiting.textContent='This live video format is not supported on this device.';
-        return;
+    const closePeer=()=>{
+      try{pc?.close()}catch(_e){}
+      pc=null;
+      pendingIce=[];
+      if(video.srcObject){
+        try{video.srcObject.getTracks().forEach(t=>t.stop())}catch(_e){}
+        video.srcObject=null;
       }
-      queue=[];
-      sourceBuffer=null;
-      mediaSource=new MediaSource();
-      video.src=URL.createObjectURL(mediaSource);
-      mediaSource.addEventListener('sourceopen',()=>{
-        try{
-          sourceBuffer=mediaSource.addSourceBuffer(mimeType);
-          try{sourceBuffer.mode='sequence'}catch(_e){}
-          sourceBuffer.addEventListener('updateend',()=>{
-            pump();
-            if(video.paused)video.play().catch(()=>{});
-            if(video.buffered.length){
-              const end=video.buffered.end(video.buffered.length-1);
-              if(end-video.currentTime>5)video.currentTime=Math.max(video.buffered.start(0),end-1.5);
-            }
-          });
-          pump();
-        }catch(err){
-          waiting.textContent='Unable to initialise live playback.';
-        }
-      },{once:true});
     };
 
     const connect=()=>{
       if(ended)return;
+      closePeer();
       socket=new WebSocket(liveSocketUrl({fixtureId:String(fixtureId),mode:'viewer'}));
-      socket.binaryType='arraybuffer';
-      socket.onopen=()=>{waiting.textContent='Waiting for live video…'};
-      socket.onmessage=e=>{
-        if(typeof e.data==='string'){
-          let msg;try{msg=JSON.parse(e.data)}catch{return}
-          if(msg.type==='meta'){
-            setup(msg.mimeType);
-            waiting.textContent='LIVE';
-            waiting.classList.add('is-live');
-          }else if(msg.type==='ended'){
-            ended=true;
-            waiting.textContent='Live broadcast ended';
-            waiting.classList.remove('is-live');
-          }else if(msg.type==='waiting'){
-            waiting.textContent='Camera connected. Starting video…';
-          }else if(msg.type==='offline'){
-            waiting.textContent='This fixture is not live.';
+
+      socket.onopen=()=>{
+        waiting.textContent='Connected. Waiting for camera…';
+      };
+
+      socket.onmessage=async e=>{
+        if(typeof e.data!=='string')return;
+        let msg;try{msg=JSON.parse(e.data)}catch{return}
+
+        if(msg.type==='viewer-ready'){
+          waiting.textContent='Waiting for live video…';
+          return;
+        }
+
+        if(msg.type==='webrtc-offer'&&msg.sdp){
+          try{
+            closePeer();
+            pc=new RTCPeerConnection(LIVE_RTC_CONFIG);
+
+            pc.ontrack=event=>{
+              const remote=event.streams&&event.streams[0];
+              if(remote){
+                video.srcObject=remote;
+                video.play().catch(()=>{});
+                waiting.textContent='LIVE';
+                waiting.classList.add('is-live');
+              }
+            };
+
+            pc.onicecandidate=event=>{
+              if(event.candidate&&socket?.readyState===WebSocket.OPEN){
+                socket.send(JSON.stringify({type:'webrtc-ice',candidate:event.candidate}));
+              }
+            };
+
+            pc.onconnectionstatechange=()=>{
+              if(!pc)return;
+              if(pc.connectionState==='connected'){
+                waiting.textContent='LIVE';
+                waiting.classList.add('is-live');
+              }else if(['failed','disconnected'].includes(pc.connectionState)){
+                waiting.textContent='Reconnecting live video…';
+                waiting.classList.remove('is-live');
+              }
+            };
+
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+            for(const candidate of pendingIce.splice(0)){
+              try{await pc.addIceCandidate(candidate)}catch(_e){}
+            }
+            const answer=await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.send(JSON.stringify({type:'webrtc-answer',sdp:pc.localDescription}));
+          }catch(err){
+            console.error('Live viewer WebRTC error',err);
+            waiting.textContent='Unable to start live video. Retrying…';
           }
           return;
         }
-        const add=buf=>{queue.push(new Uint8Array(buf));pump()};
-        if(e.data instanceof Blob)e.data.arrayBuffer().then(add);
-        else add(e.data);
+
+        if(msg.type==='webrtc-ice'&&msg.candidate){
+          const candidate=new RTCIceCandidate(msg.candidate);
+          if(pc?.remoteDescription){
+            try{await pc.addIceCandidate(candidate)}catch(_e){}
+          }else{
+            pendingIce.push(candidate);
+          }
+          return;
+        }
+
+        if(msg.type==='ended'){
+          ended=true;
+          closePeer();
+          waiting.textContent='Live broadcast ended';
+          waiting.classList.remove('is-live');
+        }else if(msg.type==='waiting'){
+          waiting.textContent='Camera connected. Starting video…';
+        }else if(msg.type==='offline'){
+          waiting.textContent='This fixture is not live.';
+        }
       };
+
       socket.onclose=()=>{
+        closePeer();
         if(!ended){
           waiting.textContent='Reconnecting to live stream…';
+          waiting.classList.remove('is-live');
           clearTimeout(retryTimer);
-          retryTimer=setTimeout(connect,2000);
+          retryTimer=setTimeout(connect,1800);
         }
       };
     };
+
     connect();
   }
 
@@ -734,6 +780,7 @@ function formatEventDate(value){
     if(!requireUser())return;
     const id=Number(new URLSearchParams(location.search).get('id')||0);
     if(!id){$('#broadcastMeta').textContent='No fixture selected.';return}
+
     let fixture;
     try{
       const data=await api('/api/fixtures/'+id);
@@ -749,21 +796,35 @@ function formatEventDate(value){
 
     const preview=$('#broadcastPreview'),startBtn=$('#startBroadcast'),stopBtn=$('#stopBroadcast'),switchBtn=$('#switchCamera');
     const stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
-    let facing='environment',stream=null,recorder=null,socket=null,starting=false;
+    let facing='environment',stream=null,socket=null,starting=false,withAudio=true;
+    const peers=new Map();
+    const pendingIce=new Map();
 
-    const setUi=(live)=>{
+    const closePeer=viewerId=>{
+      const pc=peers.get(viewerId);
+      if(pc){try{pc.close()}catch(_e){}}
+      peers.delete(viewerId);
+      pendingIce.delete(viewerId);
+    };
+
+    const closeAllPeers=()=>{
+      for(const viewerId of [...peers.keys()])closePeer(viewerId);
+    };
+
+    const setUi=live=>{
       startBtn.classList.toggle('hidden',live);
       stopBtn.classList.toggle('hidden',!live);
-      stateLabel.textContent=live?'LIVE':'OFFLINE';
+      stateLabel.textContent=live?(withAudio?'LIVE':'LIVE • VIDEO ONLY'):'OFFLINE';
       stateLabel.classList.toggle('is-live',live);
     };
+
     const stopTracks=()=>{
       if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
       preview.srcObject=null;
     };
+
     const stop=()=>{
-      try{if(recorder&&recorder.state!=='inactive')recorder.stop()}catch(_e){}
-      recorder=null;
+      closeAllPeers();
       try{if(socket&&socket.readyState<=1)socket.close()}catch(_e){}
       socket=null;
       stopTracks();
@@ -771,16 +832,54 @@ function formatEventDate(value){
       viewerLabel.textContent='0 viewers';
     };
 
+    const createPeerForViewer=async viewerId=>{
+      if(!stream||!socket||socket.readyState!==WebSocket.OPEN)return;
+      closePeer(viewerId);
+      try{
+        const pc=new RTCPeerConnection(LIVE_RTC_CONFIG);
+        peers.set(viewerId,pc);
+        pendingIce.set(viewerId,[]);
+
+        stream.getTracks().forEach(track=>pc.addTrack(track,stream));
+
+        pc.onicecandidate=event=>{
+          if(event.candidate&&socket?.readyState===WebSocket.OPEN){
+            socket.send(JSON.stringify({type:'webrtc-ice',viewerId,candidate:event.candidate}));
+          }
+        };
+
+        pc.onconnectionstatechange=()=>{
+          if(['failed','closed'].includes(pc.connectionState))closePeer(viewerId);
+        };
+
+        const offer=await pc.createOffer({offerToReceiveAudio:false,offerToReceiveVideo:false});
+        await pc.setLocalDescription(offer);
+        socket.send(JSON.stringify({type:'webrtc-offer',viewerId,sdp:pc.localDescription}));
+      }catch(err){
+        console.error('Broadcaster WebRTC error',err);
+        closePeer(viewerId);
+      }
+    };
+
     const start=async()=>{
-      if(starting||recorder)return;
+      if(starting||stream)return;
       starting=true;
       startBtn.disabled=true;
+
       try{
-        if(!navigator.mediaDevices?.getUserMedia)throw new Error('Camera streaming is not supported on this device.');
+        if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection){
+          throw new Error('Live camera streaming is not supported on this device.');
+        }
 
         const tokenData=await api('/api/fixtures/'+id+'/broadcast-token',{method:'POST'});
-        const videoConstraints={facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}};
-        let withAudio=true;
+        const videoConstraints={
+          facingMode:{ideal:facing},
+          width:{ideal:1280},
+          height:{ideal:720},
+          frameRate:{ideal:30,max:30}
+        };
+
+        withAudio=true;
         try{
           stream=await navigator.mediaDevices.getUserMedia({
             video:videoConstraints,
@@ -796,46 +895,60 @@ function formatEventDate(value){
           toast('Microphone unavailable — continuing live with video only');
         }
 
-        const mimeType=supportedBroadcastMime(withAudio);
-        if(!mimeType)throw new Error('This device cannot create a compatible live video stream.');
-
         preview.srcObject=stream;
         await preview.play().catch(()=>{});
         stateLabel.textContent=withAudio?'CONNECTING':'CONNECTING • VIDEO ONLY';
 
         socket=new WebSocket(liveSocketUrl({fixtureId:String(id),mode:'publisher',token:tokenData.token}));
-        socket.binaryType='arraybuffer';
+
         await new Promise((resolve,reject)=>{
           const timer=setTimeout(()=>reject(new Error('Live server connection timed out.')),10000);
           socket.onopen=()=>{clearTimeout(timer);resolve()};
           socket.onerror=()=>{clearTimeout(timer);reject(new Error('Could not connect to the NCSF live server.'))};
         });
 
-        socket.onmessage=e=>{
+        socket.onmessage=async e=>{
           if(typeof e.data!=='string')return;
           let msg;try{msg=JSON.parse(e.data)}catch{return}
-          if(msg.type==='viewerCount')viewerLabel.textContent=msg.count+' viewer'+(msg.count===1?'':'s');
-        };
-        socket.onclose=e=>{
-          if(recorder){toast(e.reason||'Live connection ended',true);stop()}
+
+          if(msg.type==='viewerCount'){
+            viewerLabel.textContent=msg.count+' viewer'+(msg.count===1?'':'s');
+          }else if(msg.type==='viewer-joined'&&msg.viewerId){
+            await createPeerForViewer(msg.viewerId);
+          }else if(msg.type==='viewer-left'&&msg.viewerId){
+            closePeer(msg.viewerId);
+          }else if(msg.type==='webrtc-answer'&&msg.viewerId&&msg.sdp){
+            const pc=peers.get(msg.viewerId);
+            if(pc){
+              try{
+                await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                const queued=pendingIce.get(msg.viewerId)||[];
+                pendingIce.set(msg.viewerId,[]);
+                for(const candidate of queued){
+                  try{await pc.addIceCandidate(candidate)}catch(_e){}
+                }
+              }catch(err){console.error('Answer error',err)}
+            }
+          }else if(msg.type==='webrtc-ice'&&msg.viewerId&&msg.candidate){
+            const pc=peers.get(msg.viewerId);
+            if(pc?.remoteDescription){
+              try{await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))}catch(_e){}
+            }else{
+              const queue=pendingIce.get(msg.viewerId)||[];
+              queue.push(new RTCIceCandidate(msg.candidate));
+              pendingIce.set(msg.viewerId,queue);
+            }
+          }
         };
 
-        const recorderOptions={
-          mimeType,
-          videoBitsPerSecond:1400000
+        socket.onclose=e=>{
+          if(stream){
+            toast(e.reason||'Live connection ended',true);
+            stop();
+          }
         };
-        if(withAudio)recorderOptions.audioBitsPerSecond=64000;
-        recorder=new MediaRecorder(stream,recorderOptions);
-        socket.send(JSON.stringify({type:'meta',mimeType}));
-        recorder.ondataavailable=async e=>{
-          if(!e.data||!e.data.size||!socket||socket.readyState!==WebSocket.OPEN)return;
-          if(socket.bufferedAmount>8*1024*1024)return;
-          try{socket.send(await e.data.arrayBuffer())}catch(_e){}
-        };
-        recorder.onerror=()=>{toast('Camera encoder error. Live stream stopped.',true);stop()};
-        recorder.start(750);
+
         setUi(true);
-        if(!withAudio)stateLabel.textContent='LIVE • VIDEO ONLY';
         toast(withAudio?'You are live':'You are live — video only');
       }catch(err){
         stop();
@@ -850,7 +963,7 @@ function formatEventDate(value){
     stopBtn.addEventListener('click',()=>{stop();toast('Live broadcast stopped')});
     switchBtn.addEventListener('click',async()=>{
       facing=facing==='environment'?'user':'environment';
-      if(recorder){
+      if(stream){
         stop();
         await start();
       }else{
