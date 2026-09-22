@@ -2166,3 +2166,199 @@ body.ncsf-live-fullscreen-active{
     border-radius:0!important;
   }
 }
+
+
+/* Live scoresheet overlay */
+.live-match-overlay{
+  position:absolute;
+  left:12px;
+  right:12px;
+  bottom:52px;
+  z-index:70;
+  pointer-events:none;
+  display:grid;
+  gap:6px;
+}
+.live-scorebar{
+  display:grid;
+  grid-template-columns:minmax(120px,1fr) minmax(260px,1.7fr) minmax(120px,1fr);
+  align-items:stretch;
+  border-radius:14px;
+  overflow:hidden;
+  background:rgba(3,12,23,.76);
+  color:#fff;
+  backdrop-filter:blur(7px);
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+}
+.live-score-team{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 12px;
+  min-width:0;
+}
+.live-score-team.away{justify-content:flex-end;text-align:right}
+.live-score-team .team-name{
+  font-size:11px;
+  font-weight:900;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.live-score-team .team-score{
+  font-size:24px;
+  line-height:1;
+  flex:0 0 auto;
+}
+.live-score-frame{
+  display:grid;
+  justify-items:center;
+  align-content:center;
+  gap:2px;
+  padding:7px 12px;
+  border-left:1px solid rgba(255,255,255,.12);
+  border-right:1px solid rgba(255,255,255,.12);
+  min-width:0;
+}
+.live-score-frame small{
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.1em;
+  color:#d6ad52;
+}
+.live-score-frame strong{
+  font-size:13px;
+  line-height:1.15;
+  text-align:center;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  max-width:100%;
+}
+.live-score-frame strong b{
+  color:#d6ad52;
+  font-size:9px;
+  text-transform:uppercase;
+}
+.live-score-frame span{
+  font-size:8px;
+  color:#c4d0dc;
+}
+.live-next-frame{
+  justify-self:center;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  max-width:min(90%,560px);
+  padding:5px 10px;
+  border-radius:999px;
+  background:rgba(0,0,0,.52);
+  color:#fff;
+  backdrop-filter:blur(5px);
+}
+.live-next-frame span{
+  color:#d6ad52;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.1em;
+}
+.live-next-frame strong{
+  font-size:9px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.live-match-overlay.is-final .live-scorebar{
+  background:rgba(4,22,39,.88);
+}
+.fullscreen-chat.open ~ .live-match-overlay,
+.ncsf-live-fullscreen .live-match-overlay{
+  right:12px;
+}
+
+/* On-screen scoresheet follows the official paper layout: 1/2, 3/4, then 5. */
+.score-rounds-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
+  align-items:start;
+  margin:18px 0;
+}
+.score-rounds-grid .score-round{
+  margin:0;
+  min-width:0;
+}
+.score-rounds-grid .score-round:nth-child(5){
+  grid-column:1;
+}
+.score-rounds-grid .score-grid{
+  grid-template-columns:28px minmax(90px,1fr) 42px 30px 42px minmax(90px,1fr) 28px;
+}
+.score-rounds-grid .score-grid>*{
+  padding:7px 4px;
+  font-size:10px;
+}
+.score-rounds-grid .score-cell{
+  margin:3px;
+  min-height:30px;
+}
+.score-rounds-grid .score-round-title{
+  padding:7px 10px;
+}
+.score-rounds-grid .score-round-title strong{
+  font-size:16px;
+}
+.score-rounds-grid .score-total-row,
+.score-rounds-grid .score-progressive-row{
+  grid-template-columns:1fr 42px 20px 42px 1fr;
+  padding:7px 8px;
+  font-size:10px;
+}
+
+@media(max-width:860px){
+  .score-rounds-grid{
+    grid-template-columns:1fr;
+  }
+  .score-rounds-grid .score-round:nth-child(5){
+    grid-column:auto;
+  }
+}
+
+@media(max-width:620px){
+  .live-match-overlay{
+    left:6px;
+    right:6px;
+    bottom:50px;
+  }
+  .live-scorebar{
+    grid-template-columns:minmax(72px,.8fr) minmax(150px,1.5fr) minmax(72px,.8fr);
+    border-radius:10px;
+  }
+  .live-score-team{
+    gap:5px;
+    padding:7px 7px;
+  }
+  .live-score-team .team-name{
+    font-size:8px;
+  }
+  .live-score-team .team-score{
+    font-size:19px;
+  }
+  .live-score-frame{
+    padding:6px 7px;
+  }
+  .live-score-frame small{font-size:7px}
+  .live-score-frame strong{font-size:10px}
+  .live-score-frame span{font-size:7px}
+  .live-next-frame{max-width:94%;padding:4px 8px}
+  .live-next-frame strong{font-size:8px}
+}
+
+.ncsf-live-fullscreen .live-match-overlay{
+  left:14px!important;
+  right:14px!important;
+  bottom:58px!important;
+}
+.ncsf-live-fullscreen .fullscreen-chat.open + .live-match-overlay{
+  right:min(410px,45vw)!important;
+}
