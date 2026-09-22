@@ -245,6 +245,47 @@
       <tbody>${rows}<tr class="summary-total"><td colspan="2">TOTAL</td><td>${totalP}</td><td>${totalW}</td></tr></tbody></table>
     </div>`;
   }
+  function printablePlayerName(playerId){
+    if(!playerId)return '—';
+    const p=allMatchPlayers().find(x=>x.id===Number(playerId));
+    return p?((p.first_name+' '+p.last_name).trim()):'—';
+  }
+  function compactPrintRoster(side){
+    const roster=selectedRoster(side);
+    const labels=side==='HOME'?['1','2','3','4','5','6','7']:['A','B','C','D','E','F','G'];
+    return `<div class="print-roster">
+      <div class="print-roster-title">${side==='HOME'?'HOME':'AWAY'} ROSTER</div>
+      <div class="print-roster-grid">
+        ${labels.map((label,i)=>{
+          const p=roster[i];
+          return `<div><b>${label}</b><span>${p?esc((p.first_name+' '+p.last_name).trim()):'—'}</span>${i===5?'<em>RESERVES</em>':''}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  function compactPrintRound(round){
+    const frames=state.fixture.frames.filter(f=>f.round_no===round);
+    const home=frames.filter(f=>f.winner_side==='HOME').length;
+    const away=frames.filter(f=>f.winner_side==='AWAY').length;
+    const letters=['A','B','C','D','E'];
+    return `<section class="print-round">
+      <div class="print-round-head"><strong>ROUND ${round}</strong><span>${home} - ${away}</span></div>
+      <table>
+        <thead><tr><th>#</th><th>Home</th><th>H</th><th>A</th><th>Away</th><th>#</th></tr></thead>
+        <tbody>
+          ${frames.map(fr=>`<tr>
+            <td>${fr.home_slot}</td>
+            <td>${esc(fr.home_player_name)}</td>
+            <td class="print-score">${fr.winner_side==='HOME'?'1':'0'}</td>
+            <td class="print-score">${fr.winner_side==='AWAY'?'1':'0'}</td>
+            <td>${esc(fr.away_player_name)}</td>
+            <td>${letters[(fr.away_slot||1)-1]}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </section>`;
+  }
+
   function renderScoresheet(){
     const data=state.fixture,f=data.fixture,t=data.totals;
     $('#sheetStatus').className='pill '+f.status;
@@ -320,6 +361,51 @@
         </form>
         ${data.substitutions.length?'<div class="card-list">'+data.substitutions.map(s=>`<div class="card-row"><span><strong>${esc(s.side)}: ${esc(s.out_player_name)} → ${esc(s.in_player_name)}</strong><small>From round ${s.effective_round}</small></span></div>`).join('')+'</div>':''}
       </section>`:''}
+      <section class="compact-print-sheet print-only">
+        <header class="print-head">
+          <img src="/ncsf-logo.jpg" alt="NCSF">
+          <div>
+            <h1>NAMIBIA CUE SPORTS FEDERATION</h1>
+            <h2>Blackball League Scoresheet</h2>
+            <p>${esc(f.seasonName)} • ${esc(f.divisionName)} • Round ${esc(f.roundNo)}</p>
+          </div>
+          <div class="print-meta">
+            <span><b>Date</b>${esc(dateText)}</span>
+            <span><b>Time</b>${esc(timeText)}</span>
+            <span><b>Venue</b>${esc(f.venue||'TBA')}</span>
+          </div>
+        </header>
+
+        <div class="print-match">
+          <div><small>HOME</small><strong>${esc(f.homeTeamName)}</strong></div>
+          <div class="print-final"><b>${t.home}</b><span>FINAL</span><b>${t.away}</b></div>
+          <div class="away"><small>AWAY</small><strong>${esc(f.awayTeamName)}</strong></div>
+        </div>
+
+        <div class="print-rosters">
+          ${compactPrintRoster('HOME')}
+          ${compactPrintRoster('AWAY')}
+        </div>
+
+        <div class="print-rounds">
+          ${data.frames.length===25?[1,2,3,4,5].map(compactPrintRound).join(''):'<div class="print-no-frames">Lineups not complete.</div>'}
+        </div>
+
+        <div class="print-summary">
+          <div><span>Match Result</span><strong>${esc(matchResult)}</strong></div>
+          <div><span>Player of Match</span><strong>${esc(printablePlayerName(f.playerOfMatchId))}</strong></div>
+          <div><span>Break & Run</span><strong>${esc(printablePlayerName(f.breakRunPlayerId))}</strong></div>
+          <div><span>Rack & Run</span><strong>${esc(printablePlayerName(f.rackRunPlayerId))}</strong></div>
+          <div><span>Bonus Point</span><strong>${esc(f.bonusPoints||0)}</strong></div>
+          <div><span>Status</span><strong>${esc(f.status.replaceAll('_',' '))}</strong></div>
+        </div>
+
+        <div class="print-signatures">
+          <div><span>HOME CAPTAIN: ${esc(homeCaptain?(homeCaptain.first_name+' '+homeCaptain.last_name).trim():'—')}</span><i></i><small>Signature</small></div>
+          <div><span>AWAY CAPTAIN: ${esc(awayCaptain?(awayCaptain.first_name+' '+awayCaptain.last_name).trim():'—')}</span><i></i><small>Signature</small></div>
+        </div>
+      </section>
+
       <section class="signed-sheet-card">
         <div class="section-head"><div><span class="eyebrow">MATCH RECORD</span><h3>Signed Scoresheet</h3></div></div>
         <div class="upload-box">${data.attachments.length?data.attachments.map(a=>`<div class="uploaded-file"><span><strong>${esc(a.filename)}</strong><br><small>${esc(new Date(a.created_at).toLocaleString())}</small></span><a class="btn small" target="_blank" href="/api/fixtures/${f.id}/attachment/${a.id}">Open</a></div>`).join(''):'<div class="muted">Upload the signed paper sheet or PDF from the toolbar.</div>'}</div>
