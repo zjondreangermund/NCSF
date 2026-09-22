@@ -1025,12 +1025,9 @@ function formatEventDate(value){
       const currentDate=f.fixture_date?new Date(f.fixture_date).toISOString().slice(0,16):'';
       const fixtureDate=prompt('Match date/time (YYYY-MM-DDTHH:MM). Leave blank for TBA.',currentDate); if(fixtureDate===null)return;
       const venue=prompt('Venue',f.venue||''); if(venue===null)return;
-      const streamUrl=prompt('Live stream URL (HLS .m3u8, MP4 or YouTube). Leave blank for no stream.',f.stream_url||''); if(streamUrl===null)return;
-      const streamTitle=streamUrl?prompt('Stream title',f.stream_title||(f.home_team_name+' vs '+f.away_team_name)):''; if(streamUrl&&streamTitle===null)return;
-      const streamActive=Boolean(streamUrl)&&confirm('Make this stream LIVE now? Press Cancel to save it without showing LIVE.');
       try{
-        await api('/api/admin/fixtures/'+f.id,{method:'PATCH',body:{roundNo:Number(roundNo),fixtureDate:fixtureDate||null,venue,streamUrl:streamUrl||null,streamTitle:streamTitle||null,streamActive}});
-        await reloadAdmin(); toast(streamActive?'Fixture updated and LIVE':'Fixture updated');
+        await api('/api/admin/fixtures/'+f.id,{method:'PATCH',body:{roundNo:Number(roundNo),fixtureDate:fixtureDate||null,venue}});
+        await reloadAdmin(); toast('Fixture updated');
       }catch(err){toast(err.message,true)}
     }));
     $$('.fixture-postpone').forEach(btn=>btn.addEventListener('click',async()=>{
