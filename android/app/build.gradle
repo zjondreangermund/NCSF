@@ -10,14 +10,24 @@ android {
         applicationId "com.ncsf.league"
         minSdk 24
         targetSdk 35
-        versionCode 13
-        versionName "1.12.0"
+        versionCode 14
+        versionName "1.13.0"
+    }
+
+    signingConfigs {
+        stableDebug {
+            storeFile file("../ncsf-dev.keystore")
+            storePassword "ncsf-dev-2026"
+            keyAlias "ncsf"
+            keyPassword "ncsf-dev-2026"
+        }
     }
 
     buildTypes {
         debug {
             applicationIdSuffix ""
             versionNameSuffix ""
+            signingConfig signingConfigs.stableDebug
         }
         release {
             minifyEnabled false
