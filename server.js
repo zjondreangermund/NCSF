@@ -234,6 +234,21 @@ async function initDatabase() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_players_ncsf_number_unique
       ON players(ncsf_number) WHERE ncsf_number IS NOT NULL;
     CREATE SEQUENCE IF NOT EXISTS ncsf_player_number_seq START 1;
+
+    CREATE TABLE IF NOT EXISTS content_posts (
+      id SERIAL PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('NEWS','ANNOUNCEMENT','EVENT')),
+      title TEXT NOT NULL,
+      body TEXT,
+      event_date TIMESTAMPTZ,
+      published BOOLEAN NOT NULL DEFAULT TRUE,
+      pinned BOOLEAN NOT NULL DEFAULT FALSE,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_content_posts_public
+      ON content_posts(published,type,event_date,created_at);
   `);
 }
 
