@@ -1146,11 +1146,15 @@ function formatEventDate(value){
           renderMessage(msg.message);
           updateUnread();
         }else if(msg.type==='chat-offline'){
-          chatOffline=true;
+          chatOffline=false;
+          retryTimer=setTimeout(connectChat,1800);
         }
       };
       socket.onclose=()=>{
-        if(!chatOffline)retryTimer=setTimeout(connectChat,1800);
+        if(!chatOffline){
+          clearTimeout(retryTimer);
+          retryTimer=setTimeout(connectChat,1800);
+        }
       };
     };
 
