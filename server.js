@@ -23,6 +23,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 const app = express();
+const httpServer = http.createServer(app);
 const port = Number(process.env.PORT || 3000);
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -2265,6 +2266,7 @@ const pageRoutes = {
   "/teams": "teams.html",
   "/players": "players.html",
   "/live": "live.html",
+  "/broadcast": "broadcast.html",
   "/news": "news.html",
   "/rankings": "rankings.html",
   "/admin": "admin.html",
@@ -2293,6 +2295,154 @@ app.get(["/ncsf-logo.jpg", "/favicon.ico"], (_req, res) => {
 
 app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
 
+
+const liveWss = new WebSocketServer({ server: httpServer, path: "/live-socket" });
+
+function liveStateFor(fixtureId) {
+  const id = Number(fixtureId);
+  let state = liveStreams.get(id);
+  if (!state) {
+    state = {
+      fixtureId: id,
+      publisher: null,
+      viewers: new Set(),
+      mimeType: null,
+      initChunk: null,
+      chunks: [],
+      startedAt: null
+    };
+    liveStreams.set(id, state);
+  }
+  return state;
+}
+
+function sendLiveControl(ws, payload) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  }
+}
+
+function updatePublisherViewerCount(state) {
+  sendLiveControl(state.publisher, { type: "viewerCount", count: state.viewers.size });
+}
+
+liveWss.on("connection", async (ws, req) => {
+  try {
+    const u = new URL(req.url, "http://localhost");
+    const fixtureId = Number(u.searchParams.get("fixtureId") || 0);
+    const mode = String(u.searchParams.get("mode") || "viewer");
+    if (!fixtureId) {
+      ws.close(4400, "Fixture required");
+      return;
+    }
+
+    const state = liveStateFor(fixtureId);
+
+    if (mode === "publisher") {
+      const token = u.searchParams.get("token");
+      const tokenData = consumeBroadcastToken(token, fixtureId);
+      if (!tokenData) {
+        ws.close(4401, "Invalid broadcast token");
+        return;
+      }
+      if (state.publisher && state.publisher.readyState === WebSocket.OPEN) {
+        ws.close(4409, "This fixture already has a live broadcaster");
+        return;
+      }
+
+      const fixture = await fixtureById(fixtureId);
+      if (!fixture || fixture.status === "APPROVED") {
+        ws.close(4403, "Fixture cannot be broadcast");
+        return;
+      }
+
+      state.publisher = ws;
+      state.mimeType = null;
+      state.initChunk = null;
+      state.chunks = [];
+      state.startedAt = Date.now();
+
+      await pool.query(
+        "UPDATE fixtures SET stream_url=$2,stream_title=$3,stream_active=TRUE WHERE id=$1",
+        [fixtureId, "internal://fixture/" + fixtureId, fixture.home_team_name + " vs " + fixture.away_team_name]
+      );
+      sendLiveControl(ws, { type: "ready", fixtureId, viewerCount: state.viewers.size });
+      for (const viewer of state.viewers) sendLiveControl(viewer, { type: "waiting" });
+      updatePublisherViewerCount(state);
+
+      ws.on("message", (data, isBinary) => {
+        if (!isBinary) {
+          let msg;
+          try { msg = JSON.parse(data.toString()); } catch { return; }
+          if (msg.type === "meta" && typeof msg.mimeType === "string") {
+            state.mimeType = msg.mimeType;
+            state.initChunk = null;
+            state.chunks = [];
+            for (const viewer of state.viewers) {
+              sendLiveControl(viewer, { type: "meta", mimeType: state.mimeType, startedAt: state.startedAt });
+            }
+          }
+          return;
+        }
+
+        const chunk = Buffer.from(data);
+        if (!state.initChunk) {
+          state.initChunk = chunk;
+        } else {
+          state.chunks.push(chunk);
+          if (state.chunks.length > 25) state.chunks.shift();
+        }
+
+        for (const viewer of state.viewers) {
+          if (viewer.readyState === WebSocket.OPEN && viewer.bufferedAmount < 6 * 1024 * 1024) {
+            viewer.send(chunk, { binary: true });
+          }
+        }
+      });
+
+      ws.on("close", async () => {
+        if (state.publisher !== ws) return;
+        state.publisher = null;
+        for (const viewer of state.viewers) sendLiveControl(viewer, { type: "ended" });
+        try {
+          await pool.query(
+            "UPDATE fixtures SET stream_active=FALSE,stream_url=NULL WHERE id=$1 AND stream_url=$2",
+            [fixtureId, "internal://fixture/" + fixtureId]
+          );
+        } catch (error) {
+          console.error("Failed to clear live stream:", error);
+        }
+      });
+      return;
+    }
+
+    const fixture = await fixtureById(fixtureId);
+    const internalLive = fixture && fixture.stream_active && String(fixture.stream_url || "").startsWith("internal://");
+    if (!internalLive && !(state.publisher && state.publisher.readyState === WebSocket.OPEN)) {
+      sendLiveControl(ws, { type: "offline" });
+      ws.close(4404, "Stream offline");
+      return;
+    }
+
+    state.viewers.add(ws);
+    if (state.mimeType) sendLiveControl(ws, { type: "meta", mimeType: state.mimeType, startedAt: state.startedAt });
+    if (state.initChunk && ws.readyState === WebSocket.OPEN) ws.send(state.initChunk, { binary: true });
+    for (const chunk of state.chunks) {
+      if (ws.readyState !== WebSocket.OPEN) break;
+      ws.send(chunk, { binary: true });
+    }
+    updatePublisherViewerCount(state);
+
+    ws.on("close", () => {
+      state.viewers.delete(ws);
+      updatePublisherViewerCount(state);
+    });
+  } catch (error) {
+    console.error("Live socket error:", error);
+    try { ws.close(1011, "Live stream error"); } catch {}
+  }
+});
+
 app.use((err, _req, res, _next) => {
   console.error(err);
   if (err.code === "23505") return res.status(409).json({ error: "That record already exists." });
@@ -2306,7 +2456,7 @@ initDatabase()
   .then(assignOfficialNcsfNumbers)
   .then(setupCentralDivisionAndSchedule)
   .then(correctAtomic5AndImportCoastalSchedule)
-  .then(() => app.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
+  .then(() => httpServer.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);
     process.exit(1);
