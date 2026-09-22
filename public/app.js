@@ -723,8 +723,10 @@ function formatEventDate(value){
     connect();
   }
 
-  function supportedBroadcastMime(){
-    const types=['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'];
+  function supportedBroadcastMime(withAudio=true){
+    const types=withAudio
+      ? ['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm']
+      : ['video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm'];
     return types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';
   }
 
@@ -775,16 +777,31 @@ function formatEventDate(value){
       startBtn.disabled=true;
       try{
         if(!navigator.mediaDevices?.getUserMedia)throw new Error('Camera streaming is not supported on this device.');
-        const mimeType=supportedBroadcastMime();
-        if(!mimeType)throw new Error('This device cannot create a compatible live video stream.');
 
         const tokenData=await api('/api/fixtures/'+id+'/broadcast-token',{method:'POST'});
-        stream=await navigator.mediaDevices.getUserMedia({
-          video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}},
-          audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
-        });
+        const videoConstraints={facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}};
+        let withAudio=true;
+        try{
+          stream=await navigator.mediaDevices.getUserMedia({
+            video:videoConstraints,
+            audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+          });
+        }catch(audioErr){
+          const msg=String(audioErr?.message||'').toLowerCase();
+          const audioProblem=audioErr?.name==='NotReadableError'||audioErr?.name==='NotAllowedError'||audioErr?.name==='AbortError'||
+            msg.includes('audio')||msg.includes('microphone')||msg.includes('source');
+          if(!audioProblem)throw audioErr;
+          withAudio=false;
+          stream=await navigator.mediaDevices.getUserMedia({video:videoConstraints,audio:false});
+          toast('Microphone unavailable — continuing live with video only');
+        }
+
+        const mimeType=supportedBroadcastMime(withAudio);
+        if(!mimeType)throw new Error('This device cannot create a compatible live video stream.');
+
         preview.srcObject=stream;
         await preview.play().catch(()=>{});
+        stateLabel.textContent=withAudio?'CONNECTING':'CONNECTING • VIDEO ONLY';
 
         socket=new WebSocket(liveSocketUrl({fixtureId:String(id),mode:'publisher',token:tokenData.token}));
         socket.binaryType='arraybuffer';
@@ -803,11 +820,12 @@ function formatEventDate(value){
           if(recorder){toast(e.reason||'Live connection ended',true);stop()}
         };
 
-        recorder=new MediaRecorder(stream,{
+        const recorderOptions={
           mimeType,
-          videoBitsPerSecond:1400000,
-          audioBitsPerSecond:64000
-        });
+          videoBitsPerSecond:1400000
+        };
+        if(withAudio)recorderOptions.audioBitsPerSecond=64000;
+        recorder=new MediaRecorder(stream,recorderOptions);
         socket.send(JSON.stringify({type:'meta',mimeType}));
         recorder.ondataavailable=async e=>{
           if(!e.data||!e.data.size||!socket||socket.readyState!==WebSocket.OPEN)return;
@@ -817,7 +835,8 @@ function formatEventDate(value){
         recorder.onerror=()=>{toast('Camera encoder error. Live stream stopped.',true);stop()};
         recorder.start(750);
         setUi(true);
-        toast('You are live');
+        if(!withAudio)stateLabel.textContent='LIVE • VIDEO ONLY';
+        toast(withAudio?'You are live':'You are live — video only');
       }catch(err){
         stop();
         toast(err.message||'Could not start live stream.',true);
