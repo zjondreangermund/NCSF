@@ -1017,6 +1017,25 @@ app.get("/api/public/overview", async (_req, res) => {
   res.json({ division, fixtures, standings: standings.slice(0, 8), topPlayers: players.slice(0, 10) });
 });
 
+
+app.get("/api/public/posts", async (req, res) => {
+  const args = [];
+  const where = ["published=TRUE"];
+  if (req.query.type) {
+    const type = String(req.query.type).toUpperCase();
+    if (!["NEWS","ANNOUNCEMENT","EVENT"].includes(type)) return res.status(400).json({ error: "Invalid post type." });
+    args.push(type);
+    where.push("type=$" + args.length);
+  }
+  const { rows } = await pool.query(
+    "SELECT id,type,title,body,event_date,pinned,created_at,updated_at FROM content_posts WHERE " +
+    where.join(" AND ") +
+    " ORDER BY pinned DESC, CASE WHEN type='EVENT' AND event_date >= NOW() THEN 0 WHEN type='ANNOUNCEMENT' THEN 1 WHEN type='NEWS' THEN 2 ELSE 3 END, CASE WHEN type='EVENT' THEN event_date END ASC NULLS LAST, created_at DESC LIMIT 100",
+    args
+  );
+  res.json({ posts: rows });
+});
+
 app.get("/api/public/teams", async (req, res) => {
   const args = [];
   const where = ["t.active=TRUE"];
@@ -1252,6 +1271,52 @@ app.get("/api/admin/meta", requireRoles(ROLE.NCSF, ROLE.CLUB, ROLE.TEAM), async 
   const filteredTeams = user.role === ROLE.TEAM ? teams.rows.filter(t => t.id === user.team_id) : teams.rows;
   const filteredPlayers = user.role === ROLE.TEAM ? players.rows.filter(p => p.team_id === user.team_id) : players.rows;
   res.json({ seasons: [], divisions: divisions.rows, clubs: clubs.rows, teams: filteredTeams, players: filteredPlayers, users: users.rows });
+});
+
+
+app.get("/api/admin/posts", requireRoles(ROLE.NCSF), async (_req, res) => {
+  const { rows } = await pool.query("SELECT * FROM content_posts ORDER BY pinned DESC, COALESCE(event_date,created_at) DESC, id DESC");
+  res.json({ posts: rows });
+});
+
+app.post("/api/admin/posts", requireRoles(ROLE.NCSF), async (req, res) => {
+  const type = String(req.body.type || "ANNOUNCEMENT").toUpperCase();
+  const title = String(req.body.title || "").trim();
+  const body = String(req.body.body || "").trim() || null;
+  if (!["NEWS","ANNOUNCEMENT","EVENT"].includes(type)) return res.status(400).json({ error: "Invalid post type." });
+  if (!title) return res.status(400).json({ error: "Title is required." });
+  const eventDate = type === "EVENT" ? (req.body.eventDate || null) : null;
+  if (type === "EVENT" && !eventDate) return res.status(400).json({ error: "Event date/time is required." });
+  const { rows } = await pool.query(
+    "INSERT INTO content_posts(type,title,body,event_date,published,pinned,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+    [type,title,body,eventDate,req.body.published !== false,Boolean(req.body.pinned),req.user.id]
+  );
+  res.status(201).json({ post: rows[0] });
+});
+
+app.patch("/api/admin/posts/:id", requireRoles(ROLE.NCSF), async (req, res) => {
+  const id = Number(req.params.id);
+  const current = await pool.query("SELECT * FROM content_posts WHERE id=$1", [id]);
+  if (!current.rowCount) return res.status(404).json({ error: "Post not found." });
+  const p = current.rows[0];
+  const type = req.body.type === undefined ? p.type : String(req.body.type).toUpperCase();
+  if (!["NEWS","ANNOUNCEMENT","EVENT"].includes(type)) return res.status(400).json({ error: "Invalid post type." });
+  const title = req.body.title === undefined ? p.title : String(req.body.title || "").trim();
+  if (!title) return res.status(400).json({ error: "Title is required." });
+  const body = req.body.body === undefined ? p.body : (String(req.body.body || "").trim() || null);
+  const eventDate = type === "EVENT" ? (req.body.eventDate === undefined ? p.event_date : (req.body.eventDate || null)) : null;
+  const published = req.body.published === undefined ? p.published : Boolean(req.body.published);
+  const pinned = req.body.pinned === undefined ? p.pinned : Boolean(req.body.pinned);
+  const { rows } = await pool.query(
+    "UPDATE content_posts SET type=$2,title=$3,body=$4,event_date=$5,published=$6,pinned=$7,updated_at=NOW() WHERE id=$1 RETURNING *",
+    [id,type,title,body,eventDate,published,pinned]
+  );
+  res.json({ post: rows[0] });
+});
+
+app.delete("/api/admin/posts/:id", requireRoles(ROLE.NCSF), async (req, res) => {
+  await pool.query("DELETE FROM content_posts WHERE id=$1", [Number(req.params.id)]);
+  res.json({ ok: true });
 });
 
 app.post("/api/admin/seasons", requireRoles(ROLE.NCSF), async (req, res) => {
