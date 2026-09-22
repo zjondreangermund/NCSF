@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b223f">
+  <title>NCSF Broadcast</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-page="broadcast-page">
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <img class="js-logo" src="/ncsf-logo.jpg" alt="NCSF logo">
+      <span><strong>Namibia Cue Sports Federation</strong><small>League Manager</small></span>
+    </a>
+    <nav class="nav">
+      <a href="/">Home</a>
+      <a href="/fixtures">Fixtures</a>
+      <a href="/results">Results</a>
+      <a href="/teams">Teams</a>
+      <a href="/players">Players</a>
+      <a href="/news">News & Events</a>
+      <a href="/rankings">Rankings</a>
+    </nav>
+    <div class="user-actions" id="userActions"></div>
+  </div>
+</header>
+
+<main class="page broadcast-page">
+  <section class="live-hero">
+    <div>
+      <span class="live-badge"><i></i> NCSF BROADCAST</span>
+      <h1 id="broadcastTitle">Match Broadcast</h1>
+      <p id="broadcastMeta">Use this phone as the official live camera for this fixture.</p>
+    </div>
+  </section>
+
+  <section class="panel broadcast-panel">
+    <div class="broadcast-video-shell">
+      <video id="broadcastPreview" playsinline muted autoplay></video>
+      <div class="broadcast-overlay">
+        <span id="broadcastState" class="broadcast-state">OFFLINE</span>
+        <span id="broadcastViewers">0 viewers</span>
+      </div>
+    </div>
+    <div class="broadcast-controls">
+      <button class="btn primary" id="startBroadcast">Start Live</button>
+      <button class="btn danger hidden" id="stopBroadcast">Stop Live</button>
+      <button class="btn light" id="switchCamera">Switch Camera</button>
+      <a class="btn light" id="watchBroadcast" href="#">Watch Live</a>
+    </div>
+    <div class="broadcast-help">
+      <strong>Broadcast tips</strong>
+      <p>Use landscape orientation, stable Wi-Fi/5G, keep the phone plugged in, and position the full table in view. Only one broadcaster can be live for a fixture at a time.</p>
+    </div>
+  </section>
+</main>
+
+<div class="footer">Namibia Cue Sports Federation • Official Live Broadcast</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+</body>
+</html>
