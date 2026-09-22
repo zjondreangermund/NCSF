@@ -159,6 +159,9 @@ async function initDatabase() {
       home_captain_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
       away_captain_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
       bonus_points INTEGER NOT NULL DEFAULT 0,
+      stream_url TEXT,
+      stream_title TEXT,
+      stream_active BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CHECK (home_team_id <> away_team_id)
     );
@@ -236,6 +239,9 @@ async function initDatabase() {
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS submitted_side TEXT CHECK (submitted_side IN ('HOME','AWAY'));
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS stream_url TEXT;
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS stream_title TEXT;
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS stream_active BOOLEAN NOT NULL DEFAULT FALSE;
     UPDATE fixtures
       SET submitted_side='HOME',
           submitted_by=COALESCE(submitted_by,home_confirmed_by),
@@ -1057,7 +1063,10 @@ async function fixturePayload(fixture) {
       rackRunPlayerId: fixture.rack_run_player_id,
       homeCaptainId: fixture.home_captain_id,
       awayCaptainId: fixture.away_captain_id,
-      bonusPoints: fixture.bonus_points
+      bonusPoints: fixture.bonus_points,
+      streamUrl: fixture.stream_url,
+      streamTitle: fixture.stream_title,
+      streamActive: Boolean(fixture.stream_active)
     },
     lineups,
     reserves,
@@ -1281,6 +1290,7 @@ app.get("/api/fixtures", async (req, res) => {
   }
   const { rows } = await pool.query(`
     SELECT f.id,f.division_id,f.round_no,f.fixture_date,f.status,f.venue,
+           f.stream_url,f.stream_title,f.stream_active,
            d.name division_name,s.name season_name,
            ht.id home_team_id,ht.name home_team_name,
            at.id away_team_id,at.name away_team_name,
@@ -1297,6 +1307,24 @@ app.get("/api/fixtures", async (req, res) => {
     ORDER BY f.fixture_date NULLS LAST,f.round_no,f.id
   `, args);
   res.json({ fixtures: rows });
+});
+
+app.get("/api/live/:id", async (req, res) => {
+  const fixture = await fixtureById(Number(req.params.id));
+  if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if (!fixture.stream_active || !fixture.stream_url) return res.status(404).json({ error: "No live stream is available for this fixture." });
+  res.json({
+    live: {
+      fixtureId: fixture.id,
+      title: fixture.stream_title || (fixture.home_team_name + " vs " + fixture.away_team_name),
+      streamUrl: fixture.stream_url,
+      homeTeamName: fixture.home_team_name,
+      awayTeamName: fixture.away_team_name,
+      fixtureDate: fixture.fixture_date,
+      venue: fixture.venue,
+      divisionName: fixture.division_name
+    }
+  });
 });
 
 app.get("/api/teams/:id/players", async (req, res) => {
@@ -1625,15 +1653,20 @@ app.patch("/api/admin/fixtures/:id", requireRoles(ROLE.NCSF), async (req, res) =
   const roundNo = req.body.roundNo === undefined ? fixture.round_no : Number(req.body.roundNo);
   const fixtureDate = req.body.fixtureDate === undefined ? fixture.fixture_date : (req.body.fixtureDate || null);
   const venue = req.body.venue === undefined ? fixture.venue : (String(req.body.venue || "").trim() || null);
+  const streamUrl = req.body.streamUrl === undefined ? fixture.stream_url : (String(req.body.streamUrl || "").trim() || null);
+  const streamTitle = req.body.streamTitle === undefined ? fixture.stream_title : (String(req.body.streamTitle || "").trim() || null);
+  const streamActive = req.body.streamActive === undefined ? Boolean(fixture.stream_active) : Boolean(req.body.streamActive);
   if (!Number.isInteger(roundNo) || roundNo < 1) return res.status(400).json({ error: "Round number must be 1 or higher." });
+  if (streamActive && !streamUrl) return res.status(400).json({ error: "A stream URL is required before going live." });
 
   const { rows } = await pool.query(`
     UPDATE fixtures
-    SET round_no=$2, fixture_date=$3, venue=$4
+    SET round_no=$2, fixture_date=$3, venue=$4,
+        stream_url=$5,stream_title=$6,stream_active=$7
     WHERE id=$1
     RETURNING *
-  `, [fixtureId, roundNo, fixtureDate, venue]);
-  await audit(req.user.id, fixtureId, "FIXTURE_UPDATED", { roundNo, fixtureDate, venue });
+  `, [fixtureId, roundNo, fixtureDate, venue, streamUrl, streamTitle, streamActive]);
+  await audit(req.user.id, fixtureId, "FIXTURE_UPDATED", { roundNo, fixtureDate, venue, streamUrl, streamTitle, streamActive });
   res.json({ fixture: rows[0] });
 });
 
@@ -2017,6 +2050,7 @@ const pageRoutes = {
   "/results": "results.html",
   "/teams": "teams.html",
   "/players": "players.html",
+  "/live": "live.html",
   "/news": "news.html",
   "/rankings": "rankings.html",
   "/admin": "admin.html",
