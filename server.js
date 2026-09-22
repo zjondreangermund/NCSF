@@ -70,7 +70,7 @@ const ROLE = {
 };
 
 async function initDatabase() {
-  await pool.query(\`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS seasons (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -216,7 +216,7 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_frames_fixture ON frames(fixture_id);
     CREATE INDEX IF NOT EXISTS idx_frames_winner ON frames(winner_player_id);
     CREATE INDEX IF NOT EXISTS idx_players_team ON players(team_id);
-  \`);
+  `);
 }
 
 function cleanEmail(email) {
@@ -238,13 +238,13 @@ function safeUser(row) {
 }
 
 async function currentUserById(id) {
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     SELECT u.*, c.name club_name, t.name team_name
     FROM users u
     LEFT JOIN clubs c ON c.id=u.club_id
     LEFT JOIN teams t ON t.id=u.team_id
     WHERE u.id=$1 AND u.active=TRUE
-  \`, [id]);
+  `, [id]);
   return rows[0] || null;
 }
 
@@ -271,7 +271,7 @@ async function audit(userId, fixtureId, action, detail = {}) {
 }
 
 async function fixtureById(id) {
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     SELECT f.*, d.name division_name, s.name season_name,
            ht.name home_team_name, at.name away_team_name,
            hc.name home_club_name, ac.name away_club_name,
@@ -284,7 +284,7 @@ async function fixtureById(id) {
     JOIN clubs hc ON hc.id=ht.club_id
     JOIN clubs ac ON ac.id=at.club_id
     WHERE f.id=$1
-  \`, [id]);
+  `, [id]);
   return rows[0] || null;
 }
 
@@ -334,18 +334,18 @@ async function ensureFrames(fixtureId) {
     for (let board = 1; board <= 5; board++) {
       const homeSlot = board;
       const awaySlot = ((board - 1 + shift) % 5) + 1;
-      await pool.query(\`
+      await pool.query(`
         INSERT INTO frames(fixture_id, round_no, board_no, home_slot, away_slot, home_player_id, away_player_id)
         VALUES($1,$2,$3,$4,$5,$6,$7)
         ON CONFLICT(fixture_id, round_no, board_no) DO NOTHING
-      \`, [fixtureId, round, board, homeSlot, awaySlot, home.get(homeSlot), away.get(awaySlot)]);
+      `, [fixtureId, round, board, homeSlot, awaySlot, home.get(homeSlot), away.get(awaySlot)]);
     }
   }
   return true;
 }
 
 async function getStandings(divisionId) {
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     WITH match_scores AS (
       SELECT f.id, f.home_team_id, f.away_team_id,
              COUNT(*) FILTER (WHERE fr.winner_side='HOME')::int home_frames,
@@ -379,12 +379,12 @@ async function getStandings(divisionId) {
     WHERE t.division_id=$1 AND t.active=TRUE
     GROUP BY t.id,c.name
     ORDER BY frames_won DESC, frame_difference DESC, wins DESC, team_name ASC
-  \`, [divisionId]);
+  `, [divisionId]);
   return rows;
 }
 
 async function getIndividualRankings(divisionId) {
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     SELECT p.id player_id,
            p.first_name || ' ' || p.last_name player_name,
            p.ncsf_number,
@@ -405,20 +405,20 @@ async function getIndividualRankings(divisionId) {
     GROUP BY p.id,t.name,c.name
     HAVING COUNT(f.id) > 0
     ORDER BY frames_won DESC, win_percentage DESC, frames_played DESC, player_name ASC
-  \`, [divisionId]);
+  `, [divisionId]);
   return rows;
 }
 
 async function fixturePayload(fixture) {
   const [{ rows: lineups }, { rows: frames }, { rows: subs }, { rows: attachments }] = await Promise.all([
-    pool.query(\`
+    pool.query(`
       SELECT fl.side, fl.slot, p.id player_id, p.first_name, p.last_name, p.ncsf_number
       FROM fixture_lineups fl
       JOIN players p ON p.id=fl.player_id
       WHERE fl.fixture_id=$1
       ORDER BY fl.side, fl.slot
-    \`, [fixture.id]),
-    pool.query(\`
+    `, [fixture.id]),
+    pool.query(`
       SELECT fr.*,
              hp.first_name || ' ' || hp.last_name home_player_name,
              ap.first_name || ' ' || ap.last_name away_player_name
@@ -427,8 +427,8 @@ async function fixturePayload(fixture) {
       JOIN players ap ON ap.id=fr.away_player_id
       WHERE fr.fixture_id=$1
       ORDER BY fr.round_no, fr.board_no
-    \`, [fixture.id]),
-    pool.query(\`
+    `, [fixture.id]),
+    pool.query(`
       SELECT s.*, op.first_name || ' ' || op.last_name out_player_name,
              ip.first_name || ' ' || ip.last_name in_player_name
       FROM substitutions s
@@ -436,13 +436,13 @@ async function fixturePayload(fixture) {
       JOIN players ip ON ip.id=s.in_player_id
       WHERE s.fixture_id=$1
       ORDER BY s.created_at
-    \`, [fixture.id]),
-    pool.query(\`
+    `, [fixture.id]),
+    pool.query(`
       SELECT id, kind, filename, mimetype, created_at
       FROM fixture_attachments
       WHERE fixture_id=$1
       ORDER BY created_at DESC
-    \`, [fixture.id])
+    `, [fixture.id])
   ]);
 
   const scored = frames.filter(f => f.winner_side);
@@ -515,11 +515,11 @@ app.post("/api/setup", async (req, res) => {
   }
 
   const hash = await bcrypt.hash(password, 12);
-  const created = await pool.query(\`
+  const created = await pool.query(`
     INSERT INTO users(email,password_hash,display_name,role)
     VALUES($1,$2,$3,'NCSF_ADMIN')
     RETURNING *
-  \`, [email, hash, name]);
+  `, [email, hash, name]);
 
   req.session.userId = created.rows[0].id;
   res.status(201).json({ user: safeUser(created.rows[0]) });
@@ -555,26 +555,26 @@ app.get("/api/auth/me", async (req, res) => {
 app.get("/api/public/meta", async (_req, res) => {
   const [seasons, divisions, clubs] = await Promise.all([
     pool.query("SELECT * FROM seasons ORDER BY active DESC, start_date DESC NULLS LAST, id DESC"),
-    pool.query(\`
+    pool.query(`
       SELECT d.*, s.name season_name
       FROM divisions d JOIN seasons s ON s.id=d.season_id
       WHERE d.active=TRUE ORDER BY s.active DESC, d.sort_order, d.name
-    \`),
+    `),
     pool.query("SELECT id,name,short_name FROM clubs WHERE active=TRUE ORDER BY name")
   ]);
   res.json({ seasons: seasons.rows, divisions: divisions.rows, clubs: clubs.rows });
 });
 
 app.get("/api/public/overview", async (_req, res) => {
-  const { rows: divRows } = await pool.query(\`
+  const { rows: divRows } = await pool.query(`
     SELECT d.id,d.name,s.name season_name
     FROM divisions d JOIN seasons s ON s.id=d.season_id
     WHERE d.active=TRUE
     ORDER BY s.active DESC,d.sort_order,d.id
     LIMIT 1
-  \`);
+  `);
   const division = divRows[0] || null;
-  const { rows: fixtures } = await pool.query(\`
+  const { rows: fixtures } = await pool.query(`
     SELECT f.id,f.round_no,f.fixture_date,f.status,f.venue,
            ht.name home_team_name,at.name away_team_name,
            COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
@@ -586,7 +586,7 @@ app.get("/api/public/overview", async (_req, res) => {
     GROUP BY f.id,ht.name,at.name
     ORDER BY COALESCE(f.fixture_date, f.created_at) DESC
     LIMIT 12
-  \`);
+  `);
   const standings = division ? await getStandings(division.id) : [];
   const players = division ? await getIndividualRankings(division.id) : [];
   res.json({ division, fixtures, standings: standings.slice(0, 8), topPlayers: players.slice(0, 10) });
@@ -605,13 +605,13 @@ app.get("/api/fixtures", async (req, res) => {
   const where = [];
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
-    where.push(\`f.division_id=$\${args.length}\`);
+    where.push(`f.division_id=$${args.length}`);
   }
   if (req.query.teamId) {
     args.push(Number(req.query.teamId));
-    where.push(\`(f.home_team_id=$\${args.length} OR f.away_team_id=$\${args.length})\`);
+    where.push(`(f.home_team_id=$${args.length} OR f.away_team_id=$${args.length})`);
   }
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     SELECT f.id,f.division_id,f.round_no,f.fixture_date,f.status,f.venue,
            d.name division_name,s.name season_name,
            ht.id home_team_id,ht.name home_team_name,
@@ -624,19 +624,19 @@ app.get("/api/fixtures", async (req, res) => {
     JOIN teams ht ON ht.id=f.home_team_id
     JOIN teams at ON at.id=f.away_team_id
     LEFT JOIN frames fr ON fr.fixture_id=f.id
-    \${where.length ? "WHERE " + where.join(" AND ") : ""}
+    ${where.length ? "WHERE " + where.join(" AND ") : ""}
     GROUP BY f.id,d.name,s.name,ht.id,at.id
     ORDER BY f.fixture_date NULLS LAST,f.round_no,f.id
-  \`, args);
+  `, args);
   res.json({ fixtures: rows });
 });
 
 app.get("/api/teams/:id/players", async (req, res) => {
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     SELECT id,ncsf_number,first_name,last_name,active,suspended
     FROM players WHERE team_id=$1 AND active=TRUE
     ORDER BY last_name,first_name
-  \`, [Number(req.params.id)]);
+  `, [Number(req.params.id)]);
   res.json({ players: rows });
 });
 
@@ -664,7 +664,7 @@ app.get("/api/fixtures/:id/attachment/:attachmentId", async (req, res) => {
   );
   if (!rows[0]) return res.status(404).end();
   res.setHeader("Content-Type", rows[0].mimetype);
-  res.setHeader("Content-Disposition", \`inline; filename="\${rows[0].filename.replace(/"/g, "")}"\`);
+  res.setHeader("Content-Disposition", `inline; filename="${rows[0].filename.replace(/"/g, "")}"`);
   res.send(rows[0].file_data);
 });
 
@@ -674,12 +674,12 @@ app.get("/api/my/fixtures", requireAuth, async (req, res) => {
   const args = [];
   if (user.role === ROLE.CLUB) {
     args.push(user.club_id);
-    condition = \`(ht.club_id=$1 OR at.club_id=$1)\`;
+    condition = `(ht.club_id=$1 OR at.club_id=$1)`;
   } else if (user.role === ROLE.TEAM) {
     args.push(user.team_id);
-    condition = \`(f.home_team_id=$1 OR f.away_team_id=$1)\`;
+    condition = `(f.home_team_id=$1 OR f.away_team_id=$1)`;
   }
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     SELECT f.id,f.round_no,f.fixture_date,f.status,f.venue,d.name division_name,
            ht.name home_team_name,at.name away_team_name,
            COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
@@ -689,10 +689,10 @@ app.get("/api/my/fixtures", requireAuth, async (req, res) => {
     JOIN teams ht ON ht.id=f.home_team_id
     JOIN teams at ON at.id=f.away_team_id
     LEFT JOIN frames fr ON fr.fixture_id=f.id
-    WHERE \${condition}
+    WHERE ${condition}
     GROUP BY f.id,d.name,ht.name,at.name
     ORDER BY f.fixture_date NULLS LAST,f.id
-  \`, args);
+  `, args);
   res.json({ fixtures: rows });
 });
 
@@ -772,10 +772,10 @@ app.post("/api/admin/players", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, r
   const lastName = String(req.body.lastName || "").trim();
   if (!clubId || !firstName || !lastName) return res.status(400).json({ error: "Club, first name and last name are required." });
 
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     INSERT INTO players(club_id,team_id,ncsf_number,first_name,last_name)
     VALUES($1,$2,$3,$4,$5) RETURNING *
-  \`, [clubId, teamId, String(req.body.ncsfNumber || "").trim() || null, firstName, lastName]);
+  `, [clubId, teamId, String(req.body.ncsfNumber || "").trim() || null, firstName, lastName]);
   res.status(201).json({ player: rows[0] });
 });
 
@@ -789,14 +789,14 @@ app.patch("/api/admin/players/:id", requireRoles(ROLE.NCSF, ROLE.CLUB), async (r
   const teamId = req.body.teamId === null || req.body.teamId === "" ? null : Number(req.body.teamId);
   if (teamId && !(await teamBelongsToClub(teamId, existing.club_id))) return res.status(400).json({ error: "Team must belong to the player's club." });
 
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     UPDATE players
     SET team_id=$2,
         ncsf_number=COALESCE($3,ncsf_number),
         active=COALESCE($4,active),
         suspended=COALESCE($5,suspended)
     WHERE id=$1 RETURNING *
-  \`, [
+  `, [
     playerId,
     teamId,
     req.body.ncsfNumber === undefined ? null : String(req.body.ncsfNumber || "").trim(),
@@ -826,11 +826,11 @@ app.post("/api/admin/users", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res
   if (teamId && clubId && !(await teamBelongsToClub(teamId, clubId))) return res.status(400).json({ error: "Team does not belong to that club." });
 
   const hash = await bcrypt.hash(password, 12);
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     INSERT INTO users(email,password_hash,display_name,role,club_id,team_id)
     VALUES($1,$2,$3,$4,$5,$6)
     RETURNING id,email,display_name,role,club_id,team_id,active
-  \`, [email, hash, displayName, role, clubId, teamId]);
+  `, [email, hash, displayName, role, clubId, teamId]);
   res.status(201).json({ user: safeUser(rows[0]) });
 });
 
@@ -844,10 +844,10 @@ app.post("/api/admin/fixtures", requireRoles(ROLE.NCSF), async (req, res) => {
   );
   if (valid.rows[0].count !== 2) return res.status(400).json({ error: "Both teams must belong to the selected division." });
 
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     INSERT INTO fixtures(division_id,round_no,fixture_date,venue,home_team_id,away_team_id)
     VALUES($1,$2,$3,$4,$5,$6) RETURNING *
-  \`, [
+  `, [
     divisionId,
     Number(req.body.roundNo || 1),
     req.body.fixtureDate || null,
@@ -887,17 +887,17 @@ app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF),
         const home = r % 2 === 0 ? a : b;
         const away = r % 2 === 0 ? b : a;
         const d1 = new Date(firstDate.getTime() + r * dayMs);
-        const q1 = await client.query(\`
+        const q1 = await client.query(`
           INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
           VALUES($1,$2,$3,$4,$5) RETURNING id
-        \`, [divisionId, r + 1, d1.toISOString(), home, away]);
+        `, [divisionId, r + 1, d1.toISOString(), home, away]);
         created.push(q1.rows[0].id);
 
         const d2 = new Date(firstDate.getTime() + (r + rounds) * dayMs);
-        const q2 = await client.query(\`
+        const q2 = await client.query(`
           INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
           VALUES($1,$2,$3,$4,$5) RETURNING id
-        \`, [divisionId, r + 1 + rounds, d2.toISOString(), away, home]);
+        `, [divisionId, r + 1 + rounds, d2.toISOString(), away, home]);
         created.push(q2.rows[0].id);
       }
       rotating = [rotating[0], rotating[n - 1], ...rotating.slice(1, n - 1)];
@@ -984,7 +984,7 @@ app.post("/api/fixtures/:id/substitutions", requireAuth, async (req, res) => {
 
   const field = side === "HOME" ? "home_player_id" : "away_player_id";
   const { rows: alreadyScored } = await pool.query(
-    \`SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND round_no >= $2 AND \${field}=$3 AND winner_side IS NOT NULL\`,
+    `SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND round_no >= $2 AND ${field}=$3 AND winner_side IS NOT NULL`,
     [fixture.id, effectiveRound, outPlayerId]
   );
   if (alreadyScored[0].count > 0 && user.role !== ROLE.NCSF) return res.status(409).json({ error: "A substitution cannot rewrite frames that are already scored." });
@@ -994,8 +994,8 @@ app.post("/api/fixtures/:id/substitutions", requireAuth, async (req, res) => {
     [fixture.id, side, outPlayerId, inPlayerId, effectiveRound, user.id]
   );
   await pool.query(
-    \`UPDATE frames SET \${field}=$1, updated_by=$2, updated_at=NOW()
-     WHERE fixture_id=$3 AND round_no >= $4 AND \${field}=$5 AND winner_side IS NULL\`,
+    `UPDATE frames SET ${field}=$1, updated_by=$2, updated_at=NOW()
+     WHERE fixture_id=$3 AND round_no >= $4 AND ${field}=$5 AND winner_side IS NULL`,
     [inPlayerId, user.id, fixture.id, effectiveRound, outPlayerId]
   );
   await audit(user.id, fixture.id, "SUBSTITUTION", { side, outPlayerId, inPlayerId, effectiveRound });
@@ -1031,7 +1031,7 @@ app.patch("/api/fixtures/:id/extras", requireAuth, async (req, res) => {
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
   if (fixture.status === "APPROVED" && user.role !== ROLE.NCSF) return res.status(409).json({ error: "Approved fixtures are locked." });
 
-  await pool.query(\`
+  await pool.query(`
     UPDATE fixtures SET
       player_of_match_id=$2,
       break_run_player_id=$3,
@@ -1039,7 +1039,7 @@ app.patch("/api/fixtures/:id/extras", requireAuth, async (req, res) => {
       bonus_points=$5,
       notes=$6
     WHERE id=$1
-  \`, [
+  `, [
     fixture.id,
     req.body.playerOfMatchId ? Number(req.body.playerOfMatchId) : null,
     req.body.breakRunPlayerId ? Number(req.body.breakRunPlayerId) : null,
@@ -1057,11 +1057,11 @@ app.post("/api/fixtures/:id/upload", requireAuth, upload.single("scoresheet"), a
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
   if (!req.file) return res.status(400).json({ error: "Choose a score sheet image or PDF." });
 
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     INSERT INTO fixture_attachments(fixture_id,filename,mimetype,file_data,uploaded_by)
     VALUES($1,$2,$3,$4,$5)
     RETURNING id,kind,filename,mimetype,created_at
-  \`, [fixture.id, req.file.originalname, req.file.mimetype, req.file.buffer, user.id]);
+  `, [fixture.id, req.file.originalname, req.file.mimetype, req.file.buffer, user.id]);
   await audit(user.id, fixture.id, "SIGNED_SCORESHEET_UPLOADED", { attachmentId: rows[0].id, filename: rows[0].filename });
   res.status(201).json({ attachment: rows[0] });
 });
@@ -1120,12 +1120,12 @@ app.post("/api/fixtures/:id/approve", requireRoles(ROLE.NCSF, ROLE.CLUB), async 
 app.get("/api/fixtures/:id/audit", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   if (!fixture || !canManageFixture(req.user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
-  const { rows } = await pool.query(\`
+  const { rows } = await pool.query(`
     SELECT a.id,a.action,a.detail,a.created_at,u.display_name
     FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id
     WHERE a.fixture_id=$1
     ORDER BY a.created_at DESC
-  \`, [fixture.id]);
+  `, [fixture.id]);
   res.json({ audit: rows });
 });
 
@@ -1140,7 +1140,7 @@ app.use((err, _req, res, _next) => {
 });
 
 initDatabase()
-  .then(() => app.listen(port, () => console.log(\`NCSF League Manager listening on port \${port}\`)))
+  .then(() => app.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);
     process.exit(1);
