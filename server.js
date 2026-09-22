@@ -152,6 +152,8 @@ async function initDatabase() {
       player_of_match_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
       break_run_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
       rack_run_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+      home_captain_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+      away_captain_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
       bonus_points INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CHECK (home_team_id <> away_team_id)
@@ -163,6 +165,15 @@ async function initDatabase() {
       slot INTEGER NOT NULL CHECK (slot BETWEEN 1 AND 5),
       player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
       PRIMARY KEY(fixture_id, side, slot),
+      UNIQUE(fixture_id, side, player_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS fixture_reserves (
+      fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
+      side TEXT NOT NULL CHECK (side IN ('HOME','AWAY')),
+      reserve_slot INTEGER NOT NULL CHECK (reserve_slot BETWEEN 1 AND 2),
+      player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+      PRIMARY KEY(fixture_id, side, reserve_slot),
       UNIQUE(fixture_id, side, player_id)
     );
 
@@ -216,6 +227,8 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_fixtures_division_status ON fixtures(division_id, status);
     CREATE INDEX IF NOT EXISTS idx_frames_fixture ON frames(fixture_id);
     CREATE INDEX IF NOT EXISTS idx_frames_winner ON frames(winner_player_id);
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS home_captain_id INTEGER REFERENCES players(id) ON DELETE SET NULL;
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS away_captain_id INTEGER REFERENCES players(id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_players_team ON players(team_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_players_ncsf_number_unique
       ON players(ncsf_number) WHERE ncsf_number IS NOT NULL;
@@ -584,7 +597,7 @@ async function ensureFrames(fixtureId) {
   const away = new Map(lineups.filter(x => x.side === "AWAY").map(x => [x.slot, x.player_id]));
   if (home.size !== 5 || away.size !== 5) return false;
 
-  const shifts = [0, 1, 4, 2, 3];
+  const shifts = [0, 2, 4, 1, 3];
   for (let round = 1; round <= 5; round++) {
     const shift = shifts[round - 1];
     for (let board = 1; board <= 5; board++) {
@@ -593,7 +606,12 @@ async function ensureFrames(fixtureId) {
       await pool.query(`
         INSERT INTO frames(fixture_id, round_no, board_no, home_slot, away_slot, home_player_id, away_player_id)
         VALUES($1,$2,$3,$4,$5,$6,$7)
-        ON CONFLICT(fixture_id, round_no, board_no) DO NOTHING
+        ON CONFLICT(fixture_id, round_no, board_no) DO UPDATE SET
+          home_slot=EXCLUDED.home_slot,
+          away_slot=EXCLUDED.away_slot,
+          home_player_id=EXCLUDED.home_player_id,
+          away_player_id=EXCLUDED.away_player_id
+        WHERE frames.winner_side IS NULL
       `, [fixtureId, round, board, homeSlot, awaySlot, home.get(homeSlot), away.get(awaySlot)]);
     }
   }
@@ -666,13 +684,20 @@ async function getIndividualRankings(divisionId) {
 }
 
 async function fixturePayload(fixture) {
-  const [{ rows: lineups }, { rows: frames }, { rows: subs }, { rows: attachments }] = await Promise.all([
+  const [{ rows: lineups }, { rows: reserves }, { rows: frames }, { rows: subs }, { rows: attachments }] = await Promise.all([
     pool.query(`
       SELECT fl.side, fl.slot, p.id player_id, p.first_name, p.last_name, p.ncsf_number
       FROM fixture_lineups fl
       JOIN players p ON p.id=fl.player_id
       WHERE fl.fixture_id=$1
       ORDER BY fl.side, fl.slot
+    `, [fixture.id]),
+    pool.query(`
+      SELECT r.side, r.reserve_slot, p.id player_id, p.first_name, p.last_name, p.ncsf_number
+      FROM fixture_reserves r
+      JOIN players p ON p.id=r.player_id
+      WHERE r.fixture_id=$1
+      ORDER BY r.side, r.reserve_slot
     `, [fixture.id]),
     pool.query(`
       SELECT fr.*,
@@ -730,9 +755,12 @@ async function fixturePayload(fixture) {
       playerOfMatchId: fixture.player_of_match_id,
       breakRunPlayerId: fixture.break_run_player_id,
       rackRunPlayerId: fixture.rack_run_player_id,
+      homeCaptainId: fixture.home_captain_id,
+      awayCaptainId: fixture.away_captain_id,
       bonusPoints: fixture.bonus_points
     },
     lineups,
+    reserves,
     frames,
     substitutions: subs,
     attachments,
@@ -1371,13 +1399,17 @@ app.put("/api/fixtures/:id/lineup", requireAuth, async (req, res) => {
   if (user.role === ROLE.CLUB && userSide !== side) return res.status(403).json({ error: "Club admins can only set their club lineup." });
 
   const playerIds = Array.isArray(req.body.playerIds) ? req.body.playerIds.map(Number) : [];
+  const reserveIds = Array.isArray(req.body.reserveIds) ? req.body.reserveIds.map(Number).filter(Boolean) : [];
   if (playerIds.length !== 5 || new Set(playerIds).size !== 5) return res.status(400).json({ error: "Exactly five different starting players are required." });
+  if (reserveIds.length > 2 || new Set(reserveIds).size !== reserveIds.length) return res.status(400).json({ error: "Choose no more than two different reserves." });
+  const allSelected = [...playerIds, ...reserveIds];
+  if (new Set(allSelected).size !== allSelected.length) return res.status(400).json({ error: "A player cannot be both a starter and a reserve." });
   const teamId = side === "HOME" ? fixture.home_team_id : fixture.away_team_id;
   const { rows: validRows } = await pool.query(
     "SELECT id FROM players WHERE id=ANY($1::int[]) AND team_id=$2 AND active=TRUE AND suspended=FALSE",
-    [playerIds, teamId]
+    [allSelected, teamId]
   );
-  if (validRows.length !== 5) return res.status(400).json({ error: "All starters must be active, eligible players from this team." });
+  if (validRows.length !== allSelected.length) return res.status(400).json({ error: "All selected players must be active, eligible players from this team." });
 
   const { rows: scoredRows } = await pool.query("SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND winner_side IS NOT NULL", [fixture.id]);
   if (scoredRows[0].count > 0) return res.status(409).json({ error: "Lineups cannot be changed after scoring starts. Use a substitution instead." });
@@ -1387,10 +1419,17 @@ app.put("/api/fixtures/:id/lineup", requireAuth, async (req, res) => {
     await client.query("BEGIN");
     await client.query("DELETE FROM frames WHERE fixture_id=$1", [fixture.id]);
     await client.query("DELETE FROM fixture_lineups WHERE fixture_id=$1 AND side=$2", [fixture.id, side]);
+    await client.query("DELETE FROM fixture_reserves WHERE fixture_id=$1 AND side=$2", [fixture.id, side]);
     for (let i = 0; i < 5; i++) {
       await client.query(
         "INSERT INTO fixture_lineups(fixture_id,side,slot,player_id) VALUES($1,$2,$3,$4)",
         [fixture.id, side, i + 1, playerIds[i]]
+      );
+    }
+    for (let i = 0; i < reserveIds.length; i++) {
+      await client.query(
+        "INSERT INTO fixture_reserves(fixture_id,side,reserve_slot,player_id) VALUES($1,$2,$3,$4)",
+        [fixture.id, side, i + 1, reserveIds[i]]
       );
     }
     await client.query("COMMIT");
@@ -1401,7 +1440,7 @@ app.put("/api/fixtures/:id/lineup", requireAuth, async (req, res) => {
     client.release();
   }
   await ensureFrames(fixture.id);
-  await audit(user.id, fixture.id, "LINEUP_SAVED", { side, playerIds });
+  await audit(user.id, fixture.id, "LINEUP_SAVED", { side, playerIds, reserveIds });
   res.json(await fixturePayload(await fixtureById(fixture.id)));
 });
 
@@ -1482,14 +1521,18 @@ app.patch("/api/fixtures/:id/extras", requireAuth, async (req, res) => {
       player_of_match_id=$2,
       break_run_player_id=$3,
       rack_run_player_id=$4,
-      bonus_points=$5,
-      notes=$6
+      home_captain_id=$5,
+      away_captain_id=$6,
+      bonus_points=$7,
+      notes=$8
     WHERE id=$1
   `, [
     fixture.id,
     req.body.playerOfMatchId ? Number(req.body.playerOfMatchId) : null,
     req.body.breakRunPlayerId ? Number(req.body.breakRunPlayerId) : null,
     req.body.rackRunPlayerId ? Number(req.body.rackRunPlayerId) : null,
+    req.body.homeCaptainId ? Number(req.body.homeCaptainId) : null,
+    req.body.awayCaptainId ? Number(req.body.awayCaptainId) : null,
     Number(req.body.bonusPoints || 0),
     String(req.body.notes || "").trim() || null
   ]);
