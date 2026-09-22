@@ -646,6 +646,80 @@ function formatEventDate(value){
     ]
   };
 
+  let ncsfFullscreenStage=null;
+
+  function liveControlIcon(kind){
+    if(kind==='volume')return '<span class="live-volume-icon"><i></i><b></b></span>';
+    if(kind==='muted')return '<span class="live-volume-icon muted"><i></i><b></b></span>';
+    return '<span class="live-fullscreen-icon"><i></i><i></i><i></i><i></i></span>';
+  }
+
+  function enterNcsfLiveFullscreen(stage){
+    if(!stage)return;
+    ncsfFullscreenStage=stage;
+    stage.classList.add('ncsf-live-fullscreen');
+    document.documentElement.classList.add('ncsf-live-fullscreen-active');
+    document.body.classList.add('ncsf-live-fullscreen-active');
+    try{
+      if(window.NCSFApp&&typeof window.NCSFApp.enterLiveFullscreen==='function'){
+        window.NCSFApp.enterLiveFullscreen();
+      }else if(stage.requestFullscreen){
+        stage.requestFullscreen().catch(()=>{});
+      }else if(stage.webkitRequestFullscreen){
+        stage.webkitRequestFullscreen();
+      }
+    }catch(_e){}
+  }
+
+  function exitNcsfLiveFullscreen(){
+    const stage=ncsfFullscreenStage||$('.ncsf-live-fullscreen');
+    stage?.classList.remove('ncsf-live-fullscreen');
+    document.documentElement.classList.remove('ncsf-live-fullscreen-active');
+    document.body.classList.remove('ncsf-live-fullscreen-active');
+    ncsfFullscreenStage=null;
+    try{
+      if(window.NCSFApp&&typeof window.NCSFApp.exitLiveFullscreen==='function'){
+        window.NCSFApp.exitLiveFullscreen();
+      }else if(document.fullscreenElement&&document.exitFullscreen){
+        document.exitFullscreen().catch(()=>{});
+      }else if(document.webkitFullscreenElement&&document.webkitExitFullscreen){
+        document.webkitExitFullscreen();
+      }
+    }catch(_e){}
+  }
+  window.exitNcsfLiveFullscreen=exitNcsfLiveFullscreen;
+
+  function installLiveVideoControls(video,stage,{allowAudio=true}={}){
+    if(!video||!stage||stage.querySelector('.ncsf-live-controls'))return;
+    video.controls=false;
+    const controls=document.createElement('div');
+    controls.className='ncsf-live-controls';
+    controls.innerHTML=
+      '<div class="ncsf-live-controls-left">'+
+        '<span class="ncsf-live-word"><i></i>LIVE</span>'+
+        (allowAudio?'<button class="ncsf-video-control ncsf-mute-control" type="button" aria-label="Mute">'+liveControlIcon(video.muted?'muted':'volume')+'</button>':'')+
+      '</div>'+
+      '<button class="ncsf-video-control ncsf-fullscreen-control" type="button" aria-label="Full screen">'+liveControlIcon('fullscreen')+'</button>';
+    stage.appendChild(controls);
+
+    const mute=controls.querySelector('.ncsf-mute-control');
+    mute?.addEventListener('click',e=>{
+      e.stopPropagation();
+      video.muted=!video.muted;
+      mute.setAttribute('aria-label',video.muted?'Unmute':'Mute');
+      mute.innerHTML=liveControlIcon(video.muted?'muted':'volume');
+      if(!video.muted)video.play().catch(()=>{});
+    });
+
+    controls.querySelector('.ncsf-fullscreen-control')?.addEventListener('click',e=>{
+      e.stopPropagation();
+      if(stage.classList.contains('ncsf-live-fullscreen'))exitNcsfLiveFullscreen();
+      else enterNcsfLiveFullscreen(stage);
+    });
+
+    video.addEventListener('click',()=>video.play().catch(()=>{}));
+  }
+
   function startInternalLiveViewer(fixtureId){
     const box=$('#livePlayer');
     if(!box)return;
@@ -654,9 +728,11 @@ function formatEventDate(value){
       return;
     }
 
-    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" controls autoplay></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
+    box.innerHTML='<div class="video-frame internal-live" id="internalLiveFrame"><video id="internalLiveVideo" autoplay playsinline></video><div class="live-waiting" id="liveWaiting">Connecting to live camera…</div></div>';
+    const frame=$('#internalLiveFrame');
     const video=$('#internalLiveVideo');
     const waiting=$('#liveWaiting');
+    installLiveVideoControls(video,frame,{allowAudio:true});
     let socket=null,pc=null,retryTimer=null,offerTimer=null,ended=false,pendingIce=[];
 
     const closePeer=()=>{
@@ -842,6 +918,7 @@ function formatEventDate(value){
     };
 
     viewerPreviewBtn?.addEventListener('click',toggleViewerPreview);
+    installLiveVideoControls(preview,stage,{allowAudio:false});
 
     const closePeer=viewerId=>{
       const pc=peers.get(viewerId);
