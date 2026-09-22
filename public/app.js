@@ -6,7 +6,7 @@
   const IS_NCSF_ANDROID=/\bNCSFAndroid\//i.test(navigator.userAgent||'');
   if(IS_NCSF_ANDROID)document.documentElement.classList.add('is-ncsf-app');
 
-  $('.js-logo').forEach(img=>img.src='/ncsf-logo.svg');
+  $('.js-logo').forEach(img=>img.src='/ncsf-logo.jpg');
 
   async function api(url,options={}){
     const opts={credentials:'same-origin',...options};
@@ -267,7 +267,7 @@
     const hWin=matchComplete&&t.home>t.away?1:0, aWin=matchComplete&&t.away>t.home?1:0, draw=matchComplete&&t.home===t.away?1:0;
     $('#scoreSheetRoot').innerHTML=`
       <section class="official-sheet-head">
-        <img class="js-score-logo" src="/ncsf-logo.svg" alt="NCSF">
+        <img class="js-score-logo" src="/ncsf-logo.jpg" alt="NCSF">
         <div><span class="eyebrow">NAMIBIA CUE SPORTS FEDERATION</span><h1>Blackball League Scoresheet</h1><p>${esc(f.seasonName)} • ${esc(f.divisionName)} • Round ${esc(f.roundNo)}</p></div>
         <div class="sheet-meta"><span>STARTING TIME<strong>${esc(timeText)}</strong></span><span>DATE<strong>${esc(dateText)}</strong></span><span>VENUE<strong>${esc(f.venue||'TBA')}</strong></span></div>
       </section>
