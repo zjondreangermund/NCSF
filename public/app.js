@@ -373,9 +373,13 @@
   function updateActionButtons(){
     const f=state.fixture.fixture,side=userSide(f),u=state.user;
     const submit=$('#submitMatch'),confirm=$('#confirmMatch'),approve=$('#approveMatch');
-    if(submit)submit.classList.toggle('hidden',!u||!(u.role==='NCSF_ADMIN'||side==='HOME')||!['SCHEDULED','IN_PROGRESS'].includes(f.status));
-    if(confirm)confirm.classList.toggle('hidden',!u||!(u.role==='NCSF_ADMIN'||side==='AWAY')||f.status!=='SUBMITTED');
-    if(approve)approve.classList.toggle('hidden',!u||!['NCSF_ADMIN','CLUB_ADMIN'].includes(u.role)||f.status!=='CONFIRMED');
+    const isParticipatingSide=side==='HOME'||side==='AWAY';
+    const canSubmit=Boolean(u)&&isParticipatingSide&&['SCHEDULED','IN_PROGRESS'].includes(f.status);
+    const canConfirm=Boolean(u)&&isParticipatingSide&&f.status==='SUBMITTED'&&Boolean(f.submittedSide)&&side!==f.submittedSide;
+    const canApprove=Boolean(u)&&u.role==='NCSF_ADMIN'&&f.status==='CONFIRMED';
+    if(submit)submit.classList.toggle('hidden',!canSubmit);
+    if(confirm)confirm.classList.toggle('hidden',!canConfirm);
+    if(approve)approve.classList.toggle('hidden',!canApprove);
   }
 
   async function loadPublicMetaIntoSelect(){
@@ -520,7 +524,7 @@ function formatEventDate(value){
       state.teamPlayers.HOME=home.players;state.teamPlayers.AWAY=away.players;
       renderScoresheet();
     }catch(err){$('#scoreSheetRoot').innerHTML='<div class="notice error">'+esc(err.message)+'</div>';return}
-    $('#printSheet')?.addEventListener('click',()=>window.print());
+    $('#printSheet')?.addEventListener('click',printScoresheet);
     $('#scoreUpload')?.addEventListener('change',async e=>{
       const file=e.target.files[0];if(!file)return;
       const fd=new FormData();fd.append('scoresheet',file);
@@ -533,6 +537,18 @@ function formatEventDate(value){
     $('#confirmMatch')?.addEventListener('click',()=>transitionMatch('confirm','Result confirmed'));
     $('#approveMatch')?.addEventListener('click',()=>transitionMatch('approve','Result approved and rankings updated'));
   }
+  function printScoresheet(){
+    try{
+      if(window.NCSFApp && typeof window.NCSFApp.printPage==='function'){
+        window.NCSFApp.printPage();
+        return;
+      }
+      window.print();
+    }catch(err){
+      try{window.print()}catch(_ignored){toast('Printing is not available on this device.',true)}
+    }
+  }
+
   async function transitionMatch(action,message){
     try{
       state.fixture=await api('/api/fixtures/'+state.fixture.fixture.id+'/'+action,{method:'POST'});
