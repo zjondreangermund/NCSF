@@ -96,7 +96,7 @@
         <div><div class="team-name">${esc(f.home_team_name)}</div><div class="match-meta">${esc(fmtDate(f.fixture_date))}</div></div>
         <div class="match-score">${Number(f.home_frames||0)} &ndash; ${Number(f.away_frames||0)}</div>
         <div class="away"><div class="team-name">${esc(f.away_team_name)}</div><div class="match-meta">Round ${esc(f.round_no)} • ${statusPill(f.status)}</div></div>
-        <div class="open-cell">${allowOpen?`<a class="btn small secondary" href="/scoresheet.html?id=${f.id}">Open scoresheet</a>`:''}</div>
+        <div class="open-cell">${allowOpen && (PAGE!=='home' || f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet.html?id=${f.id}">Open scoresheet</a>`:''}</div>
       </div>`).join('');
   }
   async function initHome(){
@@ -152,7 +152,7 @@
     return [1,2,3,4,5].map(slot=>map.get(slot)||null);
   }
   function lineupEditor(side){
-    const players=state.teamPlayers[side]||[], lineup=lineupFor(side);
+    const players=(state.teamPlayers[side]||[]).filter(p=>!p.suspended), lineup=lineupFor(side);
     const editable=canEditSide(side)&&!['SUBMITTED','CONFIRMED','APPROVED'].includes(state.fixture.fixture.status);
     return `<div class="sheet-team ${side==='AWAY'?'away':''}">
       <div class="kicker">${side} TEAM — STARTING FIVE</div>
@@ -179,6 +179,7 @@
         <div class="frame-player away">${esc(fr.away_player_name)}</div>
       </div>`).join('')}
       <div class="round-total"><div>TOTAL ${home}</div><div>${home} — ${away}</div><div>${away} TOTAL</div></div>
+      <div class="round-total"><div>Progressive Total ${state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='HOME').length}</div><div>${state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='HOME').length} — ${state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='AWAY').length}</div><div>${state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='AWAY').length} Progressive Total</div></div>
     </section>`;
   }
   function allMatchPlayers(){
@@ -188,7 +189,7 @@
   }
   function reserveOptions(side){
     const starters=new Set(lineupFor(side).filter(Boolean).map(x=>x.player_id));
-    return state.teamPlayers[side].filter(p=>!starters.has(p.id));
+    return state.teamPlayers[side].filter(p=>!p.suspended&&!starters.has(p.id));
   }
   function renderScoresheet(){
     const data=state.fixture,f=data.fixture,t=data.totals;
@@ -246,6 +247,8 @@
     `;
     bindSheetControls();
     updateActionButtons();
+    const uploadLabel=$('#scoreUpload')?.closest('label');
+    if(uploadLabel)uploadLabel.classList.toggle('hidden',!state.user||f.status==='APPROVED');
     function fillSubs(){
       const s=$('#subSide')?.value;if(!s)return;
       const starters=s==='HOME'?currentHome:currentAway;
@@ -294,7 +297,6 @@
     if(approve)approve.classList.toggle('hidden',!u||!['NCSF_ADMIN','CLUB_ADMIN'].includes(u.role)||f.status!=='CONFIRMED');
   }
   async function initScoresheet(){
-    if(!requireUser())return;
     const id=Number(new URLSearchParams(location.search).get('id'));
     if(!id){$('#scoreSheetRoot').innerHTML='<div class="empty">No fixture selected.</div>';return}
     try{
