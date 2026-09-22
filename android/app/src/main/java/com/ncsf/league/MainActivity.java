@@ -1,25 +1,17 @@
 package com.ncsf.league;
 
 import android.Manifest;
-import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.Intent;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.graphics.RectF;
-import android.graphics.SweepGradient;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
-import android.view.View;
-import android.view.animation.LinearInterpolator;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
 import android.webkit.JavascriptInterface;
@@ -39,7 +31,6 @@ public class MainActivity extends Activity {
     private static final int MEDIA_PERMISSION_REQUEST = 502;
 
     private WebView webView;
-    private LoadingEdgeView loadingEdge;
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingMediaPermission;
 
@@ -51,17 +42,11 @@ public class MainActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
         webView = new WebView(this);
-        loadingEdge = new LoadingEdgeView(this);
 
         root.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        FrameLayout.LayoutParams edgeParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT);
-        root.addView(loadingEdge, edgeParams);
-        loadingEdge.setElevation(dp(40));
         setContentView(root);
 
         WebSettings settings = webView.getSettings();
@@ -73,7 +58,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.3");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.4");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -90,27 +75,9 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(Intent.ACTION_VIEW, uri));
                 return true;
             }
-
-            @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                loadingEdge.start();
-                super.onPageStarted(view, url, favicon);
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                loadingEdge.start();
-                super.onPageFinished(view, url);
-            }
         });
 
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                loadingEdge.start();
-            }
-
-            @Override
+        webView.setWebChromeClient(new WebChromeClient() {            @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> {
                     boolean cameraGranted = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
@@ -169,16 +136,11 @@ public class MainActivity extends Activity {
             }
         });
 
-        loadingEdge.start();
         if (savedInstanceState == null) {
             webView.loadUrl(HOME_URL);
         } else {
             webView.restoreState(savedInstanceState);
         }
-    }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private class AppBridge {
@@ -247,82 +209,4 @@ public class MainActivity extends Activity {
         }
     }
 
-    static class LoadingEdgeView extends View {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF rect = new RectF();
-        private final Matrix gradientMatrix = new Matrix();
-        private final float stroke;
-        private final float radius;
-        private SweepGradient gradient;
-        private ValueAnimator animator;
-        private float rotation;
-
-        LoadingEdgeView(Context context) {
-            super(context);
-            stroke = dp(context, 5.5f);
-            radius = dp(context, 24f);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(stroke);
-            paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setShadowLayer(dp(context, 12f), 0, 0, Color.argb(205, 255, 255, 255));
-            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-            setClickable(false);
-            setFocusable(false);
-            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            setVisibility(VISIBLE);
-        }
-
-        private static float dp(Context context, float value) {
-            return value * context.getResources().getDisplayMetrics().density;
-        }
-
-        @Override
-        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-            super.onSizeChanged(w, h, oldw, oldh);
-            gradient = new SweepGradient(
-                    w / 2f,
-                    h / 2f,
-                    new int[]{
-                            Color.rgb(0, 53, 128),
-                            Color.WHITE,
-                            Color.rgb(210, 16, 52),
-                            Color.rgb(255, 215, 0),
-                            Color.rgb(0, 149, 67),
-                            Color.WHITE,
-                            Color.rgb(0, 53, 128)
-                    },
-                    new float[]{0f, .16f, .31f, .43f, .62f, .81f, 1f}
-            );
-            paint.setShader(gradient);
-        }
-
-        void start() {
-            if (getVisibility() != VISIBLE) setVisibility(VISIBLE);
-            if (animator != null && animator.isRunning()) return;
-            animator = ValueAnimator.ofFloat(0f, 360f);
-            animator.setDuration(1700);
-            animator.setRepeatCount(ValueAnimator.INFINITE);
-            animator.setInterpolator(new LinearInterpolator());
-            animator.addUpdateListener(animation -> {
-                rotation = (float) animation.getAnimatedValue();
-                invalidate();
-            });
-            animator.start();
-        }
-
-        void stop() {
-            start();
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            if (gradient == null) return;
-            gradientMatrix.setRotate(rotation, getWidth() / 2f, getHeight() / 2f);
-            gradient.setLocalMatrix(gradientMatrix);
-            float inset = stroke / 2f + dp(getContext(), 2f);
-            rect.set(inset, inset, getWidth() - inset, getHeight() - inset);
-            canvas.drawRoundRect(rect, radius, radius, paint);
-        }
-    }
 }
