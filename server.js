@@ -2145,7 +2145,9 @@ app.put("/api/fixtures/:id/lineup", requireAuth, async (req, res) => {
   }
   await ensureFrames(fixture.id);
   await audit(user.id, fixture.id, "LINEUP_SAVED", { side, playerIds, reserveIds });
-  res.json(await fixturePayload(await fixtureById(fixture.id)));
+  const payload = await fixturePayload(await fixtureById(fixture.id));
+  await sendLiveMatchState(fixture.id);
+  res.json(payload);
 });
 
 app.post("/api/fixtures/:id/substitutions", requireAuth, async (req, res) => {
@@ -2188,7 +2190,9 @@ app.post("/api/fixtures/:id/substitutions", requireAuth, async (req, res) => {
     [inPlayerId, user.id, fixture.id, effectiveRound, outPlayerId]
   );
   await audit(user.id, fixture.id, "SUBSTITUTION", { side, outPlayerId, inPlayerId, effectiveRound });
-  res.json(await fixturePayload(await fixtureById(fixture.id)));
+  const payload = await fixturePayload(await fixtureById(fixture.id));
+  await sendLiveMatchState(fixture.id);
+  res.json(payload);
 });
 
 app.put("/api/fixtures/:id/frames/:frameId", requireAuth, async (req, res) => {
@@ -2211,7 +2215,9 @@ app.put("/api/fixtures/:id/frames/:frameId", requireAuth, async (req, res) => {
   );
   if (fixture.status === "SCHEDULED") await pool.query("UPDATE fixtures SET status='IN_PROGRESS' WHERE id=$1", [fixture.id]);
   await audit(user.id, fixture.id, "FRAME_RESULT", { frameId: frame.id, round: frame.round_no, board: frame.board_no, winnerSide });
-  res.json(await fixturePayload(await fixtureById(fixture.id)));
+  const payload = await fixturePayload(await fixtureById(fixture.id));
+  await sendLiveMatchState(fixture.id);
+  res.json(payload);
 });
 
 app.patch("/api/fixtures/:id/extras", requireAuth, async (req, res) => {
@@ -2425,6 +2431,64 @@ function relayToViewer(state, viewerId, payload) {
   if (viewer) sendLiveControl(viewer, payload);
 }
 
+async function buildLiveMatchState(fixtureId) {
+  const fixture = await fixtureById(Number(fixtureId));
+  if (!fixture) return null;
+  const payload = await fixturePayload(fixture);
+  const frames = payload.frames || [];
+  const currentIndex = frames.findIndex(fr => !fr.winner_side);
+  const current = currentIndex >= 0 ? frames[currentIndex] : null;
+  const next = currentIndex >= 0 ? (frames[currentIndex + 1] || null) : null;
+  const previous = currentIndex > 0
+    ? frames[currentIndex - 1]
+    : (currentIndex < 0 && frames.length ? frames[frames.length - 1] : null);
+
+  const frameView = fr => fr ? ({
+    id: fr.id,
+    roundNo: Number(fr.round_no),
+    boardNo: Number(fr.board_no),
+    homePlayerId: Number(fr.home_player_id),
+    awayPlayerId: Number(fr.away_player_id),
+    homePlayerName: fr.home_player_name,
+    awayPlayerName: fr.away_player_name,
+    winnerSide: fr.winner_side || null
+  }) : null;
+
+  return {
+    fixtureId: fixture.id,
+    homeTeamName: fixture.home_team_name,
+    awayTeamName: fixture.away_team_name,
+    lineupsReady: payload.lineups.length === 10 && frames.length === 25,
+    completed: payload.totals.completed,
+    homeScore: payload.totals.home,
+    awayScore: payload.totals.away,
+    remaining: payload.totals.remaining,
+    current: frameView(current),
+    next: frameView(next),
+    previous: frameView(previous),
+    final: payload.totals.completed === 25
+  };
+}
+
+async function sendLiveMatchState(fixtureId, target = null) {
+  try {
+    const matchState = await buildLiveMatchState(fixtureId);
+    if (!matchState) return;
+    const payload = { type: "match-state", match: matchState };
+
+    if (target) {
+      sendLiveControl(target, payload);
+      return;
+    }
+
+    const state = liveStateFor(fixtureId);
+    sendLiveControl(state.publisher, payload);
+    for (const viewer of state.viewers.values()) sendLiveControl(viewer, payload);
+  } catch (error) {
+    console.error("Failed to send live match state:", error);
+  }
+}
+
 liveWss.on("connection", async (ws, req) => {
   try {
     const u = new URL(req.url, "http://localhost");
@@ -2489,6 +2553,7 @@ liveWss.on("connection", async (ws, req) => {
         sendLiveControl(ws, { type: "viewer-joined", viewerId, viewerName: viewer.viewerName || "Viewer" });
       }
       updatePublisherViewerCount(state);
+      await sendLiveMatchState(fixtureId, ws);
 
       ws.on("message", (data, isBinary) => {
         if (isBinary) return;
@@ -2570,6 +2635,7 @@ liveWss.on("connection", async (ws, req) => {
     ws.viewerName = viewerName;
     state.viewers.set(viewerId, ws);
     sendLiveControl(ws, { type: "viewer-ready", viewerId, startedAt: state.startedAt });
+    await sendLiveMatchState(fixtureId, ws);
     sendLiveControl(state.publisher, { type: "viewer-joined", viewerId, viewerName });
     updatePublisherViewerCount(state);
 
