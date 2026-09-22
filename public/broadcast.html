@@ -37,18 +37,44 @@
   </section>
 
   <section class="panel broadcast-panel">
-    <div class="broadcast-video-shell">
+    <div class="broadcast-video-shell live-stage" id="broadcastStage">
       <video id="broadcastPreview" playsinline muted autoplay></video>
+      <video id="broadcastViewerPreview" class="broadcast-viewer-preview hidden" playsinline muted autoplay></video>
       <div class="broadcast-overlay">
         <span id="broadcastState" class="broadcast-state">OFFLINE</span>
-        <span id="broadcastViewers">0 viewers</span>
+        <button id="broadcastViewers" class="broadcast-viewers-pill" type="button">0 viewers</button>
       </div>
+      <div class="broadcast-viewer-list hidden" id="broadcastViewerList"></div>
+
+      <aside class="live-chat-drawer broadcaster-chat" id="liveChatDrawer" aria-label="Live stream chat">
+        <button class="live-chat-handle" id="liveChatHandle" type="button" aria-expanded="false">
+          <span class="live-chat-grip"></span>
+          <strong>Live Chat</strong>
+          <span class="live-chat-badge hidden" id="liveChatBadge">0</span>
+          <span class="live-chat-chevron">⌃</span>
+        </button>
+        <div class="live-chat-body">
+          <div class="live-chat-head">
+            <div><strong>Match Chat</strong><small>Comments from live viewers</small></div>
+            <button class="live-chat-close" id="liveChatClose" type="button" aria-label="Hide chat">×</button>
+          </div>
+          <div class="live-chat-messages" id="liveChatMessages">
+            <div class="empty">Chat appears when the broadcast starts.</div>
+          </div>
+          <form class="live-chat-form" id="liveChatForm">
+            <input id="liveChatInput" maxlength="280" autocomplete="off" placeholder="Reply to viewers…" aria-label="Live chat message">
+            <button class="btn primary small" type="submit">Send</button>
+          </form>
+          <div class="live-chat-signin hidden" id="liveChatSignin"></div>
+        </div>
+      </aside>
     </div>
     <div class="broadcast-controls">
       <button class="btn primary" id="startBroadcast">Start Live</button>
       <button class="btn danger hidden" id="stopBroadcast">Stop Live</button>
       <button class="btn light" id="switchCamera">Switch Camera</button>
-      <a class="btn light" id="watchBroadcast" href="#">Watch Live</a>
+      <button class="btn light" id="viewerPreviewBtn" type="button">Viewer View</button>
+      <button class="btn light" id="broadcastFullscreen" type="button">Full Screen</button>
     </div>
     <div class="broadcast-help">
       <strong>Broadcast tips</strong>
