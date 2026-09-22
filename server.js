@@ -592,6 +592,61 @@ app.get("/api/public/overview", async (_req, res) => {
   res.json({ division, fixtures, standings: standings.slice(0, 8), topPlayers: players.slice(0, 10) });
 });
 
+app.get("/api/public/teams", async (req, res) => {
+  const args = [];
+  const where = ["t.active=TRUE"];
+  if (req.query.divisionId) {
+    args.push(Number(req.query.divisionId));
+    where.push(`t.division_id=${args.length}`);
+  }
+  const { rows } = await pool.query(`
+    SELECT t.id,t.name,t.short_name,t.division_id,c.name club_name,d.name division_name,s.name season_name,
+           COUNT(p.id) FILTER (WHERE p.active=TRUE)::int player_count
+    FROM teams t
+    JOIN clubs c ON c.id=t.club_id
+    LEFT JOIN divisions d ON d.id=t.division_id
+    LEFT JOIN seasons s ON s.id=d.season_id
+    LEFT JOIN players p ON p.team_id=t.id
+    WHERE ${where.join(" AND ")}
+    GROUP BY t.id,c.name,d.name,s.name
+    ORDER BY COALESCE(d.sort_order,999),c.name,t.name
+  `, args);
+  res.json({ teams: rows });
+});
+
+app.get("/api/public/players", async (req, res) => {
+  const args = [];
+  const where = ["p.active=TRUE","t.active=TRUE"];
+  if (req.query.divisionId) {
+    args.push(Number(req.query.divisionId));
+    where.push(`t.division_id=${args.length}`);
+  }
+  if (req.query.teamId) {
+    args.push(Number(req.query.teamId));
+    where.push(`p.team_id=${args.length}`);
+  }
+  const { rows } = await pool.query(`
+    SELECT p.id,p.ncsf_number,p.first_name,p.last_name,t.id team_id,t.name team_name,
+           c.name club_name,d.id division_id,d.name division_name,
+           COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL)::int frames_played,
+           COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL AND fr.winner_player_id=p.id)::int frames_won,
+           CASE WHEN COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL)=0 THEN 0
+                ELSE ROUND((COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL AND fr.winner_player_id=p.id)::numeric /
+                           NULLIF(COUNT(fr.id) FILTER (WHERE f.id IS NOT NULL),0)::numeric) * 100, 1)
+           END win_percentage
+    FROM players p
+    JOIN teams t ON t.id=p.team_id
+    JOIN clubs c ON c.id=p.club_id
+    LEFT JOIN divisions d ON d.id=t.division_id
+    LEFT JOIN frames fr ON (fr.home_player_id=p.id OR fr.away_player_id=p.id)
+    LEFT JOIN fixtures f ON f.id=fr.fixture_id AND f.status='APPROVED'
+    WHERE ${where.join(" AND ")}
+    GROUP BY p.id,t.id,t.name,c.name,d.id,d.name
+    ORDER BY p.last_name,p.first_name
+  `, args);
+  res.json({ players: rows });
+});
+
 app.get("/api/divisions/:id/standings", async (req, res) => {
   res.json({ standings: await getStandings(Number(req.params.id)) });
 });
@@ -603,13 +658,23 @@ app.get("/api/divisions/:id/individual-rankings", async (req, res) => {
 app.get("/api/fixtures", async (req, res) => {
   const args = [];
   const where = [];
+  if (!req.session.userId) {
+    where.push("f.status IN ('SCHEDULED','POSTPONED','APPROVED')");
+  }
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
-    where.push(`f.division_id=$${args.length}`);
+    where.push(`f.division_id=${args.length}`);
   }
   if (req.query.teamId) {
     args.push(Number(req.query.teamId));
-    where.push(`(f.home_team_id=$${args.length} OR f.away_team_id=$${args.length})`);
+    where.push(`(f.home_team_id=${args.length} OR f.away_team_id=${args.length})`);
+  }
+  if (req.query.status) {
+    const statuses = String(req.query.status).split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+    const allowed = ['SCHEDULED','IN_PROGRESS','SUBMITTED','CONFIRMED','APPROVED','POSTPONED','FORFEIT'];
+    if (!statuses.length || statuses.some(s => !allowed.includes(s))) return res.status(400).json({ error: "Invalid fixture status." });
+    args.push(statuses);
+    where.push(`f.status = ANY(${args.length}::text[])`);
   }
   const { rows } = await pool.query(`
     SELECT f.id,f.division_id,f.round_no,f.fixture_date,f.status,f.venue,
