@@ -3,8 +3,10 @@
   const $$=(s,r=document)=>[...r.querySelectorAll(s)];
   const PAGE=document.body.dataset.page;
   const state={user:null,meta:null,fixture:null,teamPlayers:{HOME:[],AWAY:[]}};
+  const IS_NCSF_ANDROID=/\bNCSFAndroid\//i.test(navigator.userAgent||'');
+  if(IS_NCSF_ANDROID)document.documentElement.classList.add('is-ncsf-app');
 
-  $$('.js-logo').forEach(img=>img.src='/ncsf-logo.svg');
+  $('.js-logo').forEach(img=>img.src='/ncsf-logo.svg');
 
   async function api(url,options={}){
     const opts={credentials:'same-origin',...options};
