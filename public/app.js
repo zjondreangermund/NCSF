@@ -386,12 +386,89 @@
     $('#adminPlayerTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Unassigned');
     renderAdminLists();
     syncFixtureTeams();
+    loadAdminDashboard();
   }
+  async function loadAdminDashboard(){
+    try{
+      const d=await api('/api/admin/dashboard');
+      if($('#statClubs'))$('#statClubs').textContent=d.counts.clubs||0;
+      if($('#statTeams'))$('#statTeams').textContent=d.counts.teams||0;
+      if($('#statPlayers'))$('#statPlayers').textContent=d.counts.players||0;
+      if($('#pendingCount'))$('#pendingCount').textContent=d.pending.length;
+      if($('#missingAccessCount'))$('#missingAccessCount').textContent=d.missingAccess.length;
+      if($('#pendingResults'))$('#pendingResults').innerHTML=d.pending.length
+        ? '<div class="card-list">'+d.pending.map(f=>`<div class="card-row"><span><strong>${esc(f.home_team_name)} ${f.home_frames} — ${f.away_frames} ${esc(f.away_team_name)}</strong><small>${esc(f.division_name)} • Round ${f.round_no} • ${esc(fmtDate(f.fixture_date))}</small></span><a class="btn small primary" href="/scoresheet.html?id=${f.id}">${f.status==='CONFIRMED'?'Review / Approve':'Review'}</a></div>`).join('')+'</div>'
+        : '<div class="empty">No results waiting for approval.</div>';
+      if($('#missingTeamAccess'))$('#missingTeamAccess').innerHTML=d.missingAccess.length
+        ? '<div class="card-list">'+d.missingAccess.map(t=>`<div class="card-row"><span><strong>${esc(t.team_name)}</strong><small>${esc(t.club_name)}</small></span><button class="btn small goto-access">Create Login</button></div>`).join('')+'</div>'
+        : '<div class="empty">Every team has an active login.</div>';
+      $('.goto-access').forEach(btn=>btn.addEventListener('click',()=>{
+        const tab=$('[data-admin-tab="access"]'); if(tab)tab.click();
+      }));
+      if($('#fixtureStatusSummary')){
+        const order=['SCHEDULED','IN_PROGRESS','SUBMITTED','CONFIRMED','APPROVED','POSTPONED','FORFEIT'];
+        $('#fixtureStatusSummary').innerHTML=order.filter(k=>d.byStatus[k]).map(k=>`<span class="pill ${k}">${k.replaceAll('_',' ')}: ${d.byStatus[k]}</span>`).join('') || '<span class="muted">No fixtures yet.</span>';
+      }
+    }catch(err){toast(err.message,true)}
+  }
+
+  function renderAdminFixtures(fixtures){
+    const box=$('#adminFixtures'); if(!box)return;
+    if(!fixtures.length){box.innerHTML='<div class="empty">No fixtures yet.</div>';return}
+    box.innerHTML='<div class="table-wrap"><table><thead><tr><th>Date</th><th>Round</th><th>Fixture</th><th>Score</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
+      fixtures.map(f=>`<tr>
+        <td>${esc(fmtDate(f.fixture_date))}<br><small class="muted">${esc(f.venue||'Venue TBA')}</small></td>
+        <td>${f.round_no}</td>
+        <td><strong>${esc(f.home_team_name)}</strong><br><span class="muted">vs</span> ${esc(f.away_team_name)}</td>
+        <td><strong>${f.home_frames||0} — ${f.away_frames||0}</strong></td>
+        <td>${statusPill(f.status)}</td>
+        <td>
+          <a class="btn small secondary" href="/scoresheet.html?id=${f.id}">Open</a>
+          <button class="btn small fixture-edit" data-id="${f.id}">Edit</button>
+          ${f.status==='POSTPONED'?`<button class="btn small fixture-restore" data-id="${f.id}">Restore</button>`:(!['APPROVED','FORFEIT'].includes(f.status)?`<button class="btn small fixture-postpone" data-id="${f.id}">Postpone</button>`:'')}
+          ${['SCHEDULED','POSTPONED'].includes(f.status)?`<button class="btn small danger fixture-delete" data-id="${f.id}">Delete</button>`:''}
+        </td>
+      </tr>`).join('')+'</tbody></table></div>';
+
+    $('.fixture-edit').forEach(btn=>btn.addEventListener('click',async()=>{
+      const f=fixtures.find(x=>x.id===Number(btn.dataset.id)); if(!f)return;
+      const roundNo=prompt('Round number',String(f.round_no)); if(roundNo===null)return;
+      const currentDate=f.fixture_date?new Date(f.fixture_date).toISOString().slice(0,16):'';
+      const fixtureDate=prompt('Match date/time (YYYY-MM-DDTHH:MM). Leave blank for TBA.',currentDate); if(fixtureDate===null)return;
+      const venue=prompt('Venue',f.venue||''); if(venue===null)return;
+      try{
+        await api('/api/admin/fixtures/'+f.id,{method:'PATCH',body:{roundNo:Number(roundNo),fixtureDate:fixtureDate||null,venue}});
+        await reloadAdmin(); toast('Fixture updated');
+      }catch(err){toast(err.message,true)}
+    }));
+    $('.fixture-postpone').forEach(btn=>btn.addEventListener('click',async()=>{
+      if(!confirm('Postpone this fixture?'))return;
+      try{await api('/api/admin/fixtures/'+btn.dataset.id+'/postpone',{method:'POST'});await reloadAdmin();toast('Fixture postponed')}catch(err){toast(err.message,true)}
+    }));
+    $('.fixture-restore').forEach(btn=>btn.addEventListener('click',async()=>{
+      try{await api('/api/admin/fixtures/'+btn.dataset.id+'/restore',{method:'POST'});await reloadAdmin();toast('Fixture restored')}catch(err){toast(err.message,true)}
+    }));
+    $('.fixture-delete').forEach(btn=>btn.addEventListener('click',async()=>{
+      if(!confirm('Delete this unplayed fixture? This cannot be undone.'))return;
+      try{await api('/api/admin/fixtures/'+btn.dataset.id,{method:'DELETE'});await reloadAdmin();toast('Fixture deleted')}catch(err){toast(err.message,true)}
+    }));
+  }
+
   function renderAdminLists(){
     const m=state.meta;
     $('#adminClubList').innerHTML=m.clubs.length?'<div class="card-list">'+m.clubs.map(c=>`<div class="card-row"><span><strong>${esc(c.name)}</strong><small>${m.teams.filter(t=>t.club_id===c.id).map(t=>t.name).join(', ')||'No teams'}</small></span></div>`).join('')+'</div>':'<div class="empty">No clubs yet.</div>';
-    api('/api/fixtures').then(d=>{$('#adminFixtures').innerHTML=fixtureCards(d.fixtures,true)}).catch(()=>{});
-    $('#adminUsers').innerHTML=m.users.length?'<div class="card-list">'+m.users.map(u=>`<div class="card-row"><span><strong>${esc(u.display_name)}</strong><small>${esc(u.email)} • ${esc(u.role.replaceAll('_',' '))}</small></span><span class="muted">${esc(u.team_name||u.club_name||'NCSF')}</span></div>`).join('')+'</div>':'<div class="empty">No users.</div>';
+    api('/api/fixtures').then(d=>renderAdminFixtures(d.fixtures)).catch(err=>toast(err.message,true));
+    $('#adminUsers').innerHTML=m.users.length?'<div class="card-list">'+m.users.map(u=>`<div class="card-row"><span><strong>${esc(u.display_name)}</strong><small>${esc(u.email)} • ${esc(u.role.replaceAll('_',' '))} • ${u.active?'Active':'Disabled'}</small></span><span><span class="muted">${esc(u.team_name||u.club_name||'NCSF')}</span><br><button class="btn small admin-user-password" data-id="${u.id}">Reset Password</button> ${u.id!==state.user.id?`<button class="btn small ${u.active?'danger':''} admin-user-active" data-id="${u.id}" data-active="${u.active}">${u.active?'Disable':'Enable'}</button>`:''}</span></div>`).join('')+'</div>':'<div class="empty">No users.</div>';
+    $$('.admin-user-password').forEach(btn=>btn.addEventListener('click',async()=>{
+      const password=prompt('Enter a new temporary password (minimum 8 characters):');
+      if(password===null)return;
+      try{await api('/api/admin/users/'+btn.dataset.id,{method:'PATCH',body:{password}});toast('Password reset')}catch(err){toast(err.message,true)}
+    }));
+    $$('.admin-user-active').forEach(btn=>btn.addEventListener('click',async()=>{
+      const active=btn.dataset.active!=='true';
+      if(!confirm((active?'Enable':'Disable')+' this login?'))return;
+      try{await api('/api/admin/users/'+btn.dataset.id,{method:'PATCH',body:{active}});await reloadAdmin();toast('Login updated')}catch(err){toast(err.message,true)}
+    }));
     $('#adminPlayers').innerHTML=m.players.length?'<div class="table-wrap"><table><thead><tr><th>Player</th><th>Club</th><th>Team</th><th>Frames</th><th>Status</th></tr></thead><tbody>'+m.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong><br><small class="muted">${esc(p.ncsf_number||'—')}</small></td><td>${esc(p.club_name)}</td><td>${esc(p.team_name||'Unassigned')}</td><td>—</td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}<br><button class="btn small admin-player-suspend" data-player="${p.id}" data-suspended="${p.suspended}">${p.suspended?'Reactivate':'Suspend'}</button></td></tr>`).join('')+'</tbody></table></div>':'<div class="empty">No players registered.</div>';
     $('.admin-player-suspend').forEach(btn=>btn.addEventListener('click',async()=>{try{await api('/api/admin/players/'+btn.dataset.player,{method:'PATCH',body:{suspended:btn.dataset.suspended!=='true'}});toast('Player eligibility updated');await reloadAdmin()}catch(err){toast(err.message,true)}}));
   }
