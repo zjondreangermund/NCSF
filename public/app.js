@@ -6,7 +6,7 @@
   const IS_NCSF_ANDROID=/\bNCSFAndroid\//i.test(navigator.userAgent||'');
   if(IS_NCSF_ANDROID)document.documentElement.classList.add('is-ncsf-app');
 
-  $('.js-logo').forEach(img=>img.src='/ncsf-logo.jpg');
+  $$('.js-logo').forEach(img=>img.src='/ncsf-logo.jpg');
 
   async function api(url,options={}){
     const opts={credentials:'same-origin',...options};
@@ -340,8 +340,8 @@
   function bindSheetControls(){
     $$('.save-lineup').forEach(btn=>btn.addEventListener('click',async()=>{
       const side=btn.dataset.side;
-      const values=$('.lineup-select[data-side="'+side+'"]').map(s=>Number(s.value)).filter(Boolean);
-      const reserveIds=$('.reserve-select[data-side="'+side+'"]').map(s=>Number(s.value)).filter(Boolean);
+      const values=$$('.lineup-select[data-side="'+side+'"]').map(s=>Number(s.value)).filter(Boolean);
+      const reserveIds=$$('.reserve-select[data-side="'+side+'"]').map(s=>Number(s.value)).filter(Boolean);
       try{
         $('#saveState').textContent='Saving…';
         state.fixture=await api('/api/fixtures/'+state.fixture.fixture.id+'/lineup',{method:'PUT',body:{side,playerIds:values,reserveIds}});
