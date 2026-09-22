@@ -382,11 +382,6 @@
           <div class="away"><small>AWAY</small><strong>${esc(f.awayTeamName)}</strong></div>
         </div>
 
-        <div class="print-rosters">
-          ${compactPrintRoster('HOME')}
-          ${compactPrintRoster('AWAY')}
-        </div>
-
         <div class="print-rounds">
           ${data.frames.length===25?[1,2,3,4,5].map(compactPrintRound).join(''):'<div class="print-no-frames">Lineups not complete.</div>'}
         </div>
