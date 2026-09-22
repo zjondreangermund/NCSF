@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b223f">
+  <title>NCSF Federation Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-page="admin">
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <img class="js-logo" alt="NCSF logo">
+      <span><strong>Namibia Cue Sports Federation</strong><small>League Manager</small></span>
+    </a>
+    <nav class="nav">
+      <a href="/#home">Home</a>
+      <a href="/#fixtures">Fixtures</a>
+      <a href="/#standings">Team Rankings</a>
+      <a href="/#players">Individual Rankings</a>
+    </nav>
+    <div class="user-actions" id="userActions"></div>
+  </div>
+</header>
+<main class="page">
+  <div class="section-title">
+    <div><div class="kicker">Federation controls</div><h1>NCSF Administration</h1></div>
+    <a class="btn secondary" href="/team.html">Match Centre</a>
+  </div>
+  <div class="admin-tabs">
+    <button class="btn active" data-admin-tab="setup">League Setup</button>
+    <button class="btn" data-admin-tab="clubs">Clubs & Teams</button>
+    <button class="btn" data-admin-tab="fixtures">Fixtures</button>
+    <button class="btn" data-admin-tab="access">Access</button>
+  </div>
+
+  <section class="admin-pane" data-pane="setup">
+    <div class="grid two">
+      <div class="panel">
+        <h2>Create season</h2>
+        <form id="seasonForm" class="form-grid">
+          <label class="full">Season name<input name="name" placeholder="2026 NCSF League" required></label>
+          <label>Start date<input name="startDate" type="date"></label>
+          <label>End date<input name="endDate" type="date"></label>
+          <label class="full"><span><input name="active" type="checkbox" style="width:auto"> Make active season</span></label>
+          <button class="btn primary full" type="submit">Create Season</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Create division</h2>
+        <form id="divisionForm" class="form-grid">
+          <label class="full">Season<select name="seasonId" id="divisionSeason" required></select></label>
+          <label class="full">Division name<input name="name" placeholder="Premier Division" required></label>
+          <button class="btn primary full" type="submit">Create Division</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="admin-pane hidden" data-pane="clubs">
+    <div class="grid two">
+      <div class="panel">
+        <h2>Create club</h2>
+        <form id="clubForm" class="form-grid">
+          <label class="full">Club name<input name="name" required></label>
+          <label class="full">Short name<input name="shortName"></label>
+          <button class="btn primary full" type="submit">Create Club</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Create team</h2>
+        <form id="teamForm" class="form-grid">
+          <label>Club<select name="clubId" id="teamClub" required></select></label>
+          <label>Division<select name="divisionId" id="teamDivision"></select></label>
+          <label class="full">Team name<input name="name" required></label>
+          <button class="btn primary full" type="submit">Create Team</button>
+        </form>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px"><h2>Registered clubs & teams</h2><div id="adminClubList"></div></div>
+  </section>
+
+  <section class="admin-pane hidden" data-pane="fixtures">
+    <div class="grid two">
+      <div class="panel">
+        <h2>Create one fixture</h2>
+        <form id="fixtureForm" class="form-grid">
+          <label class="full">Division<select name="divisionId" id="fixtureDivision" required></select></label>
+          <label>Home team<select name="homeTeamId" id="fixtureHome" required></select></label>
+          <label>Away team<select name="awayTeamId" id="fixtureAway" required></select></label>
+          <label>Round<input name="roundNo" type="number" min="1" value="1"></label>
+          <label>Date/time<input name="fixtureDate" type="datetime-local"></label>
+          <label class="full">Venue<input name="venue"></label>
+          <button class="btn primary full" type="submit">Create Fixture</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Generate home & away season</h2>
+        <form id="scheduleForm" class="form-grid">
+          <label class="full">Division<select name="divisionId" id="scheduleDivision" required></select></label>
+          <label class="full">First match date<input name="firstDate" type="date" required></label>
+          <button class="btn primary full" type="submit">Generate Full Schedule</button>
+        </form>
+        <p class="muted">Creates a double round-robin: every team plays every other team at home and away.</p>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px"><h2>Fixtures</h2><div id="adminFixtures"></div></div>
+  </section>
+
+  <section class="admin-pane hidden" data-pane="access">
+    <div class="grid two">
+      <div class="panel">
+        <h2>Create club/team admin</h2>
+        <form id="adminUserForm" class="form-grid">
+          <label class="full">Name<input name="displayName" required></label>
+          <label>Email<input name="email" type="email" required></label>
+          <label>Password<input name="password" type="password" minlength="8" required></label>
+          <label>Role<select name="role" id="adminUserRole"><option value="CLUB_ADMIN">Club Admin</option><option value="TEAM_ADMIN">Team Admin</option><option value="NCSF_ADMIN">NCSF Admin</option></select></label>
+          <label>Club<select name="clubId" id="adminUserClub"></select></label>
+          <label class="full">Team<select name="teamId" id="adminUserTeam"></select></label>
+          <button class="btn primary full" type="submit">Create Login</button>
+        </form>
+      </div>
+      <div class="panel"><h2>Existing access</h2><div id="adminUsers"></div></div>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+</body></html>
