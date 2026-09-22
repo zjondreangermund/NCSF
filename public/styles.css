@@ -821,3 +821,96 @@ body[data-page="scoresheet"] .page{max-width:1120px}
     border:1px solid #aaa;
   }
 }
+
+
+/* Final one-page PDF override: essentials only */
+@page{size:A4 landscape;margin:4mm}
+@media print{
+  html,body{
+    width:289mm!important;
+    min-width:289mm!important;
+    height:auto!important;
+    overflow:visible!important;
+  }
+  .compact-print-sheet{
+    display:block!important;
+    width:289mm!important;
+    max-width:289mm!important;
+    height:auto!important;
+    max-height:190mm!important;
+    overflow:hidden!important;
+    margin:0!important;
+    padding:0!important;
+    page-break-before:avoid!important;
+    page-break-after:avoid!important;
+    page-break-inside:avoid!important;
+    break-inside:avoid-page!important;
+    font-size:6.5pt!important;
+  }
+  .print-rosters{display:none!important}
+  .print-head{
+    grid-template-columns:14mm 1fr 58mm!important;
+    gap:2.5mm!important;
+    padding-bottom:1.2mm!important;
+    margin-bottom:1.2mm!important;
+  }
+  .print-head img{width:12mm!important;height:12mm!important}
+  .print-head h1{font-size:10.5pt!important}
+  .print-head h2{font-size:7.5pt!important;margin:.3mm 0!important}
+  .print-head p{font-size:5.5pt!important}
+  .print-meta{gap:.8mm!important}
+  .print-meta span{padding:.7mm!important}
+  .print-match{
+    grid-template-columns:1fr 42mm 1fr!important;
+    padding:1mm 2mm!important;
+    margin-bottom:1.2mm!important;
+  }
+  .print-match strong{font-size:9pt!important}
+  .print-final b{font-size:12pt!important}
+  .print-rounds{
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    gap:1mm!important;
+    margin:0 0 1.2mm!important;
+  }
+  .print-round,
+  .print-round:nth-child(4),
+  .print-round:nth-child(5){
+    grid-column:auto!important;
+    margin:0!important;
+    break-inside:avoid!important;
+    page-break-inside:avoid!important;
+  }
+  .print-round-head{padding:.6mm 1mm!important}
+  .print-round-head strong{font-size:6pt!important}
+  .print-round table{table-layout:fixed!important}
+  .print-round th,
+  .print-round td{
+    padding:.45mm .35mm!important;
+    font-size:4.7pt!important;
+    line-height:1!important;
+    height:4.2mm!important;
+  }
+  .print-round th:nth-child(1),
+  .print-round th:nth-child(3),
+  .print-round th:nth-child(4),
+  .print-round th:nth-child(6),
+  .print-round td:nth-child(1),
+  .print-round td:nth-child(3),
+  .print-round td:nth-child(4),
+  .print-round td:nth-child(6){
+    width:4.5mm!important;
+  }
+  .print-score{font-size:5.5pt!important}
+  .print-summary{
+    grid-template-columns:1.5fr 1.3fr 1fr 1fr .7fr .9fr!important;
+    margin-bottom:1.4mm!important;
+  }
+  .print-summary>div{padding:.8mm 1mm!important}
+  .print-summary span{font-size:4.7pt!important}
+  .print-summary strong{font-size:5.8pt!important}
+  .print-signatures{gap:8mm!important;margin-top:.7mm!important}
+  .print-signatures>div{font-size:5.5pt!important}
+  .print-signatures i{height:3.5mm!important}
+  .print-signatures small{font-size:4.6pt!important}
+}
