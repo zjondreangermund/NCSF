@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.4");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.5");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -80,16 +80,24 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {            @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> {
-                    boolean cameraGranted = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
-                    boolean audioGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+                    boolean wantsCamera = false;
+                    boolean wantsAudio = false;
+                    for (String resource : request.getResources()) {
+                        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) wantsCamera = true;
+                        if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) wantsAudio = true;
+                    }
+
+                    boolean cameraGranted = !wantsCamera || checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+                    boolean audioGranted = !wantsAudio || checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+
                     if (cameraGranted && audioGranted) {
                         request.grant(request.getResources());
                     } else {
                         pendingMediaPermission = request;
-                        requestPermissions(
-                                new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO},
-                                MEDIA_PERMISSION_REQUEST
-                        );
+                        java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
+                        if (wantsCamera && !cameraGranted) permissions.add(Manifest.permission.CAMERA);
+                        if (wantsAudio && !audioGranted) permissions.add(Manifest.permission.RECORD_AUDIO);
+                        requestPermissions(permissions.toArray(new String[0]), MEDIA_PERMISSION_REQUEST);
                     }
                 });
             }
@@ -168,10 +176,22 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == MEDIA_PERMISSION_REQUEST && pendingMediaPermission != null) {
-            boolean granted = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                    && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
-            if (granted) pendingMediaPermission.grant(pendingMediaPermission.getResources());
-            else pendingMediaPermission.deny();
+            java.util.ArrayList<String> grantedResources = new java.util.ArrayList<>();
+            for (String resource : pendingMediaPermission.getResources()) {
+                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)
+                        && checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    grantedResources.add(resource);
+                }
+                if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)
+                        && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    grantedResources.add(resource);
+                }
+            }
+            if (!grantedResources.isEmpty()) {
+                pendingMediaPermission.grant(grantedResources.toArray(new String[0]));
+            } else {
+                pendingMediaPermission.deny();
+            }
             pendingMediaPermission = null;
         }
     }
