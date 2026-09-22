@@ -2362,3 +2362,148 @@ body.ncsf-live-fullscreen-active{
 .ncsf-live-fullscreen .fullscreen-chat.open + .live-match-overlay{
   right:min(410px,45vw)!important;
 }
+
+
+/* Broadcast stats: transparent white-line presentation */
+.live-match-overlay{
+  left:50%!important;
+  right:auto!important;
+  width:min(94%,980px)!important;
+  transform:translateX(-50%)!important;
+  bottom:58px!important;
+}
+.live-scorebar{
+  background:transparent!important;
+  border-top:1px solid rgba(255,255,255,.92)!important;
+  border-bottom:1px solid rgba(255,255,255,.92)!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+  text-shadow:0 1px 4px rgba(0,0,0,.9)!important;
+}
+.live-score-team,
+.live-score-frame{
+  background:transparent!important;
+}
+.live-score-frame{
+  border-left:1px solid rgba(255,255,255,.72)!important;
+  border-right:1px solid rgba(255,255,255,.72)!important;
+}
+.live-score-team .team-name,
+.live-score-team .team-score,
+.live-score-frame strong,
+.live-score-frame span{
+  color:#fff!important;
+}
+.live-score-frame small,
+.live-score-frame strong b,
+.live-next-frame span{
+  color:#fff!important;
+}
+.live-next-frame{
+  background:transparent!important;
+  border-top:1px solid rgba(255,255,255,.72)!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+  text-shadow:0 1px 4px rgba(0,0,0,.9)!important;
+  padding-top:7px!important;
+}
+.live-match-overlay.is-final .live-scorebar{
+  background:transparent!important;
+}
+
+/* Round-complete scoresheet flashes for 5 seconds, then disappears. */
+.live-round-summary{
+  position:absolute;
+  left:50%;
+  bottom:6px;
+  width:min(92vw,760px);
+  transform:translate(-50%,14px);
+  opacity:0;
+  display:grid;
+  justify-items:center;
+  gap:6px;
+  color:#fff;
+  text-align:center;
+  text-shadow:0 2px 5px rgba(0,0,0,.95);
+  transition:opacity .3s ease,transform .3s ease;
+  pointer-events:none;
+}
+.live-round-summary.show{
+  opacity:1;
+  transform:translate(-50%,0);
+}
+.live-round-summary .round-line{
+  width:100%;
+  height:1px;
+  background:rgba(255,255,255,.92);
+}
+.live-round-summary small{
+  margin-top:2px;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.16em;
+}
+.live-round-summary .round-result{
+  font-size:clamp(18px,3vw,30px);
+  line-height:1.1;
+}
+.live-round-summary .round-progressive{
+  font-size:12px;
+  font-weight:800;
+}
+.live-match-overlay.round-summary-active .live-scorebar,
+.live-match-overlay.round-summary-active .live-next-frame{
+  opacity:0!important;
+}
+.live-match-overlay .live-scorebar,
+.live-match-overlay .live-next-frame{
+  transition:opacity .25s ease;
+}
+
+/* Keep the same clean stats structure in portrait and landscape. */
+@media(orientation:landscape){
+  .live-match-overlay{
+    width:min(88vw,980px)!important;
+    bottom:56px!important;
+  }
+  .live-scorebar{
+    grid-template-columns:minmax(160px,1fr) minmax(360px,1.6fr) minmax(160px,1fr)!important;
+  }
+  .live-score-team{
+    padding:8px 12px!important;
+  }
+  .live-score-team .team-name{font-size:11px!important}
+  .live-score-team .team-score{font-size:24px!important}
+  .live-score-frame small{font-size:8px!important}
+  .live-score-frame strong{font-size:13px!important}
+  .live-next-frame{max-width:620px!important}
+}
+
+/* Portrait keeps the compact layout shown on phone. */
+@media(max-width:620px) and (orientation:portrait){
+  .live-match-overlay{
+    width:calc(100% - 18px)!important;
+    bottom:52px!important;
+  }
+  .live-scorebar{
+    grid-template-columns:minmax(78px,.85fr) minmax(150px,1.5fr) minmax(78px,.85fr)!important;
+  }
+  .live-score-team{padding:7px 6px!important}
+  .live-score-team .team-name{font-size:8px!important}
+  .live-score-team .team-score{font-size:20px!important}
+  .live-score-frame{padding:6px 7px!important}
+  .live-score-frame strong{font-size:10px!important}
+  .live-round-summary{
+    width:calc(100vw - 32px)!important;
+  }
+}
+
+/* Video remains uncropped; broadcaster now rotates before capture so landscape viewers receive landscape video. */
+.internal-live video,
+.broadcast-video-shell video,
+.ncsf-live-fullscreen video{
+  object-fit:contain!important;
+  transform:none!important;
+}
