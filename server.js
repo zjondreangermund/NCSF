@@ -1249,16 +1249,23 @@ function pdfPlayerNames(payload) {
 function drawCell(doc, x, y, w, h, text, opts = {}) {
   doc.rect(x, y, w, h).lineWidth(opts.lineWidth || 0.45).strokeColor(opts.stroke || "#b7bec7").stroke();
   if (opts.fill) doc.rect(x, y, w, h).fillColor(opts.fill).fill();
+
+  const font = opts.bold ? "Helvetica-Bold" : "Helvetica";
+  const size = opts.size || 6.2;
   doc.fillColor(opts.color || "#111111")
-    .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
-    .fontSize(opts.size || 6.2)
-    .text(String(text ?? ""), x + 2.5, y + 2.2, {
-      width: Math.max(1, w - 5),
-      height: Math.max(1, h - 4),
-      align: opts.align || "left",
-      ellipsis: true,
-      lineBreak: false
-    });
+    .font(font)
+    .fontSize(size);
+
+  const lineHeight = doc.currentLineHeight(false);
+  const textY = y + Math.max(1, (h - lineHeight) / 2 - 0.15);
+
+  doc.text(String(text ?? ""), x + 2.5, textY, {
+    width: Math.max(1, w - 5),
+    height: Math.max(1, h - 2),
+    align: opts.align || "left",
+    ellipsis: true,
+    lineBreak: false
+  });
 }
 
 function drawPdfTextFit(doc, text, x, y, w, opts = {}) {
@@ -1540,11 +1547,13 @@ function streamOnePageScoresheetPdf(res, payload) {
   const colW = (usable - gapX) / 2;
   const roundH = 119;
 
+  const round5X = left + (usable - colW) / 2;
+
   drawRound(1, left, roundsY, colW);
   drawRound(2, left + colW + gapX, roundsY, colW);
   drawRound(3, left, roundsY + roundH + gapY, colW);
   drawRound(4, left + colW + gapX, roundsY + roundH + gapY, colW);
-  drawRound(5, left, roundsY + (roundH + gapY) * 2, colW);
+  drawRound(5, round5X, roundsY + (roundH + gapY) * 2, colW);
 
   const finalY = roundsY + (roundH + gapY) * 2 + roundH + 8;
   const centerScoreW = 34;
