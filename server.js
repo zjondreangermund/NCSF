@@ -287,6 +287,18 @@ async function initDatabase() {
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS stream_url TEXT;
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS stream_title TEXT;
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS stream_active BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS bonus_side TEXT CHECK (bonus_side IN ('HOME','AWAY'));
+
+    CREATE TABLE IF NOT EXISTS fixture_break_runs (
+      fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
+      player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(fixture_id, player_id)
+    );
+    INSERT INTO fixture_break_runs(fixture_id,player_id)
+      SELECT id,break_run_player_id FROM fixtures
+      WHERE break_run_player_id IS NOT NULL
+      ON CONFLICT DO NOTHING;
     UPDATE fixtures
       SET submitted_side='HOME',
           submitted_by=COALESCE(submitted_by,home_confirmed_by),
@@ -966,6 +978,54 @@ async function ensureFrames(fixtureId) {
   return true;
 }
 
+async function syncDerivedFixtureExtras(fixtureId) {
+  const { rows } = await pool.query(`
+    SELECT winner_side,winner_player_id
+    FROM frames
+    WHERE fixture_id=$1 AND winner_side IS NOT NULL
+  `, [fixtureId]);
+
+  let home = 0;
+  let away = 0;
+  const wins = new Map();
+
+  for (const row of rows) {
+    if (row.winner_side === "HOME") home++;
+    if (row.winner_side === "AWAY") away++;
+    if (row.winner_player_id) {
+      const id = Number(row.winner_player_id);
+      wins.set(id, (wins.get(id) || 0) + 1);
+    }
+  }
+
+  const maxWins = wins.size ? Math.max(...wins.values()) : 0;
+  const playerOfMatchIds = maxWins > 0
+    ? [...wins.entries()]
+        .filter(([,count]) => count === maxWins)
+        .map(([id]) => Number(id))
+        .sort((a,b) => a - b)
+    : [];
+
+  let bonusSide = null;
+  if (home >= 18) bonusSide = "HOME";
+  else if (away >= 18) bonusSide = "AWAY";
+
+  await pool.query(`
+    UPDATE fixtures
+       SET player_of_match_id=$2,
+           bonus_points=$3,
+           bonus_side=$4
+     WHERE id=$1
+  `, [
+    fixtureId,
+    playerOfMatchIds[0] || null,
+    bonusSide ? 1 : 0,
+    bonusSide
+  ]);
+
+  return { home, away, maxWins, playerOfMatchIds, bonusSide, bonusPoints: bonusSide ? 1 : 0 };
+}
+
 async function getStandings(divisionId) {
   const { rows } = await pool.query(`
     WITH match_scores AS (
@@ -1032,7 +1092,7 @@ async function getIndividualRankings(divisionId) {
 }
 
 async function fixturePayload(fixture) {
-  const [{ rows: lineups }, { rows: reserves }, { rows: frames }, { rows: subs }, { rows: attachments }] = await Promise.all([
+  const [{ rows: lineups }, { rows: reserves }, { rows: frames }, { rows: subs }, { rows: attachments }, { rows: breakRuns }] = await Promise.all([
     pool.query(`
       SELECT fl.side, fl.slot, p.id player_id, p.first_name, p.last_name, p.ncsf_number
       FROM fixture_lineups fl
@@ -1071,12 +1131,47 @@ async function fixturePayload(fixture) {
       FROM fixture_attachments
       WHERE fixture_id=$1
       ORDER BY created_at DESC
+    `, [fixture.id]),
+    pool.query(`
+      SELECT br.player_id,p.first_name,p.last_name,p.ncsf_number
+      FROM fixture_break_runs br
+      JOIN players p ON p.id=br.player_id
+      WHERE br.fixture_id=$1
+      ORDER BY p.last_name,p.first_name,p.id
     `, [fixture.id])
   ]);
 
   const scored = frames.filter(f => f.winner_side);
   const homeFrames = scored.filter(f => f.winner_side === "HOME").length;
   const awayFrames = scored.filter(f => f.winner_side === "AWAY").length;
+
+  const winCounts = new Map();
+  for (const fr of scored) {
+    if (!fr.winner_player_id) continue;
+    const id = Number(fr.winner_player_id);
+    winCounts.set(id, (winCounts.get(id) || 0) + 1);
+  }
+  const maxPlayerWins = winCounts.size ? Math.max(...winCounts.values()) : 0;
+  const playerOfMatchIds = maxPlayerWins > 0
+    ? [...winCounts.entries()]
+        .filter(([,count]) => count === maxPlayerWins)
+        .map(([id]) => Number(id))
+        .sort((a,b) => a - b)
+    : [];
+  const bonusSide = homeFrames >= 18 ? "HOME" : awayFrames >= 18 ? "AWAY" : null;
+  const bonusPoints = bonusSide ? 1 : 0;
+
+  // Keep legacy single-value fixture columns synchronized for compatibility.
+  if (
+    Number(fixture.player_of_match_id || 0) !== Number(playerOfMatchIds[0] || 0) ||
+    Number(fixture.bonus_points || 0) !== bonusPoints ||
+    (fixture.bonus_side || null) !== bonusSide
+  ) {
+    await pool.query(
+      "UPDATE fixtures SET player_of_match_id=$2,bonus_points=$3,bonus_side=$4 WHERE id=$1",
+      [fixture.id, playerOfMatchIds[0] || null, bonusPoints, bonusSide]
+    );
+  }
 
   return {
     fixture: {
@@ -1103,12 +1198,24 @@ async function fixturePayload(fixture) {
       homeConfirmed: Boolean(fixture.home_confirmed_by),
       awayConfirmed: Boolean(fixture.away_confirmed_by),
       approvedAt: fixture.approved_at,
-      playerOfMatchId: fixture.player_of_match_id,
-      breakRunPlayerId: fixture.break_run_player_id,
+      playerOfMatchId: playerOfMatchIds[0] || null,
+      playerOfMatchIds,
+      playerOfMatchMaxWins: maxPlayerWins,
+      breakRunPlayerId: breakRuns[0]?.player_id || fixture.break_run_player_id || null,
+      breakRunPlayerIds: breakRuns.map(r => Number(r.player_id)),
+      breakRunPlayers: breakRuns.map(r => ({
+        playerId: Number(r.player_id),
+        firstName: r.first_name,
+        lastName: r.last_name,
+        ncsfNumber: r.ncsf_number
+      })),
       rackRunPlayerId: fixture.rack_run_player_id,
       homeCaptainId: fixture.home_captain_id,
       awayCaptainId: fixture.away_captain_id,
-      bonusPoints: fixture.bonus_points,
+      bonusPoints,
+      bonusSide,
+      bonusTeamId: bonusSide === "HOME" ? fixture.home_team_id : bonusSide === "AWAY" ? fixture.away_team_id : null,
+      bonusTeamName: bonusSide === "HOME" ? fixture.home_team_name : bonusSide === "AWAY" ? fixture.away_team_name : null,
       streamUrl: fixture.stream_url,
       streamTitle: fixture.stream_title,
       streamActive: Boolean(fixture.stream_active)
@@ -2389,6 +2496,7 @@ app.put("/api/fixtures/:id/frames/:frameId", requireAuth, async (req, res) => {
   );
   if (fixture.status === "SCHEDULED") await pool.query("UPDATE fixtures SET status='IN_PROGRESS' WHERE id=$1", [fixture.id]);
   await audit(user.id, fixture.id, "FRAME_RESULT", { frameId: frame.id, round: frame.round_no, board: frame.board_no, winnerSide });
+  await syncDerivedFixtureExtras(fixture.id);
   const payload = await fixturePayload(await fixtureById(fixture.id));
   await sendLiveMatchState(fixture.id);
   res.json(payload);
@@ -2400,27 +2508,70 @@ app.patch("/api/fixtures/:id/extras", requireAuth, async (req, res) => {
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
   if (fixture.status === "APPROVED" && user.role !== ROLE.NCSF) return res.status(409).json({ error: "Approved fixtures are locked." });
 
-  await pool.query(`
-    UPDATE fixtures SET
-      player_of_match_id=$2,
-      break_run_player_id=$3,
-      rack_run_player_id=$4,
-      home_captain_id=$5,
-      away_captain_id=$6,
-      bonus_points=$7,
-      notes=$8
-    WHERE id=$1
-  `, [
-    fixture.id,
-    req.body.playerOfMatchId ? Number(req.body.playerOfMatchId) : null,
-    req.body.breakRunPlayerId ? Number(req.body.breakRunPlayerId) : null,
-    req.body.rackRunPlayerId ? Number(req.body.rackRunPlayerId) : null,
-    req.body.homeCaptainId ? Number(req.body.homeCaptainId) : null,
-    req.body.awayCaptainId ? Number(req.body.awayCaptainId) : null,
-    Number(req.body.bonusPoints || 0),
-    String(req.body.notes || "").trim() || null
-  ]);
-  await audit(user.id, fixture.id, "MATCH_EXTRAS_UPDATED", req.body);
+  const idsInput = Array.isArray(req.body.breakRunPlayerIds)
+    ? req.body.breakRunPlayerIds
+    : req.body.breakRunPlayerIds
+      ? [req.body.breakRunPlayerIds]
+      : req.body.breakRunPlayerId
+        ? [req.body.breakRunPlayerId]
+        : [];
+  const breakRunPlayerIds = [...new Set(idsInput.map(Number).filter(Number.isInteger))];
+
+  if (breakRunPlayerIds.length) {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT p.id
+      FROM players p
+      JOIN teams t ON t.id=p.team_id
+      WHERE p.id = ANY($1::int[])
+        AND t.id IN ($2,$3)
+    `, [breakRunPlayerIds, fixture.home_team_id, fixture.away_team_id]);
+    if (rows.length !== breakRunPlayerIds.length) {
+      return res.status(400).json({ error: "Break & Run players must belong to one of the participating teams." });
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM fixture_break_runs WHERE fixture_id=$1", [fixture.id]);
+    for (const playerId of breakRunPlayerIds) {
+      await client.query(
+        "INSERT INTO fixture_break_runs(fixture_id,player_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
+        [fixture.id, playerId]
+      );
+    }
+
+    await client.query(`
+      UPDATE fixtures SET
+        break_run_player_id=$2,
+        rack_run_player_id=$3,
+        home_captain_id=$4,
+        away_captain_id=$5,
+        notes=$6
+      WHERE id=$1
+    `, [
+      fixture.id,
+      breakRunPlayerIds[0] || null,
+      req.body.rackRunPlayerId ? Number(req.body.rackRunPlayerId) : null,
+      req.body.homeCaptainId ? Number(req.body.homeCaptainId) : null,
+      req.body.awayCaptainId ? Number(req.body.awayCaptainId) : null,
+      String(req.body.notes || "").trim() || null
+    ]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  await syncDerivedFixtureExtras(fixture.id);
+  await audit(user.id, fixture.id, "MATCH_EXTRAS_UPDATED", {
+    breakRunPlayerIds,
+    rackRunPlayerId: req.body.rackRunPlayerId || null,
+    homeCaptainId: req.body.homeCaptainId || null,
+    awayCaptainId: req.body.awayCaptainId || null
+  });
   res.json(await fixturePayload(await fixtureById(fixture.id)));
 });
 
@@ -2452,7 +2603,8 @@ app.post("/api/fixtures/:id/submit", requireAuth, async (req, res) => {
     return res.status(409).json({ error: "This result has already been submitted." });
   }
 
-  const payload = await fixturePayload(fixture);
+  await syncDerivedFixtureExtras(fixture.id);
+  const payload = await fixturePayload(await fixtureById(fixture.id));
   if (payload.frames.length !== 25 || payload.totals.completed !== 25) return res.status(409).json({ error: "All 25 frames must be completed before submission." });
   if (payload.lineups.length !== 10) return res.status(409).json({ error: "Both five-player lineups are required." });
 
