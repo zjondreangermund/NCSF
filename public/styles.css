@@ -1864,6 +1864,9 @@ body.ncsf-live-fullscreen-active{
   top:12px!important;
   right:12px!important;
 }
+#broadcastStage.ncsf-live-fullscreen .live-chat-drawer:not(.open){
+  top:58px!important;
+}
 
 
 /* Live audio cues */
