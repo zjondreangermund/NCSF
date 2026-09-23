@@ -309,6 +309,15 @@
     const homeCaptain=homeRoster.find(p=>p.player_id===f.homeCaptainId);
     const awayCaptain=awayRoster.find(p=>p.player_id===f.awayCaptainId);
     const hWin=matchComplete&&t.home>t.away?1:0, aWin=matchComplete&&t.away>t.home?1:0, draw=matchComplete&&t.home===t.away?1:0;
+    const playerNameById=id=>{
+      const p=players.find(x=>Number(x.id)===Number(id));
+      return p?((p.first_name+' '+p.last_name).trim()):'';
+    };
+    const autoPlayerIds=Array.isArray(f.playerOfMatchIds)?f.playerOfMatchIds:[f.playerOfMatchId].filter(Boolean);
+    const autoPlayerNames=autoPlayerIds.map(playerNameById).filter(Boolean);
+    const breakRunIds=new Set((Array.isArray(f.breakRunPlayerIds)?f.breakRunPlayerIds:[f.breakRunPlayerId]).filter(Boolean).map(Number));
+    const awardsEditable=Boolean(state.user)&&f.status!=='APPROVED';
+    const bonusText=f.bonusTeamName?(f.bonusTeamName+' • +1 bonus point'):'No bonus yet • requires 18+ frames';
     $('#scoreSheetRoot').innerHTML=`
       <section class="official-sheet-head">
         <img class="js-score-logo" src="/ncsf-logo.jpg" alt="NCSF">
@@ -330,14 +339,34 @@
       </section>
       <section class="match-extras-card">
         <form id="extrasForm">
-          <label>Player of Match<select name="playerOfMatchId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.playerOfMatchId,'— Select player —')}</select></label>
-          <label>Break & Run<select name="breakRunPlayerId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.breakRunPlayerId,'— Blank —')}</select></label>
-          <label>Rack & Run<select name="rackRunPlayerId">${options(players,'id',p=>p.first_name+' '+p.last_name,f.rackRunPlayerId,'— Blank —')}</select></label>
-          <label>Bonus Point<input name="bonusPoints" type="number" value="${esc(f.bonusPoints||0)}"></label>
-          <label>Home Captain<select name="homeCaptainId">${options(homeRoster,'player_id',p=>(p.first_name+' '+p.last_name).trim(),f.homeCaptainId,'— Select captain —')}</select></label>
-          <label>Away Captain<select name="awayCaptainId">${options(awayRoster,'player_id',p=>(p.first_name+' '+p.last_name).trim(),f.awayCaptainId,'— Select captain —')}</select></label>
-          <label class="wide">Match Notes<textarea name="notes" rows="2">${esc(f.notes||'')}</textarea></label>
-          ${state.user?'<button class="btn primary wide" type="submit">Save Match Details</button>':''}
+          <div class="auto-award-field">
+            <span>Player/s of Tournament <em>AUTO</em></span>
+            <strong>${autoPlayerNames.length?esc(autoPlayerNames.join(', ')):'Appears automatically from frame wins'}</strong>
+            ${f.playerOfMatchMaxWins?'<small>Highest individual frame wins: '+esc(f.playerOfMatchMaxWins)+'</small>':''}
+          </div>
+
+          <fieldset class="award-multi-field">
+            <legend>Break & Run <small>Select every player who achieved it</small></legend>
+            <div class="award-choice-list">
+              ${players.map(p=>{
+                const id=Number(p.id);
+                const name=(p.first_name+' '+p.last_name).trim();
+                return '<label class="award-choice"><input type="checkbox" name="breakRunPlayerIds" value="'+esc(id)+'" '+(breakRunIds.has(id)?'checked':'')+' '+(awardsEditable?'':'disabled')+'><span>'+esc(name)+(p.ncsf_number?'<small>'+esc(p.ncsf_number)+'</small>':'')+'</span></label>';
+              }).join('')}
+            </div>
+          </fieldset>
+
+          <label>Rack & Run<select name="rackRunPlayerId" ${awardsEditable?'':'disabled'}>${options(players,'id',p=>p.first_name+' '+p.last_name,f.rackRunPlayerId,'— Blank —')}</select></label>
+
+          <div class="auto-award-field bonus">
+            <span>Bonus Team <em>AUTO</em></span>
+            <strong>${esc(bonusText)}</strong>
+          </div>
+
+          <label>Home Captain<select name="homeCaptainId" ${awardsEditable?'':'disabled'}>${options(homeRoster,'player_id',p=>(p.first_name+' '+p.last_name).trim(),f.homeCaptainId,'— Select captain —')}</select></label>
+          <label>Away Captain<select name="awayCaptainId" ${awardsEditable?'':'disabled'}>${options(awayRoster,'player_id',p=>(p.first_name+' '+p.last_name).trim(),f.awayCaptainId,'— Select captain —')}</select></label>
+          <label class="wide">Match Notes<textarea name="notes" rows="2" ${awardsEditable?'':'disabled'}>${esc(f.notes||'')}</textarea></label>
+          ${awardsEditable?'<button class="btn primary wide" type="submit">Save Match Details</button>':''}
         </form>
       </section>
       <div class="roster-summary-grid">${rosterSummary('HOME')}${rosterSummary('AWAY')}</div>
@@ -443,7 +472,9 @@
     }));
     $('#extrasForm')?.addEventListener('submit',async e=>{
       e.preventDefault(); try{
-        state.fixture=await api('/api/fixtures/'+state.fixture.fixture.id+'/extras',{method:'PATCH',body:formObject(e.currentTarget)});
+        const body=formObject(e.currentTarget);
+        body.breakRunPlayerIds=$('input[name="breakRunPlayerIds"]:checked',e.currentTarget).map(cb=>Number(cb.value)).filter(Boolean);
+        state.fixture=await api('/api/fixtures/'+state.fixture.fixture.id+'/extras',{method:'PATCH',body});
         renderScoresheet(); toast('Match details saved');
       }catch(err){toast(err.message,true)}
     });
