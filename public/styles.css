@@ -2843,3 +2843,251 @@ body.ncsf-live-fullscreen-active{
     font-size:10px!important;
   }
 }
+
+
+/* Text-overlap hardening across scoresheets, fixtures and admin cards */
+.official-sheet-head > *,
+.fixture-score-hero > *,
+.match-card > *,
+.roster-heading > *,
+.roster-slot > *,
+.score-round-title > *,
+.score-grid > *,
+.score-total-row > *,
+.score-progressive-row > *,
+.final-score-card > *,
+.section-head > *,
+.card-row > *,
+.uploaded-file > *{
+  min-width:0!important;
+}
+
+.official-sheet-head h1,
+.official-sheet-head p,
+.sheet-meta strong,
+.fixture-score-hero h2,
+.fixture-score-hero small,
+.match-card .team-name,
+.match-card .match-meta,
+.roster-heading h3,
+.roster-name,
+.final-score-card strong,
+.card-row strong,
+.card-row small,
+.uploaded-file strong,
+.uploaded-file small{
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+}
+
+.official-sheet-head h1,
+.fixture-score-hero h2,
+.roster-heading h3,
+.final-score-card strong{
+  line-height:1.12!important;
+}
+
+.score-round-title{
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;
+}
+.score-round-title strong,
+.score-round-title span{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+
+.score-player{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  line-height:1.2!important;
+}
+.score-player.away{
+  min-width:0!important;
+}
+
+.score-total-row > *,
+.score-progressive-row > *{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.score-progressive-row em{
+  font-style:italic;
+}
+
+.roster-slot select,
+.roster-slot .roster-name{
+  min-width:0!important;
+  max-width:100%!important;
+}
+.roster-name{
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+
+.roster-summary table{
+  table-layout:fixed!important;
+}
+.roster-summary th,
+.roster-summary td{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.roster-summary th:nth-child(2),
+.roster-summary td:nth-child(2){
+  width:auto!important;
+}
+
+.match-card .open-cell{
+  min-width:0!important;
+  display:flex!important;
+  gap:7px!important;
+  flex-wrap:wrap!important;
+  justify-content:flex-end!important;
+}
+.match-card .team-name{
+  line-height:1.18!important;
+}
+.match-score{
+  white-space:nowrap!important;
+}
+
+.card-row > span,
+.uploaded-file > span{
+  min-width:0!important;
+  flex:1 1 auto!important;
+}
+.card-row .btn,
+.uploaded-file .btn{
+  flex:0 0 auto!important;
+}
+
+.table-wrap td,
+.table-wrap th{
+  vertical-align:middle!important;
+}
+.table-wrap td strong,
+.table-wrap td small{
+  max-width:100%!important;
+}
+
+@media(max-width:860px){
+  .fixture-score-hero{
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;
+  }
+  .fixture-score-hero h2{
+    font-size:clamp(15px,4vw,20px)!important;
+    overflow-wrap:anywhere!important;
+  }
+}
+
+@media(max-width:620px){
+  .official-sheet-head{
+    grid-template-columns:58px minmax(0,1fr)!important;
+  }
+  .official-sheet-head img{
+    width:54px!important;
+    height:54px!important;
+  }
+  .official-sheet-head h1{
+    font-size:19px!important;
+  }
+
+  .fixture-score-hero{
+    gap:6px!important;
+  }
+  .fixture-score-hero > div{
+    min-width:0!important;
+  }
+  .fixture-score-hero h2{
+    font-size:14px!important;
+    line-height:1.12!important;
+  }
+  .fixture-score-hero small{
+    display:block!important;
+    font-size:9px!important;
+    line-height:1.2!important;
+  }
+  .fixture-live-score{
+    gap:4px!important;
+  }
+  .fixture-live-score strong{
+    font-size:26px!important;
+  }
+
+  .score-rounds-grid .score-grid{
+    grid-template-columns:24px minmax(0,1fr) 34px 22px 34px minmax(0,1fr) 24px!important;
+  }
+  .score-rounds-grid .score-grid > *{
+    min-width:0!important;
+    padding:6px 2px!important;
+    font-size:9px!important;
+  }
+  .score-rounds-grid .score-cell{
+    margin:2px!important;
+    min-height:29px!important;
+  }
+  .score-rounds-grid .score-total-row,
+  .score-rounds-grid .score-progressive-row{
+    grid-template-columns:minmax(0,1fr) 34px 12px 34px minmax(0,1fr)!important;
+    padding:6px 5px!important;
+    font-size:9px!important;
+  }
+
+  .final-score-card{
+    grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr)!important;
+  }
+  .final-score-card > div{
+    min-width:0!important;
+    padding:11px 5px!important;
+  }
+  .final-score-card span{
+    font-size:8px!important;
+    letter-spacing:.08em!important;
+    text-align:center!important;
+  }
+  .final-score-card strong,
+  .final-score-card .match-result strong{
+    max-width:100%!important;
+    font-size:16px!important;
+    overflow-wrap:anywhere!important;
+  }
+
+  .section-head{
+    align-items:flex-start!important;
+    flex-wrap:wrap!important;
+  }
+  .section-head > *{
+    min-width:0!important;
+  }
+
+  .match-card{
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;
+    gap:8px!important;
+  }
+  .match-card .team-name{
+    font-size:12px!important;
+    overflow-wrap:anywhere!important;
+  }
+  .match-card .match-meta{
+    font-size:10px!important;
+  }
+  .match-card .open-cell{
+    grid-column:1/-1!important;
+    justify-content:flex-start!important;
+  }
+
+  .card-row,
+  .uploaded-file{
+    align-items:flex-start!important;
+    flex-wrap:wrap!important;
+  }
+}
