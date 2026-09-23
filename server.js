@@ -1360,11 +1360,11 @@ function streamOnePageScoresheetPdf(res, payload) {
     const progressiveHome = payload.frames.filter(fr => Number(fr.round_no) <= round && fr.winner_side === "HOME").length;
     const progressiveAway = payload.frames.filter(fr => Number(fr.round_no) <= round && fr.winner_side === "AWAY").length;
 
-    const titleH = 13;
-    const headH = 9;
-    const rowH = 14;
-    const totalH = 9;
-    const progressiveH = 9;
+    const titleH = 14;
+    const headH = 10;
+    const rowH = 15;
+    const totalH = 10;
+    const progressiveH = 10;
 
     doc.font("Helvetica-Bold").fontSize(7.2).fillColor(line)
       .text(`ROUND ${round}`, x, y + 2, { width: w, align: "center" });
@@ -1408,7 +1408,7 @@ function streamOnePageScoresheetPdf(res, payload) {
         drawCell(doc, cx, yy, widths[idx], rowH, val, {
           size: idx === 1 || idx === 5 ? 5.25 : idx === 3 ? 4.6 : 5.8,
           bold: idx === 2 || idx === 4,
-          align: idx === 1 ? "left" : idx === 5 ? "right" : "center",
+          align: "center",
           stroke: line,
           lineWidth: 0.45
         });
@@ -1435,10 +1435,10 @@ function streamOnePageScoresheetPdf(res, payload) {
   const drawDetailLine = (x, y, label, value, w) => {
     const labelW = 105;
     doc.font("Helvetica-Bold").fontSize(5.4).fillColor(line)
-      .text(label, x, y + 3, { width: labelW - 5 });
-    drawCell(doc, x + labelW, y, w - labelW, 14, value || "-", {
-      size: 5.5,
-      align: "left",
+      .text(label, x, y + 4, { width: labelW - 5 });
+    drawCell(doc, x + labelW, y, w - labelW, 15, value || "-", {
+      size: 5.4,
+      align: "center",
       stroke: "#777777",
       lineWidth: 0.4
     });
@@ -1451,10 +1451,10 @@ function streamOnePageScoresheetPdf(res, payload) {
     const pW = 22;
     const wW = 22;
     const nameW = w - codeW - pW - wW;
-    const rowH = 11;
-    const headH = 9;
-    const reserveH = 8;
-    const totalH = 10;
+    const rowH = 12;
+    const headH = 10;
+    const reserveH = 9;
+    const totalH = 11;
 
     doc.font("Helvetica-Bold").fontSize(6.3).fillColor(line)
       .text(sideTitle, x, y, { width: w, align: "center" });
@@ -1468,7 +1468,7 @@ function streamOnePageScoresheetPdf(res, payload) {
 
     data.starters.forEach(r => {
       drawCell(doc, x, yy, codeW, rowH, r.code, { size: 5.2, align: "center", stroke: line });
-      drawCell(doc, x + codeW, yy, nameW, rowH, r.name, { size: 5.2, stroke: line });
+      drawCell(doc, x + codeW, yy, nameW, rowH, r.name, { size: 5.2, align: "center", stroke: line });
       drawCell(doc, x + codeW + nameW, yy, pW, rowH, r.played, { size: 5.2, align: "center", stroke: line });
       drawCell(doc, x + codeW + nameW + pW, yy, wW, rowH, r.won, { size: 5.2, align: "center", stroke: line });
       yy += rowH;
@@ -1481,7 +1481,7 @@ function streamOnePageScoresheetPdf(res, payload) {
 
     data.reserves.forEach(r => {
       drawCell(doc, x, yy, codeW, rowH, r.code, { size: 5.2, align: "center", stroke: line });
-      drawCell(doc, x + codeW, yy, nameW, rowH, r.name, { size: 5.2, stroke: line });
+      drawCell(doc, x + codeW, yy, nameW, rowH, r.name, { size: 5.2, align: "center", stroke: line });
       drawCell(doc, x + codeW + nameW, yy, pW, rowH, r.played, { size: 5.2, align: "center", stroke: line });
       drawCell(doc, x + codeW + nameW + pW, yy, wW, rowH, r.won, { size: 5.2, align: "center", stroke: line });
       yy += rowH;
@@ -1536,9 +1536,9 @@ function streamOnePageScoresheetPdf(res, payload) {
 
   const roundsY = 108;
   const gapX = 8;
-  const gapY = 5;
+  const gapY = 6;
   const colW = (usable - gapX) / 2;
-  const roundH = 110;
+  const roundH = 119;
 
   drawRound(1, left, roundsY, colW);
   drawRound(2, left + colW + gapX, roundsY, colW);
@@ -1546,33 +1546,43 @@ function streamOnePageScoresheetPdf(res, payload) {
   drawRound(4, left + colW + gapX, roundsY + roundH + gapY, colW);
   drawRound(5, left, roundsY + (roundH + gapY) * 2, colW);
 
-  const finalY = roundsY + (roundH + gapY) * 2 + roundH + 6;
+  const finalY = roundsY + (roundH + gapY) * 2 + roundH + 8;
   const centerScoreW = 34;
   const finalLabelW = (usable - (centerScoreW * 2)) / 2;
-  drawCell(doc, left, finalY, finalLabelW, 17, "FINAL TOTAL", { size: 5.7, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
-  drawCell(doc, left + finalLabelW, finalY, centerScoreW, 17, t.home, { size: 7.8, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
-  drawCell(doc, left + finalLabelW + centerScoreW, finalY, centerScoreW, 17, t.away, { size: 7.8, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
-  drawCell(doc, left + finalLabelW + (centerScoreW * 2), finalY, finalLabelW, 17, "FINAL TOTAL", { size: 5.7, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left, finalY, finalLabelW, 18, "FINAL TOTAL", { size: 5.7, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left + finalLabelW, finalY, centerScoreW, 18, t.home, { size: 7.8, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left + finalLabelW + centerScoreW, finalY, centerScoreW, 18, t.away, { size: 7.8, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left + finalLabelW + (centerScoreW * 2), finalY, finalLabelW, 18, "FINAL TOTAL", { size: 5.7, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
 
-  const detailY = finalY + 23;
+  const detailY = finalY + 24;
   const detailGap = 18;
   const detailW = (usable - detailGap) / 2;
   const matchResult = t.completed < 25
     ? "IN PROGRESS"
     : (t.home > t.away ? `${f.homeTeamName} WIN` : t.away > t.home ? `${f.awayTeamName} WIN` : "DRAW");
 
-  drawDetailLine(left, detailY, "Player of Match", names.get(Number(f.playerOfMatchId)) || "-", detailW);
-  drawDetailLine(left, detailY + 17, "Break & Run", names.get(Number(f.breakRunPlayerId)) || "-", detailW);
-  drawDetailLine(left, detailY + 34, "Rack & Run", names.get(Number(f.rackRunPlayerId)) || "-", detailW);
-  drawDetailLine(left, detailY + 51, "Bonus Point", String(f.bonusPoints || 0), detailW);
+  const playerOfMatchText = (f.playerOfMatchIds || [])
+    .map(id => names.get(Number(id)))
+    .filter(Boolean)
+    .join(", ") || "-";
+  const breakRunText = (f.breakRunPlayerIds || [])
+    .map(id => names.get(Number(id)))
+    .filter(Boolean)
+    .join(", ") || "-";
+  const bonusText = f.bonusTeamName ? `${f.bonusTeamName} (+1)` : "-";
+
+  drawDetailLine(left, detailY, "Player/s of Tournament", playerOfMatchText, detailW);
+  drawDetailLine(left, detailY + 18, "Break & Run", breakRunText, detailW);
+  drawDetailLine(left, detailY + 36, "Rack & Run", names.get(Number(f.rackRunPlayerId)) || "-", detailW);
+  drawDetailLine(left, detailY + 54, "Bonus Point", bonusText, detailW);
 
   const rightX = left + detailW + detailGap;
   drawDetailLine(rightX, detailY, "Match Result", matchResult, detailW);
-  drawDetailLine(rightX, detailY + 17, "Home Frames Won", String(t.home), detailW);
-  drawDetailLine(rightX, detailY + 34, "Away Frames Won", String(t.away), detailW);
-  drawDetailLine(rightX, detailY + 51, "Status", String(f.status || "").replaceAll("_"," "), detailW);
+  drawDetailLine(rightX, detailY + 18, "Home Frames Won", String(t.home), detailW);
+  drawDetailLine(rightX, detailY + 36, "Away Frames Won", String(t.away), detailW);
+  drawDetailLine(rightX, detailY + 54, "Status", String(f.status || "").replaceAll("_"," "), detailW);
 
-  const rosterY = detailY + 77;
+  const rosterY = detailY + 82;
   const rosterGap = 18;
   const rosterW = (usable - rosterGap) / 2;
   const homeRosterEnd = drawRoster("HOME", left, rosterY, rosterW);
@@ -1587,19 +1597,19 @@ function streamOnePageScoresheetPdf(res, payload) {
   doc.font("Helvetica-Bold").fontSize(5.4).fillColor(line)
     .text(`CAPTAIN SIGNATURE (HOME):`, left, signY, { width: sigW });
   drawPdfTextFit(doc, homeCaptain, left, signY + 9, sigW, {
-    size: 5.2, minSize: 4.2, bold: true, color: line, height: 8
+    size: 5.2, minSize: 4.2, bold: true, align: "center", color: line, height: 8
   });
   doc.moveTo(left, signY + 25).lineTo(left + sigW, signY + 25).strokeColor(line).lineWidth(0.55).stroke();
 
   doc.font("Helvetica-Bold").fontSize(5.4).fillColor(line)
     .text(`CAPTAIN SIGNATURE (AWAY):`, awaySigX, signY, { width: sigW });
   drawPdfTextFit(doc, awayCaptain, awaySigX, signY + 9, sigW, {
-    size: 5.2, minSize: 4.2, bold: true, color: line, height: 8
+    size: 5.2, minSize: 4.2, bold: true, align: "center", color: line, height: 8
   });
   doc.moveTo(awaySigX, signY + 25).lineTo(awaySigX + sigW, signY + 25).strokeColor(line).lineWidth(0.55).stroke();
 
   doc.font("Helvetica").fontSize(4.2).fillColor("#777777")
-    .text("Generated by NCSF League Manager", left, H - 16, { width: usable, align: "center" });
+    .text("Generated by NCSF League Manager", left, H - 22, { width: usable, height: 7, align: "center", lineBreak: false });
 
   doc.end();
 }
