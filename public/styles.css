@@ -3594,3 +3594,62 @@ body.ncsf-live-fullscreen-active{
 .ncsf-live-fullscreen .live-next-frame strong{
   font-size:9px!important;
 }
+
+
+/* Active live preview fills the same outer width as Live Chat */
+.live-panel{
+  overflow:hidden;
+}
+.live-panel .live-stage{
+  width:100%!important;
+  max-width:100%!important;
+  margin:0!important;
+  padding:0!important;
+  box-sizing:border-box!important;
+}
+.live-panel #livePlayer.live-player-ready{
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:#000!important;
+  box-sizing:border-box!important;
+}
+.live-panel #livePlayer.live-player-ready .video-frame,
+.live-panel #livePlayer.live-player-ready .internal-live{
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+.live-panel #livePlayer.live-player-ready .video-frame video,
+.live-panel #livePlayer.live-player-ready .video-frame iframe,
+.live-panel #livePlayer.live-player-ready .internal-live video{
+  display:block!important;
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+}
+.live-panel .live-chat-inline-host{
+  width:100%!important;
+  max-width:100%!important;
+  margin-left:0!important;
+  margin-right:0!important;
+  box-sizing:border-box!important;
+}
+
+@media(max-width:760px){
+  .live-panel{
+    padding:8px!important;
+  }
+  .live-panel .live-stage,
+  .live-panel #livePlayer.live-player-ready,
+  .live-panel #livePlayer.live-player-ready .video-frame,
+  .live-panel #livePlayer.live-player-ready .internal-live{
+    width:100%!important;
+    border-radius:12px!important;
+  }
+}
