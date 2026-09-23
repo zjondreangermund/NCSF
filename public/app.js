@@ -758,37 +758,21 @@ function formatEventDate(value){
     document.documentElement.classList.add('ncsf-live-fullscreen-active');
     document.body.classList.add('ncsf-live-fullscreen-active');
     moveLiveChatForFullscreen(stage,true);
-    try{
-      if(screen.orientation?.lock)screen.orientation.lock('landscape').catch(()=>{});
-      if(window.NCSFApp&&typeof window.NCSFApp.enterLiveFullscreen==='function'){
-        window.NCSFApp.enterLiveFullscreen();
-      }else if(stage.requestFullscreen){
-        stage.requestFullscreen().catch(()=>{});
-      }else if(stage.webkitRequestFullscreen){
-        stage.webkitRequestFullscreen();
-      }
-    }catch(_e){}
+    window.dispatchEvent(new Event('resize'));
   }
 
   function exitNcsfLiveFullscreen(){
     const stage=ncsfFullscreenStage||$('.ncsf-live-fullscreen');
-    stage?.classList.remove('ncsf-live-fullscreen');
+    stage?.classList.remove('ncsf-live-fullscreen','ncsf-chat-open');
     document.documentElement.classList.remove('ncsf-live-fullscreen-active');
     document.body.classList.remove('ncsf-live-fullscreen-active');
     moveLiveChatForFullscreen(stage,false);
     ncsfFullscreenStage=null;
     requestAnimationFrame(()=>window.scrollTo(0,ncsfFullscreenScrollY||0));
     setTimeout(()=>window.scrollTo(0,ncsfFullscreenScrollY||0),220);
-    try{
-      if(window.NCSFApp&&typeof window.NCSFApp.exitLiveFullscreen==='function'){
-        window.NCSFApp.exitLiveFullscreen();
-      }else if(document.fullscreenElement&&document.exitFullscreen){
-        document.exitFullscreen().catch(()=>{});
-      }else if(document.webkitFullscreenElement&&document.webkitExitFullscreen){
-        document.webkitExitFullscreen();
-      }
-    }catch(_e){}
+    window.dispatchEvent(new Event('resize'));
   }
+
   window.exitNcsfLiveFullscreen=exitNcsfLiveFullscreen;
   window.__ncsfRestoreLivePage=()=>{
     if(!ncsfFullscreenStage){
@@ -919,7 +903,7 @@ function formatEventDate(value){
         '<span class="ncsf-live-word"><i></i>LIVE</span>'+
         (allowAudio?'<button class="ncsf-video-control ncsf-mute-control" type="button" aria-label="Unmute">'+liveControlIcon(video.muted?'muted':'volume')+'</button><span class="ncsf-sound-hint">Tap for sound</span>':'')+
       '</div>'+
-      '<button class="ncsf-video-control ncsf-fullscreen-control" type="button" aria-label="Full screen">'+liveControlIcon('fullscreen')+'</button>';
+      '<button class="ncsf-video-control ncsf-fullscreen-control" type="button" aria-label="Landscape view">'+liveControlIcon('fullscreen')+'<span class="ncsf-landscape-label">Landscape</span></button>';
     stage.appendChild(controls);
 
     const mute=controls.querySelector('.ncsf-mute-control');
@@ -933,10 +917,15 @@ function formatEventDate(value){
       if(!video.muted)video.play().catch(()=>{});
     });
 
-    controls.querySelector('.ncsf-fullscreen-control')?.addEventListener('click',e=>{
+    const landscapeBtn=controls.querySelector('.ncsf-fullscreen-control');
+    landscapeBtn?.addEventListener('click',e=>{
       e.stopPropagation();
       if(stage.classList.contains('ncsf-live-fullscreen'))exitNcsfLiveFullscreen();
       else enterNcsfLiveFullscreen(stage);
+      const active=stage.classList.contains('ncsf-live-fullscreen');
+      landscapeBtn.setAttribute('aria-label',active?'Exit landscape view':'Landscape view');
+      const label=landscapeBtn.querySelector('.ncsf-landscape-label');
+      if(label)label.textContent=active?'Exit':'Landscape';
     });
 
     video.addEventListener('click',()=>video.play().catch(()=>{}));
@@ -1598,6 +1587,8 @@ function formatEventDate(value){
       const fullscreen=drawer.classList.contains('fullscreen-chat');
       open=fullscreen?Boolean(value):true;
       drawer.classList.toggle('open',open);
+      const stage=drawer.closest('.ncsf-live-fullscreen');
+      stage?.classList.toggle('ncsf-chat-open',fullscreen&&open);
       handle.setAttribute('aria-expanded',open?'true':'false');
       const chevron=$('.live-chat-chevron',handle);
       if(chevron)chevron.textContent=open?'⌄':'⌃';
