@@ -3851,3 +3851,51 @@ body.ncsf-live-fullscreen-active{
     grid-template-columns:30px minmax(66px,auto) minmax(0,1fr)!important;
   }
 }
+
+
+/* Broadcaster video quality selector */
+.broadcast-quality-control{
+  flex:1 1 260px;
+  min-width:220px;
+  display:grid!important;
+  grid-template-columns:auto minmax(140px,1fr);
+  align-items:center;
+  gap:4px 10px;
+  padding:7px 11px;
+  border:1px solid #d5dee8;
+  border-radius:11px;
+  background:#fff;
+  color:var(--navy);
+}
+.broadcast-quality-control>span{
+  font-size:12px;
+  font-weight:850;
+  white-space:nowrap;
+}
+.broadcast-quality-control select{
+  width:100%;
+  min-width:0;
+  padding:7px 9px;
+  border:1px solid #d5dee8;
+  border-radius:8px;
+  background:#f8fafc;
+  color:var(--navy);
+  font:inherit;
+  font-size:13px;
+  font-weight:750;
+}
+.broadcast-quality-control small{
+  grid-column:1/-1;
+  min-width:0;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+@media(max-width:620px){
+  .broadcast-quality-control{
+    grid-column:1/-1;
+    min-width:0;
+    grid-template-columns:auto minmax(0,1fr);
+  }
+}

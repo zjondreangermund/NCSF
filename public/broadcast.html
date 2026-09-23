@@ -78,6 +78,15 @@
       <button class="btn danger hidden" id="stopBroadcast">Stop Live</button>
       <button class="btn light" id="switchCamera">Switch Camera</button>
       <button class="btn light" id="broadcastMic" type="button">Mic: On</button>
+      <label class="broadcast-quality-control" for="broadcastQuality">
+        <span>Stream quality</span>
+        <select id="broadcastQuality" aria-label="Stream quality">
+          <option value="auto" selected>Auto</option>
+          <option value="high">High · 1080p</option>
+          <option value="saver">Data Saver · 720p</option>
+        </select>
+        <small id="broadcastQualityStatus">Auto uses available camera and connection quality.</small>
+      </label>
       <button class="btn warning hidden" id="broadcastPermissions" type="button">Allow Camera & Mic</button>
       <button class="btn light" id="viewerPreviewBtn" type="button">Viewer View</button>
     </div>
