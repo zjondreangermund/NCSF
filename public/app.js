@@ -762,6 +762,17 @@ function formatEventDate(value){
     document.documentElement.classList.add('ncsf-live-fullscreen-active');
     document.body.classList.add('ncsf-live-fullscreen-active');
     moveLiveChatForFullscreen(stage,true);
+
+    // Full-screen only the live player. Do not rotate the Android activity.
+    try{
+      if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
+        window.NCSFApp.setVideoFullscreen(true);
+      }else if(stage.requestFullscreen&&!document.fullscreenElement){
+        stage.requestFullscreen().catch(()=>{});
+      }else if(stage.webkitRequestFullscreen&&!document.webkitFullscreenElement){
+        stage.webkitRequestFullscreen();
+      }
+    }catch(_e){}
     window.dispatchEvent(new Event('resize'));
   }
 
@@ -772,12 +783,33 @@ function formatEventDate(value){
     document.body.classList.remove('ncsf-live-fullscreen-active');
     moveLiveChatForFullscreen(stage,false);
     ncsfFullscreenStage=null;
+
+    try{
+      if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
+        window.NCSFApp.setVideoFullscreen(false);
+      }else if(document.fullscreenElement&&document.exitFullscreen){
+        document.exitFullscreen().catch(()=>{});
+      }else if(document.webkitFullscreenElement&&document.webkitExitFullscreen){
+        document.webkitExitFullscreen();
+      }
+    }catch(_e){}
+
     requestAnimationFrame(()=>window.scrollTo(0,ncsfFullscreenScrollY||0));
     setTimeout(()=>window.scrollTo(0,ncsfFullscreenScrollY||0),220);
     window.dispatchEvent(new Event('resize'));
   }
 
   window.exitNcsfLiveFullscreen=exitNcsfLiveFullscreen;
+  document.addEventListener('fullscreenchange',()=>{
+    if(!document.fullscreenElement&&ncsfFullscreenStage&&!(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function')){
+      exitNcsfLiveFullscreen();
+    }
+  });
+  document.addEventListener('webkitfullscreenchange',()=>{
+    if(!document.webkitFullscreenElement&&ncsfFullscreenStage&&!(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function')){
+      exitNcsfLiveFullscreen();
+    }
+  });
   window.__ncsfRestoreLivePage=()=>{
     if(!ncsfFullscreenStage){
       document.documentElement.classList.remove('ncsf-live-fullscreen-active');
