@@ -1143,6 +1143,7 @@ function formatEventDate(value){
     const preview=$('#broadcastPreview'),viewerPreview=$('#broadcastViewerPreview');
     const startBtn=$('#startBroadcast'),stopBtn=$('#stopBroadcast'),switchBtn=$('#switchCamera');
     const micBtn=$('#broadcastMic'),permissionBtn=$('#broadcastPermissions'),viewerPreviewBtn=$('#viewerPreviewBtn');
+    const qualitySelect=$('#broadcastQuality'),qualityStatus=$('#broadcastQualityStatus');
     const stage=$('#broadcastStage'),stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
     const viewerList=$('#broadcastViewerList');
     let facing='environment',stream=null,socket=null,starting=false,withAudio=true,chatStarted=false,viewerPreviewOn=false;
@@ -1151,6 +1152,79 @@ function formatEventDate(value){
     const pendingIce=new Map();
     const viewerNames=new Map();
     let mediaPermissionResolver=null;
+    const qualityProfiles={
+      auto:{width:1920,height:1080,maxBitrate:null,label:'Auto'},
+      high:{width:1920,height:1080,maxBitrate:4000000,label:'High'},
+      saver:{width:1280,height:720,maxBitrate:1200000,label:'Data Saver'}
+    };
+    let streamQuality=qualityProfiles[qualitySelect?.value]?qualitySelect.value:'auto';
+
+    const getQualityProfile=()=>qualityProfiles[streamQuality]||qualityProfiles.auto;
+    const videoConstraintsForQuality=()=>{
+      const profile=getQualityProfile();
+      return {
+        facingMode:{ideal:facing},
+        width:{ideal:profile.width},
+        height:{ideal:profile.height},
+        aspectRatio:{ideal:16/9},
+        frameRate:{ideal:30,max:30}
+      };
+    };
+    const configureVideoSenderQuality=async sender=>{
+      if(!sender||sender.track?.kind!=='video'||typeof sender.getParameters!=='function'||typeof sender.setParameters!=='function')return;
+      try{
+        const parameters=sender.getParameters();
+        if(!Array.isArray(parameters.encodings)||!parameters.encodings.length)return;
+        const maxBitrate=getQualityProfile().maxBitrate;
+        if(maxBitrate)parameters.encodings[0].maxBitrate=maxBitrate;
+        else delete parameters.encodings[0].maxBitrate;
+        await sender.setParameters(parameters);
+      }catch(_e){}
+    };
+    const updateQualityStatus=()=>{
+      if(!qualityStatus)return;
+      const profile=getQualityProfile();
+      const track=stream?.getVideoTracks?.()[0];
+      const settings=track?.getSettings?.();
+      if(settings?.width&&settings?.height){
+        const fps=settings.frameRate?Math.round(settings.frameRate):'up to 30';
+        qualityStatus.textContent=profile.label+' · camera '+settings.width+'×'+settings.height+' · '+fps+' fps';
+        return;
+      }
+      qualityStatus.textContent=profile.label==='Auto'
+        ? 'Auto uses the best available camera and connection quality.'
+        : profile.label+' requests '+profile.width+'p and uses '+(profile.label==='High'?'more':'less')+' data.';
+    };
+    const applySelectedQuality=async()=>{
+      if(!stream){updateQualityStatus();return}
+      const profile=getQualityProfile();
+      const track=stream.getVideoTracks()[0];
+      if(track?.applyConstraints){
+        try{
+          await track.applyConstraints({
+            width:{ideal:profile.width},
+            height:{ideal:profile.height},
+            aspectRatio:{ideal:16/9},
+            frameRate:{ideal:30,max:30}
+          });
+        }catch(_e){}
+      }
+      const senders=[...peers.values()].flatMap(pc=>typeof pc.getSenders==='function'?pc.getSenders():[]);
+      await Promise.all(senders.map(configureVideoSenderQuality));
+      updateQualityStatus();
+    };
+    qualitySelect?.addEventListener('change',async()=>{
+      streamQuality=qualityProfiles[qualitySelect.value]?qualitySelect.value:'auto';
+      qualitySelect.disabled=true;
+      try{
+        await applySelectedQuality();
+        const profile=getQualityProfile();
+        toast(stream?profile.label+' stream quality selected':'Stream quality set to '+profile.label);
+      }finally{
+        qualitySelect.disabled=false;
+      }
+    });
+    updateQualityStatus();
 
     window.onNcsfMediaPermissionResult=(cameraGranted,audioGranted)=>{
       if(mediaPermissionResolver){
@@ -1372,7 +1446,10 @@ function formatEventDate(value){
         peers.set(viewerId,pc);
         pendingIce.set(viewerId,[]);
 
-        stream.getTracks().forEach(track=>pc.addTrack(track,stream));
+        for(const track of stream.getTracks()){
+          const sender=pc.addTrack(track,stream);
+          if(track.kind==='video')await configureVideoSenderQuality(sender);
+        }
 
         pc.onicecandidate=event=>{
           if(event.candidate&&socket?.readyState===WebSocket.OPEN){
@@ -1514,15 +1591,7 @@ function formatEventDate(value){
         await setBroadcastAwake(true);
         await new Promise(resolve=>setTimeout(resolve,350));
 
-        const videoConstraints={
-          facingMode:{ideal:facing},
-          width:{ideal:1920},
-          height:{ideal:1080},
-          aspectRatio:{ideal:16/9},
-          frameRate:{ideal:30,max:30}
-        };
-
-        stream=await navigator.mediaDevices.getUserMedia({video:videoConstraints,audio:false});
+        stream=await navigator.mediaDevices.getUserMedia({video:videoConstraintsForQuality(),audio:false});
         withAudio=false;
         try{
           const audioStream=await navigator.mediaDevices.getUserMedia({
@@ -1541,6 +1610,7 @@ function formatEventDate(value){
         updateMicButton();
 
         preview.srcObject=stream;
+        updateQualityStatus();
         await preview.play().catch(()=>{});
         stateLabel.textContent=withAudio?'CONNECTING':'CONNECTING • VIDEO ONLY';
 
