@@ -3768,3 +3768,130 @@ body.ncsf-live-fullscreen-active{
   height:100%!important;
   object-fit:cover!important;
 }
+
+
+/* Live preview sizing + true video-only landscape fullscreen */
+body[data-page="live-page"] .live-stage,
+body[data-page="broadcast-page"] .broadcast-video-shell{
+  width:100%!important;
+  max-width:none!important;
+  box-sizing:border-box!important;
+}
+
+body[data-page="live-page"] #livePlayer,
+body[data-page="live-page"] #livePlayer .video-frame.internal-live,
+body[data-page="broadcast-page"] .broadcast-video-shell{
+  width:100%!important;
+  max-width:none!important;
+  margin-left:0!important;
+  margin-right:0!important;
+}
+
+body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) #livePlayer .video-frame.internal-live,
+body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .broadcast-video-shell{
+  aspect-ratio:16/9!important;
+  min-height:0!important;
+  height:auto!important;
+  overflow:hidden!important;
+  border-radius:18px!important;
+  background:#000!important;
+}
+
+body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) #livePlayer .video-frame.internal-live video,
+body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .broadcast-video-shell video{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:none!important;
+  object-fit:contain!important;
+  object-position:center center!important;
+  background:#000!important;
+}
+
+/* Landscape button opens only the video stage; the surrounding app never rotates. */
+html.ncsf-live-fullscreen-active,
+body.ncsf-live-fullscreen-active{
+  overflow:hidden!important;
+  background:transparent!important;
+}
+
+.ncsf-live-fullscreen{
+  --ncsf-side-chat:clamp(190px,26%,280px);
+  position:fixed!important;
+  top:50%!important;
+  left:50%!important;
+  right:auto!important;
+  bottom:auto!important;
+  z-index:2147483000!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  max-width:none!important;
+  max-height:none!important;
+  overflow:hidden!important;
+  background:#000!important;
+  transform-origin:center center!important;
+}
+
+@media(orientation:portrait){
+  .ncsf-live-fullscreen{
+    width:100dvh!important;
+    height:100dvw!important;
+    transform:translate(-50%,-50%) rotate(90deg)!important;
+  }
+}
+@media(orientation:landscape){
+  .ncsf-live-fullscreen{
+    width:100dvw!important;
+    height:100dvh!important;
+    transform:translate(-50%,-50%)!important;
+  }
+}
+
+.ncsf-live-fullscreen video{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:none!important;
+  max-height:none!important;
+  margin:0!important;
+  object-fit:contain!important;
+  object-position:center center!important;
+  background:#000!important;
+  transform:none!important;
+}
+
+/* No app/card background is visible in landscape mode. */
+.ncsf-live-fullscreen::before,
+.ncsf-live-fullscreen::after{
+  content:none!important;
+}
+.ncsf-live-fullscreen .live-waiting,
+.ncsf-live-fullscreen .broadcast-overlay{
+  background:transparent!important;
+}
+
+/* Chat is a transparent right rail; when open it reserves space instead of covering video. */
+.ncsf-live-fullscreen.ncsf-chat-open video{
+  width:calc(100% - var(--ncsf-side-chat))!important;
+  right:var(--ncsf-side-chat)!important;
+}
+.ncsf-live-fullscreen.ncsf-chat-open .ncsf-live-controls{
+  right:var(--ncsf-side-chat)!important;
+}
+.ncsf-live-fullscreen.ncsf-chat-open .live-match-overlay{
+  right:calc(var(--ncsf-side-chat) + 12px)!important;
+}
+.ncsf-live-fullscreen .fullscreen-chat.open,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-body,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-head,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-messages,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-form,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-signin{
+  background:transparent!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
