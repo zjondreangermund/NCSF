@@ -674,6 +674,10 @@ function formatEventDate(value){
   }
   function renderLivePlayer(live){
     const box=$('#livePlayer');
+    if(box){
+      box.classList.remove('empty');
+      box.classList.add('live-player-ready');
+    }
     const title=$('#liveTitle');
     const meta=$('#liveMeta');
     if(title)title.textContent=live.title||'Live Match';
@@ -934,6 +938,8 @@ function formatEventDate(value){
   function startInternalLiveViewer(fixtureId){
     const box=$('#livePlayer');
     if(!box)return;
+    box.classList.remove('empty');
+    box.classList.add('live-player-ready');
     if(!window.RTCPeerConnection){
       box.innerHTML='<div class="empty">Live playback is not supported on this device.</div>';
       return;
