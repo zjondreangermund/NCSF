@@ -1168,7 +1168,8 @@ function formatEventDate(value){
     const qualitySelect=$('#broadcastQuality'),qualityStatus=$('#broadcastQualityStatus');
     const stage=$('#broadcastStage'),stateLabel=$('#broadcastState'),viewerLabel=$('#broadcastViewers');
     const viewerList=$('#broadcastViewerList');
-    let facing='environment',stream=null,socket=null,starting=false,withAudio=true,chatStarted=false,viewerPreviewOn=false;
+    let facing='environment',stream=null,cameraStream=null,socket=null,starting=false,withAudio=true,chatStarted=false,viewerPreviewOn=false;
+    let landscapeVideo=null,landscapeCanvas=null,landscapeCanvasStream=null,landscapeFrame=0;
     let manualStop=false,reconnectTimer=null,reconnectAttempt=0,connectingPublisher=false;
     const peers=new Map();
     const pendingIce=new Map();
@@ -1206,7 +1207,7 @@ function formatEventDate(value){
     const updateQualityStatus=()=>{
       if(!qualityStatus)return;
       const profile=getQualityProfile();
-      const track=stream?.getVideoTracks?.()[0];
+      const track=(cameraStream||stream)?.getVideoTracks?.()[0];
       const settings=track?.getSettings?.();
       if(settings?.width&&settings?.height){
         const fps=settings.frameRate?Math.round(settings.frameRate):'up to 30';
@@ -1220,7 +1221,7 @@ function formatEventDate(value){
     const applySelectedQuality=async()=>{
       if(!stream){updateQualityStatus();return}
       const profile=getQualityProfile();
-      const track=stream.getVideoTracks()[0];
+      const track=(cameraStream||stream).getVideoTracks()[0];
       if(track?.applyConstraints){
         try{
           await track.applyConstraints({
@@ -1423,8 +1424,82 @@ function formatEventDate(value){
     };
 
     const stopTracks=()=>{
+      if(landscapeFrame)cancelAnimationFrame(landscapeFrame);
+      landscapeFrame=0;
+      if(landscapeVideo){
+        try{landscapeVideo.pause();landscapeVideo.srcObject=null}catch(_e){}
+      }
+      landscapeVideo=null;
       if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+      if(landscapeCanvasStream){
+        landscapeCanvasStream.getTracks().forEach(t=>t.stop());
+        landscapeCanvasStream=null;
+      }
+      if(cameraStream){
+        cameraStream.getTracks().forEach(t=>t.stop());
+        cameraStream=null;
+      }
+      landscapeCanvas=null;
       preview.srcObject=null;
+    };
+
+    const prepareLandscapeBroadcastStream=async source=>{
+      const sourceTrack=source.getVideoTracks()[0];
+      const settings=sourceTrack?.getSettings?.();
+      if(!sourceTrack||!(Number(settings?.height)>Number(settings?.width))||!HTMLCanvasElement.prototype.captureStream){
+        return source;
+      }
+
+      const cameraVideo=document.createElement('video');
+      cameraVideo.muted=true;
+      cameraVideo.playsInline=true;
+      cameraVideo.srcObject=new MediaStream([sourceTrack]);
+      await cameraVideo.play();
+      if(cameraVideo.readyState<2){
+        await new Promise(resolve=>cameraVideo.addEventListener('loadeddata',resolve,{once:true}));
+      }
+
+      const canvas=document.createElement('canvas');
+      const context=canvas.getContext('2d',{alpha:false});
+      if(!context){
+        cameraVideo.pause();
+        cameraVideo.srcObject=null;
+        return source;
+      }
+      landscapeVideo=cameraVideo;
+      landscapeCanvas=canvas;
+
+      const drawFrame=()=>{
+        if(landscapeVideo!==cameraVideo)return;
+        const width=cameraVideo.videoWidth||Number(settings.width)||0;
+        const height=cameraVideo.videoHeight||Number(settings.height)||0;
+        if(width&&height){
+          const portrait=height>width;
+          const outputWidth=portrait?height:width;
+          const outputHeight=portrait?width:height;
+          if(canvas.width!==outputWidth||canvas.height!==outputHeight){
+            canvas.width=outputWidth;
+            canvas.height=outputHeight;
+          }
+          context.setTransform(1,0,0,1,0,0);
+          if(portrait){
+            context.translate(outputWidth,0);
+            context.rotate(Math.PI/2);
+            context.drawImage(cameraVideo,0,0,outputHeight,outputWidth);
+          }else{
+            context.drawImage(cameraVideo,0,0,outputWidth,outputHeight);
+          }
+        }
+        landscapeFrame=requestAnimationFrame(drawFrame);
+      };
+      drawFrame();
+
+      landscapeCanvasStream=canvas.captureStream(30);
+      const output=new MediaStream([
+        ...landscapeCanvasStream.getVideoTracks(),
+        ...source.getAudioTracks()
+      ]);
+      return output;
     };
 
     const stop=()=>{
@@ -1603,7 +1678,8 @@ function formatEventDate(value){
         await setBroadcastAwake(true);
         await new Promise(resolve=>setTimeout(resolve,350));
 
-        stream=await navigator.mediaDevices.getUserMedia({video:videoConstraintsForQuality(),audio:false});
+        cameraStream=await navigator.mediaDevices.getUserMedia({video:videoConstraintsForQuality(),audio:false});
+        stream=await prepareLandscapeBroadcastStream(cameraStream);
         withAudio=false;
         try{
           const audioStream=await navigator.mediaDevices.getUserMedia({
