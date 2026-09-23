@@ -762,20 +762,25 @@ function formatEventDate(value){
     if(label)label.textContent=active?'Exit':'Landscape';
   }
 
+  function syncLiveVideoOrientation(stage,active){
+    if(!stage)return;
+    const portrait=window.innerHeight>window.innerWidth;
+    stage.classList.toggle('ncsf-live-rotated',Boolean(active&&portrait));
+  }
+
   function enterNcsfLiveFullscreen(stage){
     if(!stage)return;
     ncsfFullscreenScrollY=window.scrollY||document.documentElement.scrollTop||0;
     ncsfFullscreenStage=stage;
     stage.classList.add('ncsf-live-fullscreen');
+    syncLiveVideoOrientation(stage,true);
     document.documentElement.classList.add('ncsf-live-fullscreen-active');
     document.body.classList.add('ncsf-live-fullscreen-active');
     moveLiveChatForFullscreen(stage,true);
     syncLiveLandscapeControl(stage,true);
 
     try{
-      if(window.NCSFApp&&typeof window.NCSFApp.enterLiveFullscreen==='function'){
-        window.NCSFApp.enterLiveFullscreen();
-      }else if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
+      if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
         window.NCSFApp.setVideoFullscreen(true);
       }else if(stage.requestFullscreen&&!document.fullscreenElement){
         stage.requestFullscreen().catch(()=>{});
@@ -789,6 +794,7 @@ function formatEventDate(value){
   function exitNcsfLiveFullscreen(){
     const stage=ncsfFullscreenStage||$('.ncsf-live-fullscreen');
     stage?.classList.remove('ncsf-live-fullscreen','ncsf-chat-open');
+    syncLiveVideoOrientation(stage,false);
     document.documentElement.classList.remove('ncsf-live-fullscreen-active');
     document.body.classList.remove('ncsf-live-fullscreen-active');
     moveLiveChatForFullscreen(stage,false);
@@ -796,9 +802,7 @@ function formatEventDate(value){
     ncsfFullscreenStage=null;
 
     try{
-      if(window.NCSFApp&&typeof window.NCSFApp.exitLiveFullscreen==='function'){
-        window.NCSFApp.exitLiveFullscreen();
-      }else if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
+      if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
         window.NCSFApp.setVideoFullscreen(false);
       }else if(document.fullscreenElement&&document.exitFullscreen){
         document.exitFullscreen().catch(()=>{});
@@ -835,7 +839,11 @@ function formatEventDate(value){
   };
   window.addEventListener('pageshow',()=>window.__ncsfRestoreLivePage?.());
   window.addEventListener('orientationchange',()=>{
-    if(!ncsfFullscreenStage)setTimeout(()=>window.__ncsfRestoreLivePage?.(),160);
+    if(ncsfFullscreenStage){
+      setTimeout(()=>syncLiveVideoOrientation(ncsfFullscreenStage,true),100);
+    }else{
+      setTimeout(()=>window.__ncsfRestoreLivePage?.(),160);
+    }
   });
 
   function ensureLiveScoreOverlay(stage){
