@@ -1161,168 +1161,304 @@ function streamOnePageScoresheetPdf(res, payload) {
   const doc = new PDFDocument({
     size: "A4",
     layout: "portrait",
-    margin: 18,
+    margin: 12,
     autoFirstPage: true,
     info: { Title: `NCSF ${f.homeTeamName} vs ${f.awayTeamName}` }
   });
 
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="NCSF-${String(f.homeTeamName).replace(/[^a-z0-9]+/gi,"-")}-vs-${String(f.awayTeamName).replace(/[^a-z0-9]+/gi,"-")}.pdf"`);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="NCSF-${String(f.homeTeamName).replace(/[^a-z0-9]+/gi,"-")}-vs-${String(f.awayTeamName).replace(/[^a-z0-9]+/gi,"-")}.pdf"`
+  );
   res.setHeader("Cache-Control", "no-store");
   doc.pipe(res);
 
   const W = doc.page.width;
-  const left = 18;
-  const usable = W - 36;
-
-  try {
-    doc.image(getNcsfLogoJpeg(), left, 14, { fit: [32, 32], align: "center", valign: "center" });
-  } catch (_e) {}
-
-  doc.fillColor("#0b223f").font("Helvetica-Bold").fontSize(11.5)
-    .text("NAMIBIA CUE SPORTS FEDERATION", 56, 15, { width: usable - 38 });
-  doc.fontSize(8).fillColor("#222")
-    .text("Blackball League Scoresheet", 56, 30, { width: usable - 38 });
-  doc.font("Helvetica").fontSize(6).fillColor("#5f6874")
-    .text(`${f.seasonName} - ${f.divisionName} - Round ${f.roundNo}`, 56, 42, { width: usable - 38 });
+  const H = doc.page.height;
+  const left = 12;
+  const usable = W - 24;
+  const line = "#111111";
+  const light = "#f4f4f4";
+  const lighter = "#fafafa";
 
   const d = f.fixtureDate ? new Date(f.fixtureDate) : null;
   const dateText = d ? d.toLocaleDateString("en-GB", { timeZone: "Africa/Windhoek" }) : "TBA";
   const timeText = d ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Windhoek" }) : "TBA";
-  const meta = [["DATE", dateText], ["TIME", timeText], ["VENUE", f.venue || "TBA"]];
-  const metaGap = 4;
-  const metaY = 56;
-  const metaW = (usable - (metaGap * 2)) / 3;
-  meta.forEach((m, i) => {
-    const x = left + i * (metaW + metaGap);
-    drawCell(doc, x, metaY, metaW, 24, m[1], {
-      size: 6.5, bold: true, align: "center", fill: "#f3f5f7"
-    });
-    doc.font("Helvetica-Bold").fontSize(4.5).fillColor("#687280")
-      .text(m[0], x + 2, metaY + 3, { width: metaW - 4, align: "center" });
-  });
-
-  const heroY = 86;
-  const heroH = 36;
-  drawCell(doc, left, heroY, usable, heroH, "", { fill: "#eef2f6", stroke: "#0b223f", lineWidth: 0.9 });
-  const teamW = (usable / 2) - 54;
-  doc.fillColor("#5c6775").font("Helvetica-Bold").fontSize(4.8).text("HOME", left + 8, heroY + 6);
-  doc.fillColor("#0b223f").fontSize(9.5).text(f.homeTeamName, left + 8, heroY + 16, { width: teamW, ellipsis: true });
-  doc.fillColor("#5c6775").fontSize(4.8).text("AWAY", W / 2 + 46, heroY + 6, { width: teamW, align: "right" });
-  doc.fillColor("#0b223f").fontSize(9.5).text(f.awayTeamName, W / 2 + 46, heroY + 16, { width: teamW, align: "right", ellipsis: true });
-  doc.font("Helvetica-Bold").fontSize(15).fillColor("#0b223f")
-    .text(`${t.home}  -  ${t.away}`, W / 2 - 48, heroY + 8, { width: 96, align: "center" });
-  doc.fontSize(5).fillColor("#5c6775")
-    .text(`${t.completed}/25 frames`, W / 2 - 48, heroY + 25, { width: 96, align: "center" });
-
-  const roundsY = 130;
-  const horizontalGap = 6;
-  const verticalGap = 5;
-  const colW = (usable - horizontalGap) / 2;
-  const rowH = 13;
-  const headH = 13;
-  const tableHeadH = 9;
-  const roundBlockH = headH + tableHeadH + (5 * rowH);
   const letters = ["A","B","C","D","E"];
 
-  for (let round = 1; round <= 5; round++) {
-    const row = Math.floor((round - 1) / 2);
-    const col = (round - 1) % 2;
-    const isLastSingle = round === 5;
-    const x = isLastSingle
-      ? left
-      : left + col * (colW + horizontalGap);
-    const yRound = roundsY + row * (roundBlockH + verticalGap);
+  const playerStat = playerId => {
+    const frames = payload.frames.filter(fr =>
+      (Number(fr.home_player_id) === Number(playerId) || Number(fr.away_player_id) === Number(playerId)) &&
+      Boolean(fr.winner_side)
+    );
+    return {
+      played: frames.length,
+      won: frames.filter(fr => Number(fr.winner_player_id) === Number(playerId)).length
+    };
+  };
+
+  const rosterRows = side => {
+    const starters = payload.lineups
+      .filter(p => p.side === side)
+      .sort((a,b) => Number(a.slot) - Number(b.slot))
+      .map((p,i) => ({
+        code: side === "HOME" ? String(i + 1) : letters[i],
+        name: `${p.first_name} ${p.last_name}`.trim(),
+        ...playerStat(p.player_id),
+        reserve: false
+      }));
+    const reserves = payload.reserves
+      .filter(p => p.side === side)
+      .sort((a,b) => Number(a.reserve_slot) - Number(b.reserve_slot))
+      .map((p,i) => ({
+        code: side === "HOME" ? String(i + 6) : ["F","G"][i],
+        name: `${p.first_name} ${p.last_name}`.trim(),
+        ...playerStat(p.player_id),
+        reserve: true
+      }));
+    return { starters, reserves };
+  };
+
+  const drawRound = (round, x, y, w) => {
     const frames = payload.frames.filter(fr => Number(fr.round_no) === round);
-    const rh = frames.filter(fr => fr.winner_side === "HOME").length;
-    const ra = frames.filter(fr => fr.winner_side === "AWAY").length;
+    const home = frames.filter(fr => fr.winner_side === "HOME").length;
+    const away = frames.filter(fr => fr.winner_side === "AWAY").length;
+    const progressiveHome = payload.frames.filter(fr => Number(fr.round_no) <= round && fr.winner_side === "HOME").length;
+    const progressiveAway = payload.frames.filter(fr => Number(fr.round_no) <= round && fr.winner_side === "AWAY").length;
 
-    drawCell(doc, x, yRound, colW, headH, `ROUND ${round}     ${rh}-${ra}`, {
-      size: 7, bold: true, align: "center", fill: "#e9edf2", stroke: "#7c8794"
-    });
+    const titleH = 13;
+    const headH = 9;
+    const rowH = 14;
+    const totalH = 9;
+    const progressiveH = 9;
 
-    const yHead = yRound + headH;
-    const narrow = 11;
-    const scoreW = 15;
-    const playerW = (colW - (narrow * 2) - (scoreW * 2)) / 2;
-    const widths = [narrow, playerW, scoreW, scoreW, playerW, narrow];
-    const labels = ["#", "HOME", "H", "A", "AWAY", "#"];
+    doc.font("Helvetica-Bold").fontSize(7.2).fillColor(line)
+      .text(`ROUND ${round}`, x, y + 2, { width: w, align: "center" });
+    doc.font("Helvetica-Bold").fontSize(5.8)
+      .text(`${home}-${away}`, x + w - 38, y + 3, { width: 34, align: "right" });
+
+    const yHead = y + titleH;
+    const slotW = 13;
+    const scoreW = 18;
+    const vsW = 14;
+    const playerW = (w - (slotW * 2) - (scoreW * 2) - vsW) / 2;
+    const widths = [slotW, playerW, scoreW, vsW, scoreW, playerW, slotW];
+    const labels = ["#", "HOME TEAM", "H", "vs", "A", "AWAY TEAM", "#"];
     let cx = x;
+
     labels.forEach((label, idx) => {
-      drawCell(doc, cx, yHead, widths[idx], tableHeadH, label, {
-        size: 4.7, bold: true, align: "center", fill: "#f7f8fa"
+      drawCell(doc, cx, yHead, widths[idx], headH, label, {
+        size: idx === 1 || idx === 5 ? 4.5 : 4.8,
+        bold: true,
+        align: "center",
+        fill: lighter,
+        stroke: line,
+        lineWidth: 0.45
       });
       cx += widths[idx];
     });
 
     frames.forEach((fr, i) => {
-      const y = yHead + tableHeadH + i * rowH;
+      const yy = yHead + headH + i * rowH;
       const vals = [
         fr.home_slot,
         fr.home_player_name,
         fr.winner_side === "HOME" ? "1" : "0",
+        "vs",
         fr.winner_side === "AWAY" ? "1" : "0",
         fr.away_player_name,
         letters[(Number(fr.away_slot || 1) - 1)] || ""
       ];
       cx = x;
       vals.forEach((val, idx) => {
-        drawCell(doc, cx, y, widths[idx], rowH, val, {
-          size: idx === 1 || idx === 4 ? 5.5 : 6.1,
-          bold: idx === 2 || idx === 3,
-          align: idx === 1 ? "left" : idx === 4 ? "right" : "center"
+        drawCell(doc, cx, yy, widths[idx], rowH, val, {
+          size: idx === 1 || idx === 5 ? 5.25 : idx === 3 ? 4.6 : 5.8,
+          bold: idx === 2 || idx === 4,
+          align: idx === 1 ? "left" : idx === 5 ? "right" : "center",
+          stroke: line,
+          lineWidth: 0.45
         });
         cx += widths[idx];
       });
     });
-  }
 
-  const summaryY = roundsY + (3 * roundBlockH) + (2 * verticalGap) + 8;
-  const matchResult = t.completed < 25 ? "IN PROGRESS" :
-    (t.home > t.away ? `${f.homeTeamName} WON` : t.away > t.home ? `${f.awayTeamName} WON` : "DRAW");
-  const summary = [
-    ["MATCH RESULT", matchResult],
-    ["PLAYER OF MATCH", names.get(Number(f.playerOfMatchId)) || "-"],
-    ["BREAK & RUN", names.get(Number(f.breakRunPlayerId)) || "-"],
-    ["RACK & RUN", names.get(Number(f.rackRunPlayerId)) || "-"],
-    ["BONUS", String(f.bonusPoints || 0)],
-    ["STATUS", String(f.status || "").replaceAll("_"," ")]
-  ];
-  const summaryGap = 4;
-  const summaryCellW = (usable - (summaryGap * 2)) / 3;
-  const summaryCellH = 27;
-  summary.forEach((s, i) => {
-    const row = Math.floor(i / 3);
-    const col = i % 3;
-    const x = left + col * (summaryCellW + summaryGap);
-    const y = summaryY + row * (summaryCellH + 3);
-    drawCell(doc, x, y, summaryCellW, summaryCellH, s[1], {
-      size: 6.2, bold: true, align: "center", fill: i === 0 ? "#f3e8c8" : "#f7f8fa"
+    const totalY = yHead + headH + (5 * rowH);
+    const half = w / 2;
+    drawCell(doc, x, totalY, half - 18, totalH, "TOTAL", { size: 5.1, bold: true, align: "center", stroke: line });
+    drawCell(doc, x + half - 18, totalY, 18, totalH, home, { size: 5.5, bold: true, align: "center", stroke: line });
+    drawCell(doc, x + half, totalY, 18, totalH, away, { size: 5.5, bold: true, align: "center", stroke: line });
+    drawCell(doc, x + half + 18, totalY, half - 18, totalH, "TOTAL", { size: 5.1, bold: true, align: "center", stroke: line });
+
+    const pY = totalY + totalH;
+    drawCell(doc, x, pY, half - 18, progressiveH, "Progressive Total", { size: 4.5, align: "center", stroke: line });
+    drawCell(doc, x + half - 18, pY, 18, progressiveH, progressiveHome, { size: 5.2, bold: true, align: "center", stroke: line });
+    drawCell(doc, x + half, pY, 18, progressiveH, progressiveAway, { size: 5.2, bold: true, align: "center", stroke: line });
+    drawCell(doc, x + half + 18, pY, half - 18, progressiveH, "Progressive Total", { size: 4.5, align: "center", stroke: line });
+
+    return titleH + headH + (5 * rowH) + totalH + progressiveH;
+  };
+
+  const drawDetailLine = (x, y, label, value, w) => {
+    const labelW = 105;
+    doc.font("Helvetica-Bold").fontSize(5.4).fillColor(line)
+      .text(label, x, y + 3, { width: labelW - 5 });
+    drawCell(doc, x + labelW, y, w - labelW, 14, value || "-", {
+      size: 5.5,
+      align: "left",
+      stroke: "#777777",
+      lineWidth: 0.4
     });
-    doc.font("Helvetica-Bold").fontSize(4.4).fillColor("#6a7380")
-      .text(s[0], x + 2, y + 3, { width: summaryCellW - 4, align: "center" });
-  });
+  };
 
-  const signY = summaryY + (summaryCellH * 2) + 16;
+  const drawRoster = (side, x, y, w) => {
+    const data = rosterRows(side);
+    const sideTitle = side === "HOME" ? "HOME TEAM" : "AWAY TEAM";
+    const codeW = 18;
+    const pW = 22;
+    const wW = 22;
+    const nameW = w - codeW - pW - wW;
+    const rowH = 11;
+    const headH = 9;
+    const reserveH = 8;
+    const totalH = 10;
+
+    doc.font("Helvetica-Bold").fontSize(6.3).fillColor(line)
+      .text(sideTitle, x, y, { width: w, align: "center" });
+
+    let yy = y + 10;
+    drawCell(doc, x, yy, codeW, headH, "", { fill: light, stroke: line });
+    drawCell(doc, x + codeW, yy, nameW, headH, "", { fill: light, stroke: line });
+    drawCell(doc, x + codeW + nameW, yy, pW, headH, "P", { size: 5, bold: true, align: "center", fill: light, stroke: line });
+    drawCell(doc, x + codeW + nameW + pW, yy, wW, headH, "W", { size: 5, bold: true, align: "center", fill: light, stroke: line });
+    yy += headH;
+
+    data.starters.forEach(r => {
+      drawCell(doc, x, yy, codeW, rowH, r.code, { size: 5.2, align: "center", stroke: line });
+      drawCell(doc, x + codeW, yy, nameW, rowH, r.name, { size: 5.2, stroke: line });
+      drawCell(doc, x + codeW + nameW, yy, pW, rowH, r.played, { size: 5.2, align: "center", stroke: line });
+      drawCell(doc, x + codeW + nameW + pW, yy, wW, rowH, r.won, { size: 5.2, align: "center", stroke: line });
+      yy += rowH;
+    });
+
+    drawCell(doc, x, yy, w, reserveH, "RESERVES", {
+      size: 4.8, bold: true, align: "center", fill: light, stroke: line
+    });
+    yy += reserveH;
+
+    data.reserves.forEach(r => {
+      drawCell(doc, x, yy, codeW, rowH, r.code, { size: 5.2, align: "center", stroke: line });
+      drawCell(doc, x + codeW, yy, nameW, rowH, r.name, { size: 5.2, stroke: line });
+      drawCell(doc, x + codeW + nameW, yy, pW, rowH, r.played, { size: 5.2, align: "center", stroke: line });
+      drawCell(doc, x + codeW + nameW + pW, yy, wW, rowH, r.won, { size: 5.2, align: "center", stroke: line });
+      yy += rowH;
+    });
+
+    drawCell(doc, x, yy, codeW + nameW, totalH, "TOTAL", {
+      size: 5.2, bold: true, align: "right", stroke: line
+    });
+    drawCell(doc, x + codeW + nameW, yy, pW, totalH, t.completed, {
+      size: 5.5, bold: true, align: "center", stroke: line
+    });
+    drawCell(doc, x + codeW + nameW + pW, yy, wW, totalH, side === "HOME" ? t.home : t.away, {
+      size: 5.5, bold: true, align: "center", stroke: line
+    });
+
+    return yy + totalH;
+  };
+
+  try {
+    doc.image(getNcsfLogoJpeg(), left + 2, 13, { fit: [38, 38], align: "center", valign: "center" });
+  } catch (_e) {}
+
+  doc.fillColor(line).font("Helvetica-Bold").fontSize(12.5)
+    .text("NAMIBIA CUE SPORTS FEDERATION", 56, 15, { width: usable - 90, align: "center" });
+  doc.fontSize(9.1)
+    .text("Blackball League Scoresheet", 56, 30, { width: usable - 90, align: "center" });
+  doc.font("Helvetica").fontSize(5.2).fillColor("#444444")
+    .text(`${f.seasonName || ""} - ${f.divisionName || ""} - Round ${f.roundNo || ""}`, 56, 43, { width: usable - 90, align: "center" });
+  doc.fontSize(5.2).fillColor(line)
+    .text(`STARTING TIME: ${timeText}   |   DATE: ${dateText}   |   VENUE: ${f.venue || "TBA"}`, left, 54, { width: usable, align: "center" });
+
+  const teamLabelY = 66;
+  const teamBoxY = 75;
+  const teamGap = 38;
+  const teamW = (usable - teamGap) / 2;
+  doc.font("Helvetica-Bold").fontSize(5).fillColor(line).text("HOME TEAM", left, teamLabelY);
+  doc.text("AWAY TEAM", left + teamW + teamGap, teamLabelY);
+  drawCell(doc, left, teamBoxY, teamW, 22, f.homeTeamName, { size: 8.3, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left + teamW + teamGap, teamBoxY, teamW, 22, f.awayTeamName, { size: 8.3, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  doc.font("Helvetica-Bold").fontSize(7).fillColor(line)
+    .text("vs", left + teamW, teamBoxY + 7, { width: teamGap, align: "center" });
+
+  const roundsY = 108;
+  const gapX = 8;
+  const gapY = 5;
+  const colW = (usable - gapX) / 2;
+  const roundH = 110;
+
+  drawRound(1, left, roundsY, colW);
+  drawRound(2, left + colW + gapX, roundsY, colW);
+  drawRound(3, left, roundsY + roundH + gapY, colW);
+  drawRound(4, left + colW + gapX, roundsY + roundH + gapY, colW);
+  drawRound(5, left, roundsY + (roundH + gapY) * 2, colW);
+
+  const finalY = roundsY + (roundH + gapY) * 2 + roundH + 6;
+  const centerScoreW = 34;
+  const finalLabelW = (usable - (centerScoreW * 2)) / 2;
+  drawCell(doc, left, finalY, finalLabelW, 17, "FINAL TOTAL", { size: 5.7, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left + finalLabelW, finalY, centerScoreW, 17, t.home, { size: 7.8, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left + finalLabelW + centerScoreW, finalY, centerScoreW, 17, t.away, { size: 7.8, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left + finalLabelW + (centerScoreW * 2), finalY, finalLabelW, 17, "FINAL TOTAL", { size: 5.7, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+
+  const detailY = finalY + 23;
+  const detailGap = 18;
+  const detailW = (usable - detailGap) / 2;
+  const matchResult = t.completed < 25
+    ? "IN PROGRESS"
+    : (t.home > t.away ? `${f.homeTeamName} WIN` : t.away > t.home ? `${f.awayTeamName} WIN` : "DRAW");
+
+  drawDetailLine(left, detailY, "Player of Match", names.get(Number(f.playerOfMatchId)) || "-", detailW);
+  drawDetailLine(left, detailY + 17, "Break & Run", names.get(Number(f.breakRunPlayerId)) || "-", detailW);
+  drawDetailLine(left, detailY + 34, "Rack & Run", names.get(Number(f.rackRunPlayerId)) || "-", detailW);
+  drawDetailLine(left, detailY + 51, "Bonus Point", String(f.bonusPoints || 0), detailW);
+
+  const rightX = left + detailW + detailGap;
+  drawDetailLine(rightX, detailY, "Match Result", matchResult, detailW);
+  drawDetailLine(rightX, detailY + 17, "Home Frames Won", String(t.home), detailW);
+  drawDetailLine(rightX, detailY + 34, "Away Frames Won", String(t.away), detailW);
+  drawDetailLine(rightX, detailY + 51, "Status", String(f.status || "").replaceAll("_"," "), detailW);
+
+  const rosterY = detailY + 77;
+  const rosterGap = 18;
+  const rosterW = (usable - rosterGap) / 2;
+  const homeRosterEnd = drawRoster("HOME", left, rosterY, rosterW);
+  const awayRosterEnd = drawRoster("AWAY", left + rosterW + rosterGap, rosterY, rosterW);
+
+  const signY = Math.max(homeRosterEnd, awayRosterEnd) + 12;
   const homeCaptain = names.get(Number(f.homeCaptainId)) || "-";
   const awayCaptain = names.get(Number(f.awayCaptainId)) || "-";
-  const sigGap = 18;
-  const sigW = (usable - sigGap) / 2;
-  doc.font("Helvetica-Bold").fontSize(6).fillColor("#2b3440")
-    .text(`HOME CAPTAIN: ${homeCaptain}`, left, signY, { width: sigW });
-  doc.moveTo(left, signY + 26).lineTo(left + sigW, signY + 26).strokeColor("#444").lineWidth(0.5).stroke();
-  doc.font("Helvetica").fontSize(5).fillColor("#666").text("Signature", left, signY + 29);
-  const awayX = left + sigW + sigGap;
-  doc.font("Helvetica-Bold").fontSize(6).fillColor("#2b3440")
-    .text(`AWAY CAPTAIN: ${awayCaptain}`, awayX, signY, { width: sigW, align: "right" });
-  doc.moveTo(awayX, signY + 26).lineTo(awayX + sigW, signY + 26).strokeColor("#444").lineWidth(0.5).stroke();
-  doc.font("Helvetica").fontSize(5).fillColor("#666").text("Signature", awayX + sigW - 50, signY + 29, { width: 50, align: "right" });
+  const sigW = (usable - 20) / 2;
+  const awaySigX = left + sigW + 20;
 
-  doc.font("Helvetica").fontSize(5).fillColor("#7b8490")
-    .text("Generated by NCSF League Manager", left, doc.page.height - 18, { width: usable, align: "center" });
+  doc.font("Helvetica-Bold").fontSize(5.4).fillColor(line)
+    .text(`CAPTAIN SIGNATURE (HOME):`, left, signY, { width: sigW });
+  doc.font("Helvetica-Bold").fontSize(5.2).fillColor(line)
+    .text(homeCaptain, left, signY + 9, { width: sigW });
+  doc.moveTo(left, signY + 25).lineTo(left + sigW, signY + 25).strokeColor(line).lineWidth(0.55).stroke();
+
+  doc.font("Helvetica-Bold").fontSize(5.4).fillColor(line)
+    .text(`CAPTAIN SIGNATURE (AWAY):`, awaySigX, signY, { width: sigW });
+  doc.font("Helvetica-Bold").fontSize(5.2).fillColor(line)
+    .text(awayCaptain, awaySigX, signY + 9, { width: sigW });
+  doc.moveTo(awaySigX, signY + 25).lineTo(awaySigX + sigW, signY + 25).strokeColor(line).lineWidth(0.55).stroke();
+
+  doc.font("Helvetica").fontSize(4.2).fillColor("#777777")
+    .text("Generated by NCSF League Manager", left, H - 16, { width: usable, align: "center" });
 
   doc.end();
 }
+
 app.get("/api/health", async (_req, res) => {
   try {
     await pool.query("SELECT 1");
