@@ -3836,3 +3836,18 @@ body.ncsf-live-fullscreen-active{
   transform:rotate(90deg)!important;
 }
 
+
+
+/* Keep the starters role label clear of the player name field */
+.roster-slot{
+  grid-template-columns:34px minmax(66px,auto) minmax(0,1fr)!important;
+}
+.roster-role{
+  min-width:0!important;
+  white-space:nowrap!important;
+}
+@media(max-width:620px){
+  .roster-slot{
+    grid-template-columns:30px minmax(66px,auto) minmax(0,1fr)!important;
+  }
+}
