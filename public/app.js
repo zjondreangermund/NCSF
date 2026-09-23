@@ -1404,16 +1404,6 @@ function formatEventDate(value){
         if(window.NCSFApp&&typeof window.NCSFApp.setBroadcastActive==='function'){
           window.NCSFApp.setBroadcastActive(Boolean(active));
         }
-        if(window.NCSFApp){
-          if(typeof window.NCSFApp.setBroadcastLandscape==='function'){
-            window.NCSFApp.setBroadcastLandscape(Boolean(active));
-          }else{
-            if(active&&typeof window.NCSFApp.enterLiveFullscreen==='function')window.NCSFApp.enterLiveFullscreen();
-            if(!active&&typeof window.NCSFApp.exitLiveFullscreen==='function')window.NCSFApp.exitLiveFullscreen();
-          }
-        }else if(active&&screen.orientation?.lock){
-          await screen.orientation.lock('landscape').catch(()=>{});
-        }
       }catch(_e){}
       try{
         if(active&&navigator.wakeLock?.request){
