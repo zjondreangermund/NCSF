@@ -3653,3 +3653,118 @@ body.ncsf-live-fullscreen-active{
     border-radius:12px!important;
   }
 }
+
+
+/* FINAL live landscape behavior: true full-screen video, no side/background panels */
+html.ncsf-live-fullscreen-active,
+body.ncsf-live-fullscreen-active{
+  overflow:hidden!important;
+  width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  background:transparent!important;
+}
+
+.ncsf-live-fullscreen{
+  position:fixed!important;
+  top:50%!important;
+  left:50%!important;
+  right:auto!important;
+  bottom:auto!important;
+  margin:0!important;
+  padding:0!important;
+  max-width:none!important;
+  max-height:none!important;
+  border:0!important;
+  border-radius:0!important;
+  overflow:hidden!important;
+  z-index:2147483000!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  transform-origin:center center!important;
+}
+
+@media(orientation:portrait){
+  .ncsf-live-fullscreen{
+    width:100dvh!important;
+    height:100dvw!important;
+    transform:translate(-50%,-50%) rotate(90deg)!important;
+  }
+}
+
+@media(orientation:landscape){
+  .ncsf-live-fullscreen{
+    width:100dvw!important;
+    height:100dvh!important;
+    transform:translate(-50%,-50%)!important;
+  }
+}
+
+.ncsf-live-fullscreen video,
+.ncsf-live-fullscreen.ncsf-chat-open video{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:none!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:0!important;
+  object-fit:cover!important;
+  object-position:center center!important;
+  background:transparent!important;
+  transform:none!important;
+}
+
+/* Chat never changes the full-screen video size. It floats transparently at the right. */
+.ncsf-live-fullscreen.ncsf-chat-open .ncsf-live-controls{
+  right:0!important;
+}
+.ncsf-live-fullscreen.ncsf-chat-open .live-match-overlay{
+  right:14px!important;
+}
+
+.ncsf-live-fullscreen .fullscreen-chat.open{
+  width:clamp(190px,25%,270px)!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-body,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-messages,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-form,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-signin{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-message,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-message.mine{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+
+/* Normal portrait preview fills the complete live preview box, same width as chat. */
+.live-panel .live-stage,
+.live-panel #livePlayer.live-player-ready,
+.live-panel #livePlayer.live-player-ready .video-frame,
+.live-panel #livePlayer.live-player-ready .internal-live{
+  width:100%!important;
+  max-width:100%!important;
+  margin-left:0!important;
+  margin-right:0!important;
+  box-sizing:border-box!important;
+}
+.live-panel #livePlayer.live-player-ready .video-frame{
+  aspect-ratio:16/9!important;
+}
+.live-panel #livePlayer.live-player-ready .video-frame video{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+}
