@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.13");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.14");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -215,19 +215,23 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void enterLiveFullscreen() {
-            runOnUiThread(() -> {
-                liveFullscreen = true;
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-                getWindow().getDecorView().setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_FULLSCREEN |
-                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-            });
+            runOnUiThread(() -> forceLandscapeOrientation(true));
         }
 
         @JavascriptInterface
         public void exitLiveFullscreen() {
             runOnUiThread(() -> exitLiveFullscreenNative());
+        }
+
+        @JavascriptInterface
+        public void setBroadcastLandscape(boolean active) {
+            runOnUiThread(() -> {
+                if (active) {
+                    forceLandscapeOrientation(false);
+                } else {
+                    restorePortraitOrientation(false);
+                }
+            });
         }
 
         @JavascriptInterface
@@ -348,10 +352,52 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void exitLiveFullscreenNative() {
-        liveFullscreen = false;
+    private void forceLandscapeOrientation(boolean immersive) {
+        liveFullscreen = immersive;
+
+        // Reset first, then force landscape twice. This works even when the
+        // phone's Auto rotate setting is off and avoids stale WebView orientation.
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        webView.postDelayed(
+                () -> setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE),
+                70);
+        webView.postDelayed(
+                () -> {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                    webView.evaluateJavascript(
+                            "window.dispatchEvent(new Event('resize'));window.dispatchEvent(new Event('orientationchange'));",
+                            null);
+                },
+                280);
+
+        if (immersive) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } else {
+            // Broadcaster uses landscape capture but remains a normal scrollable page.
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        }
+    }
+
+    private void restorePortraitOrientation(boolean fromFullscreen) {
+        liveFullscreen = false;
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+
+        webView.postDelayed(() -> {
+            if (!liveFullscreen) {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                webView.evaluateJavascript(
+                        "window.__ncsfRestoreLivePage&&window.__ncsfRestoreLivePage();",
+                        null);
+            }
+        }, 550);
+    }
+
+    private void exitLiveFullscreenNative() {
+        restorePortraitOrientation(true);
     }
 
     @Override
