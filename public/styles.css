@@ -3091,3 +3091,70 @@ body.ncsf-live-fullscreen-active{
     flex-wrap:wrap!important;
   }
 }
+
+
+/* Mobile live rotation/scroll reliability */
+body[data-page="live-page"]:not(.ncsf-live-fullscreen-active),
+body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active){
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  height:auto!important;
+  min-height:100vh!important;
+  position:static!important;
+  touch-action:pan-y pinch-zoom!important;
+  overscroll-behavior-y:auto!important;
+  -webkit-overflow-scrolling:touch!important;
+}
+
+body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) .page,
+body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .page{
+  overflow:visible!important;
+  height:auto!important;
+  min-height:100vh!important;
+}
+
+body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) .live-stage,
+body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) .video-frame,
+body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .broadcast-video-shell{
+  touch-action:pan-y pinch-zoom!important;
+  overscroll-behavior:contain auto!important;
+}
+
+body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) video,
+body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) video{
+  touch-action:pan-y pinch-zoom!important;
+}
+
+body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) .ncsf-live-controls,
+body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .ncsf-live-controls,
+body[data-page="live-page"] .live-chat-inline-host,
+body[data-page="broadcast-page"] .live-chat-inline-host,
+body[data-page="live-page"] button,
+body[data-page="broadcast-page"] button,
+body[data-page="live-page"] input,
+body[data-page="broadcast-page"] input{
+  touch-action:manipulation!important;
+}
+
+/* Only a true video fullscreen locks the page behind it. */
+html:not(.ncsf-live-fullscreen-active),
+body:not(.ncsf-live-fullscreen-active){
+  overscroll-behavior-y:auto;
+}
+
+@media(max-width:900px) and (orientation:landscape){
+  body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .broadcast-page,
+  body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) .page{
+    padding-bottom:44px!important;
+  }
+
+  body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .broadcast-video-shell{
+    max-height:72vh!important;
+  }
+
+  body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .broadcast-controls{
+    position:relative!important;
+    z-index:4!important;
+    margin-top:8px!important;
+  }
+}
