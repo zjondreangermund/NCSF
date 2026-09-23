@@ -1689,9 +1689,23 @@ body[data-page="scoresheet"] .page{max-width:1120px}
   margin:0!important;
   border-radius:0!important;
   aspect-ratio:auto!important;
+  transform:none!important;
   z-index:999999!important;
   background:#000!important;
   overflow:hidden!important;
+}
+.ncsf-live-fullscreen.ncsf-live-rotated{
+  inset:auto!important;
+  top:50%!important;
+  left:50%!important;
+  right:auto!important;
+  bottom:auto!important;
+  width:100vh!important;
+  height:100vw!important;
+  width:100dvh!important;
+  height:100dvw!important;
+  transform:translate(-50%,-50%) rotate(90deg)!important;
+  transform-origin:center center!important;
 }
 .ncsf-live-fullscreen video{
   position:absolute!important;
