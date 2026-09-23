@@ -754,6 +754,14 @@ function formatEventDate(value){
     return '<span class="live-fullscreen-icon"><i></i><i></i><i></i><i></i></span>';
   }
 
+  function syncLiveLandscapeControl(stage,active){
+    const button=stage?.querySelector('.ncsf-fullscreen-control');
+    if(!button)return;
+    button.setAttribute('aria-label',active?'Exit landscape view':'Landscape view');
+    const label=button.querySelector('.ncsf-landscape-label');
+    if(label)label.textContent=active?'Exit':'Landscape';
+  }
+
   function enterNcsfLiveFullscreen(stage){
     if(!stage)return;
     ncsfFullscreenScrollY=window.scrollY||document.documentElement.scrollTop||0;
@@ -762,10 +770,12 @@ function formatEventDate(value){
     document.documentElement.classList.add('ncsf-live-fullscreen-active');
     document.body.classList.add('ncsf-live-fullscreen-active');
     moveLiveChatForFullscreen(stage,true);
+    syncLiveLandscapeControl(stage,true);
 
-    // Full-screen only the live player. Do not rotate the Android activity.
     try{
-      if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
+      if(window.NCSFApp&&typeof window.NCSFApp.enterLiveFullscreen==='function'){
+        window.NCSFApp.enterLiveFullscreen();
+      }else if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
         window.NCSFApp.setVideoFullscreen(true);
       }else if(stage.requestFullscreen&&!document.fullscreenElement){
         stage.requestFullscreen().catch(()=>{});
@@ -782,10 +792,13 @@ function formatEventDate(value){
     document.documentElement.classList.remove('ncsf-live-fullscreen-active');
     document.body.classList.remove('ncsf-live-fullscreen-active');
     moveLiveChatForFullscreen(stage,false);
+    syncLiveLandscapeControl(stage,false);
     ncsfFullscreenStage=null;
 
     try{
-      if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
+      if(window.NCSFApp&&typeof window.NCSFApp.exitLiveFullscreen==='function'){
+        window.NCSFApp.exitLiveFullscreen();
+      }else if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
         window.NCSFApp.setVideoFullscreen(false);
       }else if(document.fullscreenElement&&document.exitFullscreen){
         document.exitFullscreen().catch(()=>{});
@@ -983,6 +996,7 @@ function formatEventDate(value){
     const waiting=$('#liveWaiting');
     installLiveVideoControls(video,frame,{allowAudio:true});
     ensureLiveScoreOverlay(frame);
+    if(IS_NCSF_ANDROID)enterNcsfLiveFullscreen(frame);
     let socket=null,pc=null,retryTimer=null,offerTimer=null,ended=false,pendingIce=[];
 
     const closePeer=()=>{
