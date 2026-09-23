@@ -1154,6 +1154,32 @@ function drawCell(doc, x, y, w, h, text, opts = {}) {
     });
 }
 
+function drawPdfTextFit(doc, text, x, y, w, opts = {}) {
+  const value = String(text ?? "");
+  const font = opts.bold ? "Helvetica-Bold" : "Helvetica";
+  const maxSize = Number(opts.size || 8);
+  const minSize = Number(opts.minSize || Math.min(5, maxSize));
+  let size = maxSize;
+
+  doc.font(font).fontSize(size);
+  while (size > minSize && doc.widthOfString(value) > Math.max(1, w - 2)) {
+    size = Math.max(minSize, size - 0.25);
+    doc.fontSize(size);
+  }
+
+  doc.fillColor(opts.color || "#111111")
+    .font(font)
+    .fontSize(size)
+    .text(value, x, y, {
+      width: Math.max(1, w),
+      height: opts.height || (size * 1.45),
+      align: opts.align || "left",
+      ellipsis: true,
+      lineBreak: false
+    });
+}
+
+
 function streamOnePageScoresheetPdf(res, payload) {
   const f = payload.fixture;
   const t = payload.totals;
@@ -1371,14 +1397,18 @@ function streamOnePageScoresheetPdf(res, payload) {
     doc.image(getNcsfLogoJpeg(), left + 2, 13, { fit: [38, 38], align: "center", valign: "center" });
   } catch (_e) {}
 
-  doc.fillColor(line).font("Helvetica-Bold").fontSize(12.5)
-    .text("NAMIBIA CUE SPORTS FEDERATION", 56, 15, { width: usable - 90, align: "center" });
-  doc.fontSize(9.1)
-    .text("Blackball League Scoresheet", 56, 30, { width: usable - 90, align: "center" });
-  doc.font("Helvetica").fontSize(5.2).fillColor("#444444")
-    .text(`${f.seasonName || ""} - ${f.divisionName || ""} - Round ${f.roundNo || ""}`, 56, 43, { width: usable - 90, align: "center" });
-  doc.fontSize(5.2).fillColor(line)
-    .text(`STARTING TIME: ${timeText}   |   DATE: ${dateText}   |   VENUE: ${f.venue || "TBA"}`, left, 54, { width: usable, align: "center" });
+  drawPdfTextFit(doc, "NAMIBIA CUE SPORTS FEDERATION", 56, 15, usable - 90, {
+    size: 12.5, minSize: 10.5, bold: true, align: "center", color: line, height: 16
+  });
+  drawPdfTextFit(doc, "Blackball League Scoresheet", 56, 30, usable - 90, {
+    size: 9.1, minSize: 7.5, bold: true, align: "center", color: line, height: 12
+  });
+  drawPdfTextFit(doc, `${f.seasonName || ""} - ${f.divisionName || ""} - Round ${f.roundNo || ""}`, 56, 43, usable - 90, {
+    size: 5.2, minSize: 4.3, align: "center", color: "#444444", height: 8
+  });
+  drawPdfTextFit(doc, `STARTING TIME: ${timeText}   |   DATE: ${dateText}   |   VENUE: ${f.venue || "TBA"}`, left, 54, usable, {
+    size: 5.2, minSize: 4.2, align: "center", color: line, height: 8
+  });
 
   const teamLabelY = 66;
   const teamBoxY = 75;
@@ -1386,8 +1416,14 @@ function streamOnePageScoresheetPdf(res, payload) {
   const teamW = (usable - teamGap) / 2;
   doc.font("Helvetica-Bold").fontSize(5).fillColor(line).text("HOME TEAM", left, teamLabelY);
   doc.text("AWAY TEAM", left + teamW + teamGap, teamLabelY);
-  drawCell(doc, left, teamBoxY, teamW, 22, f.homeTeamName, { size: 8.3, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
-  drawCell(doc, left + teamW + teamGap, teamBoxY, teamW, 22, f.awayTeamName, { size: 8.3, bold: true, align: "center", stroke: line, lineWidth: 0.6 });
+  drawCell(doc, left, teamBoxY, teamW, 22, "", { stroke: line, lineWidth: 0.6 });
+  drawPdfTextFit(doc, f.homeTeamName, left + 4, teamBoxY + 6, teamW - 8, {
+    size: 8.3, minSize: 5.5, bold: true, align: "center", color: line, height: 10
+  });
+  drawCell(doc, left + teamW + teamGap, teamBoxY, teamW, 22, "", { stroke: line, lineWidth: 0.6 });
+  drawPdfTextFit(doc, f.awayTeamName, left + teamW + teamGap + 4, teamBoxY + 6, teamW - 8, {
+    size: 8.3, minSize: 5.5, bold: true, align: "center", color: line, height: 10
+  });
   doc.font("Helvetica-Bold").fontSize(7).fillColor(line)
     .text("vs", left + teamW, teamBoxY + 7, { width: teamGap, align: "center" });
 
@@ -1443,14 +1479,16 @@ function streamOnePageScoresheetPdf(res, payload) {
 
   doc.font("Helvetica-Bold").fontSize(5.4).fillColor(line)
     .text(`CAPTAIN SIGNATURE (HOME):`, left, signY, { width: sigW });
-  doc.font("Helvetica-Bold").fontSize(5.2).fillColor(line)
-    .text(homeCaptain, left, signY + 9, { width: sigW });
+  drawPdfTextFit(doc, homeCaptain, left, signY + 9, sigW, {
+    size: 5.2, minSize: 4.2, bold: true, color: line, height: 8
+  });
   doc.moveTo(left, signY + 25).lineTo(left + sigW, signY + 25).strokeColor(line).lineWidth(0.55).stroke();
 
   doc.font("Helvetica-Bold").fontSize(5.4).fillColor(line)
     .text(`CAPTAIN SIGNATURE (AWAY):`, awaySigX, signY, { width: sigW });
-  doc.font("Helvetica-Bold").fontSize(5.2).fillColor(line)
-    .text(awayCaptain, awaySigX, signY + 9, { width: sigW });
+  drawPdfTextFit(doc, awayCaptain, awaySigX, signY + 9, sigW, {
+    size: 5.2, minSize: 4.2, bold: true, color: line, height: 8
+  });
   doc.moveTo(awaySigX, signY + 25).lineTo(awaySigX + sigW, signY + 25).strokeColor(line).lineWidth(0.55).stroke();
 
   doc.font("Helvetica").fontSize(4.2).fillColor("#777777")
