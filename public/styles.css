@@ -3600,38 +3600,48 @@ body.ncsf-live-fullscreen-active{
 .live-panel{
   overflow:hidden;
 }
-.live-panel .live-stage{
+.live-panel .live-stage,
+.live-panel #livePlayer,
+.live-panel #livePlayer.live-player-ready,
+.live-panel #livePlayer .video-frame,
+.live-panel #livePlayer .internal-live{
   width:100%!important;
-  max-width:100%!important;
+  max-width:none!important;
+  min-width:0!important;
   margin:0!important;
   padding:0!important;
   box-sizing:border-box!important;
+}
+.live-panel .live-stage{
+  overflow:hidden!important;
+  border-radius:16px!important;
+  background:#000!important;
 }
 .live-panel #livePlayer.live-player-ready{
-  width:100%!important;
-  max-width:none!important;
-  margin:0!important;
-  padding:0!important;
   border:0!important;
-  border-radius:0!important;
   background:#000!important;
-  box-sizing:border-box!important;
 }
-.live-panel #livePlayer.live-player-ready .video-frame,
-.live-panel #livePlayer.live-player-ready .internal-live{
-  width:100%!important;
-  max-width:none!important;
-  margin:0!important;
+.live-panel #livePlayer.live-player-ready .video-frame{
+  position:relative!important;
+  aspect-ratio:16/9!important;
+  overflow:hidden!important;
   border-radius:0!important;
   box-shadow:none!important;
+  background:#000!important;
 }
 .live-panel #livePlayer.live-player-ready .video-frame video,
-.live-panel #livePlayer.live-player-ready .video-frame iframe,
-.live-panel #livePlayer.live-player-ready .internal-live video{
+.live-panel #livePlayer.live-player-ready .video-frame iframe{
+  position:absolute!important;
+  inset:0!important;
   display:block!important;
   width:100%!important;
+  height:100%!important;
   max-width:none!important;
   margin:0!important;
+  border:0!important;
+  object-fit:cover!important;
+  object-position:center center!important;
+  background:#000!important;
 }
 .live-panel .live-chat-inline-host{
   width:100%!important;
@@ -3645,17 +3655,12 @@ body.ncsf-live-fullscreen-active{
   .live-panel{
     padding:8px!important;
   }
-  .live-panel .live-stage,
-  .live-panel #livePlayer.live-player-ready,
-  .live-panel #livePlayer.live-player-ready .video-frame,
-  .live-panel #livePlayer.live-player-ready .internal-live{
-    width:100%!important;
+  .live-panel .live-stage{
     border-radius:12px!important;
   }
 }
 
-
-/* FINAL live landscape behavior: true full-screen video, no side/background panels */
+/* Final landscape behavior: video stage only, full screen, no app/card background. */
 html.ncsf-live-fullscreen-active,
 body.ncsf-live-fullscreen-active{
   overflow:hidden!important;
@@ -3672,15 +3677,15 @@ body.ncsf-live-fullscreen-active{
   left:50%!important;
   right:auto!important;
   bottom:auto!important;
+  z-index:2147483000!important;
   margin:0!important;
   padding:0!important;
-  max-width:none!important;
-  max-height:none!important;
   border:0!important;
   border-radius:0!important;
+  max-width:none!important;
+  max-height:none!important;
   overflow:hidden!important;
-  z-index:2147483000!important;
-  background:transparent!important;
+  background:#000!important;
   box-shadow:none!important;
   transform-origin:center center!important;
 }
@@ -3692,7 +3697,6 @@ body.ncsf-live-fullscreen-active{
     transform:translate(-50%,-50%) rotate(90deg)!important;
   }
 }
-
 @media(orientation:landscape){
   .ncsf-live-fullscreen{
     width:100dvw!important;
@@ -3713,26 +3717,63 @@ body.ncsf-live-fullscreen-active{
   padding:0!important;
   object-fit:cover!important;
   object-position:center center!important;
-  background:transparent!important;
+  background:#000!important;
   transform:none!important;
 }
 
-/* Chat never changes the full-screen video size. It floats transparently at the right. */
+/* Live stats stay compact and centred over the video. */
+.ncsf-live-fullscreen .live-match-overlay{
+  left:50%!important;
+  right:auto!important;
+  bottom:48px!important;
+  width:min(74%,820px)!important;
+  max-width:calc(100% - 44px)!important;
+  transform:translateX(-50%)!important;
+}
+.ncsf-live-fullscreen .live-scorebar{
+  grid-template-columns:104px minmax(0,1fr) 104px!important;
+  min-height:40px!important;
+}
+.ncsf-live-fullscreen .live-score-team{
+  gap:5px!important;
+  padding:4px 7px!important;
+}
+.ncsf-live-fullscreen .live-score-team .team-name{font-size:8px!important}
+.ncsf-live-fullscreen .live-score-team .team-score{font-size:17px!important}
+.ncsf-live-fullscreen .live-score-frame{padding:4px 8px!important}
+.ncsf-live-fullscreen .live-score-frame small{font-size:6.5px!important}
+.ncsf-live-fullscreen .live-score-frame strong{font-size:12px!important}
+.ncsf-live-fullscreen .live-score-frame span{font-size:7px!important}
+.ncsf-live-fullscreen .live-next-frame{
+  max-width:62%!important;
+  padding-top:3px!important;
+}
+.ncsf-live-fullscreen .live-next-frame span{font-size:6.5px!important}
+.ncsf-live-fullscreen .live-next-frame strong{font-size:9px!important}
+
+/* Chat floats at the right with no panel background and never resizes the video. */
 .ncsf-live-fullscreen.ncsf-chat-open .ncsf-live-controls{
   right:0!important;
 }
 .ncsf-live-fullscreen.ncsf-chat-open .live-match-overlay{
-  right:14px!important;
+  right:auto!important;
 }
-
 .ncsf-live-fullscreen .fullscreen-chat.open{
+  position:absolute!important;
+  top:0!important;
+  right:0!important;
+  bottom:0!important;
+  left:auto!important;
   width:clamp(190px,25%,270px)!important;
+  height:100%!important;
   background:transparent!important;
   border:0!important;
   box-shadow:none!important;
   backdrop-filter:none!important;
+  pointer-events:auto!important;
 }
 .ncsf-live-fullscreen .fullscreen-chat.open .live-chat-body,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-head,
 .ncsf-live-fullscreen .fullscreen-chat.open .live-chat-messages,
 .ncsf-live-fullscreen .fullscreen-chat.open .live-chat-form,
 .ncsf-live-fullscreen .fullscreen-chat.open .live-chat-signin{
@@ -3740,6 +3781,9 @@ body.ncsf-live-fullscreen-active{
   border:0!important;
   box-shadow:none!important;
   backdrop-filter:none!important;
+}
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-head{
+  display:none!important;
 }
 .ncsf-live-fullscreen .fullscreen-chat.open .live-chat-message,
 .ncsf-live-fullscreen .fullscreen-chat.open .live-chat-message.mine{
@@ -3747,151 +3791,48 @@ body.ncsf-live-fullscreen-active{
   border:0!important;
   box-shadow:none!important;
   backdrop-filter:none!important;
+  color:#fff!important;
+  text-shadow:0 1px 4px rgba(0,0,0,.95)!important;
 }
-
-/* Normal portrait preview fills the complete live preview box, same width as chat. */
-.live-panel .live-stage,
-.live-panel #livePlayer.live-player-ready,
-.live-panel #livePlayer.live-player-ready .video-frame,
-.live-panel #livePlayer.live-player-ready .internal-live{
-  width:100%!important;
-  max-width:100%!important;
-  margin-left:0!important;
-  margin-right:0!important;
-  box-sizing:border-box!important;
-}
-.live-panel #livePlayer.live-player-ready .video-frame{
-  aspect-ratio:16/9!important;
-}
-.live-panel #livePlayer.live-player-ready .video-frame video{
-  width:100%!important;
-  height:100%!important;
-  object-fit:cover!important;
-}
-
-
-/* Live preview sizing + true video-only landscape fullscreen */
-body[data-page="live-page"] .live-stage,
-body[data-page="broadcast-page"] .broadcast-video-shell{
-  width:100%!important;
-  max-width:none!important;
-  box-sizing:border-box!important;
-}
-
-body[data-page="live-page"] #livePlayer,
-body[data-page="live-page"] #livePlayer .video-frame.internal-live,
-body[data-page="broadcast-page"] .broadcast-video-shell{
-  width:100%!important;
-  max-width:none!important;
-  margin-left:0!important;
-  margin-right:0!important;
-}
-
-body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) #livePlayer .video-frame.internal-live,
-body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .broadcast-video-shell{
-  aspect-ratio:16/9!important;
-  min-height:0!important;
-  height:auto!important;
-  overflow:hidden!important;
-  border-radius:18px!important;
-  background:#000!important;
-}
-
-body[data-page="live-page"]:not(.ncsf-live-fullscreen-active) #livePlayer .video-frame.internal-live video,
-body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active) .broadcast-video-shell video{
-  position:absolute!important;
-  inset:0!important;
-  width:100%!important;
-  height:100%!important;
-  max-width:none!important;
-  object-fit:contain!important;
-  object-position:center center!important;
-  background:#000!important;
-}
-
-/* Landscape button opens only the video stage; the surrounding app never rotates. */
-html.ncsf-live-fullscreen-active,
-body.ncsf-live-fullscreen-active{
-  overflow:hidden!important;
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-form input,
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-form .btn{
   background:transparent!important;
-}
-
-.ncsf-live-fullscreen{
-  --ncsf-side-chat:clamp(190px,26%,280px);
-  position:fixed!important;
-  top:50%!important;
-  left:50%!important;
-  right:auto!important;
-  bottom:auto!important;
-  z-index:2147483000!important;
-  margin:0!important;
-  padding:0!important;
-  border:0!important;
-  border-radius:0!important;
-  max-width:none!important;
-  max-height:none!important;
-  overflow:hidden!important;
-  background:#000!important;
-  transform-origin:center center!important;
-}
-
-@media(orientation:portrait){
-  .ncsf-live-fullscreen{
-    width:100dvh!important;
-    height:100dvw!important;
-    transform:translate(-50%,-50%) rotate(90deg)!important;
-  }
-}
-@media(orientation:landscape){
-  .ncsf-live-fullscreen{
-    width:100dvw!important;
-    height:100dvh!important;
-    transform:translate(-50%,-50%)!important;
-  }
-}
-
-.ncsf-live-fullscreen video{
-  position:absolute!important;
-  inset:0!important;
-  width:100%!important;
-  height:100%!important;
-  max-width:none!important;
-  max-height:none!important;
-  margin:0!important;
-  object-fit:contain!important;
-  object-position:center center!important;
-  background:#000!important;
-  transform:none!important;
-}
-
-/* No app/card background is visible in landscape mode. */
-.ncsf-live-fullscreen::before,
-.ncsf-live-fullscreen::after{
-  content:none!important;
-}
-.ncsf-live-fullscreen .live-waiting,
-.ncsf-live-fullscreen .broadcast-overlay{
-  background:transparent!important;
-}
-
-/* Chat is a transparent right rail; when open it reserves space instead of covering video. */
-.ncsf-live-fullscreen.ncsf-chat-open video{
-  width:calc(100% - var(--ncsf-side-chat))!important;
-  right:var(--ncsf-side-chat)!important;
-}
-.ncsf-live-fullscreen.ncsf-chat-open .ncsf-live-controls{
-  right:var(--ncsf-side-chat)!important;
-}
-.ncsf-live-fullscreen.ncsf-chat-open .live-match-overlay{
-  right:calc(var(--ncsf-side-chat) + 12px)!important;
-}
-.ncsf-live-fullscreen .fullscreen-chat.open,
-.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-body,
-.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-head,
-.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-messages,
-.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-form,
-.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-signin{
-  background:transparent!important;
+  border:1px solid rgba(255,255,255,.58)!important;
+  color:#fff!important;
   box-shadow:none!important;
-  backdrop-filter:none!important;
 }
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-form input{
+  -webkit-text-fill-color:#fff!important;
+}
+.ncsf-live-fullscreen .fullscreen-chat.open .live-chat-form input::placeholder{
+  color:rgba(255,255,255,.78)!important;
+}
+
+/* Keep the Landscape control visible on the video. */
+.ncsf-fullscreen-control{
+  width:auto!important;
+  min-width:94px!important;
+  padding:0 10px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  border:1px solid rgba(255,255,255,.38)!important;
+  border-radius:999px!important;
+  background:rgba(0,0,0,.24)!important;
+  color:#fff!important;
+}
+.ncsf-landscape-label{
+  display:inline-block!important;
+  font-size:10px!important;
+  font-weight:800!important;
+  color:#fff!important;
+  white-space:nowrap!important;
+  text-shadow:0 1px 3px rgba(0,0,0,.9)!important;
+}
+.ncsf-fullscreen-control .ncsf-fullscreen-icon{
+  width:18px!important;
+  height:14px!important;
+  transform:rotate(90deg)!important;
+}
+
