@@ -4059,3 +4059,34 @@ body.ncsf-live-fullscreen-active{
   }
   .news-opportunities-callout .btn{width:100%;text-align:center}
 }
+
+
+
+/* Keep inline live chat off portrait pages; show it for landscape video views. */
+@media(orientation:portrait){
+  body[data-page="live-page"] .live-chat-inline-host,
+  body[data-page="broadcast-page"] .live-chat-inline-host{
+    display:none!important;
+  }
+
+  /* A CSS-rotated video is visually landscape even if the device stays portrait. */
+  body[data-page="live-page"] .ncsf-live-fullscreen:not(.ncsf-live-rotated) .fullscreen-chat,
+  body[data-page="broadcast-page"] .ncsf-live-fullscreen:not(.ncsf-live-rotated) .fullscreen-chat{
+    display:none!important;
+  }
+
+  /* If chat was open when the view returned to portrait, give video its full width. */
+  body[data-page="live-page"] .ncsf-live-fullscreen:not(.ncsf-live-rotated).ncsf-chat-open video,
+  body[data-page="broadcast-page"] .ncsf-live-fullscreen:not(.ncsf-live-rotated).ncsf-chat-open video{
+    right:0!important;
+    width:100%!important;
+  }
+  body[data-page="live-page"] .ncsf-live-fullscreen:not(.ncsf-live-rotated).ncsf-chat-open .ncsf-live-controls,
+  body[data-page="broadcast-page"] .ncsf-live-fullscreen:not(.ncsf-live-rotated).ncsf-chat-open .ncsf-live-controls{
+    right:0!important;
+  }
+  body[data-page="live-page"] .ncsf-live-fullscreen:not(.ncsf-live-rotated).ncsf-chat-open .live-match-overlay,
+  body[data-page="broadcast-page"] .ncsf-live-fullscreen:not(.ncsf-live-rotated).ncsf-chat-open .live-match-overlay{
+    right:14px!important;
+  }
+}
