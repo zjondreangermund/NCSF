@@ -3916,3 +3916,14 @@ body.ncsf-live-fullscreen-active{
     grid-template-columns:auto minmax(0,1fr);
   }
 }
+
+/* Keep the full-screen viewer count clear of the chat control. */
+.ncsf-live-fullscreen #broadcastViewers{
+  position:absolute!important;
+  top:0!important;
+  right:122px!important;
+  z-index:141!important;
+}
+.ncsf-live-fullscreen .broadcast-viewer-list{
+  right:122px!important;
+}
