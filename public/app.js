@@ -1443,64 +1443,9 @@ function formatEventDate(value){
       preview.srcObject=null;
     };
 
-    const prepareLandscapeBroadcastStream=async source=>{
-      const sourceTrack=source.getVideoTracks()[0];
-      const settings=sourceTrack?.getSettings?.();
-      if(!sourceTrack||!(Number(settings?.height)>Number(settings?.width))||!HTMLCanvasElement.prototype.captureStream){
-        return source;
-      }
-
-      const cameraVideo=document.createElement('video');
-      cameraVideo.muted=true;
-      cameraVideo.playsInline=true;
-      cameraVideo.srcObject=new MediaStream([sourceTrack]);
-      await cameraVideo.play();
-      if(cameraVideo.readyState<2){
-        await new Promise(resolve=>cameraVideo.addEventListener('loadeddata',resolve,{once:true}));
-      }
-
-      const canvas=document.createElement('canvas');
-      const context=canvas.getContext('2d',{alpha:false});
-      if(!context){
-        cameraVideo.pause();
-        cameraVideo.srcObject=null;
-        return source;
-      }
-      landscapeVideo=cameraVideo;
-      landscapeCanvas=canvas;
-
-      const drawFrame=()=>{
-        if(landscapeVideo!==cameraVideo)return;
-        const width=cameraVideo.videoWidth||Number(settings.width)||0;
-        const height=cameraVideo.videoHeight||Number(settings.height)||0;
-        if(width&&height){
-          const portrait=height>width;
-          const outputWidth=portrait?height:width;
-          const outputHeight=portrait?width:height;
-          if(canvas.width!==outputWidth||canvas.height!==outputHeight){
-            canvas.width=outputWidth;
-            canvas.height=outputHeight;
-          }
-          context.setTransform(1,0,0,1,0,0);
-          if(portrait){
-            context.translate(outputWidth,0);
-            context.rotate(Math.PI/2);
-            context.drawImage(cameraVideo,0,0,outputHeight,outputWidth);
-          }else{
-            context.drawImage(cameraVideo,0,0,outputWidth,outputHeight);
-          }
-        }
-        landscapeFrame=requestAnimationFrame(drawFrame);
-      };
-      drawFrame();
-
-      landscapeCanvasStream=canvas.captureStream(30);
-      const output=new MediaStream([
-        ...landscapeCanvasStream.getVideoTracks(),
-        ...source.getAudioTracks()
-      ]);
-      return output;
-    };
+    // Preserve the camera's native orientation. Full-screen landscape is a viewer-side
+    // presentation choice; rotating the outgoing camera frames here turns the table sideways.
+    const prepareLandscapeBroadcastStream=async source=>source;
 
     const stop=()=>{
       manualStop=true;
