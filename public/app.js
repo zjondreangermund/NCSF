@@ -206,7 +206,7 @@
         <div class="score-slot-no">${fr.home_slot}</div>
         <div class="score-player">${esc(fr.home_player_name)}</div>
         <button class="score-cell frame-win ${fr.winner_side==='HOME'?'selected':''}" data-frame="${fr.id}" data-winner="HOME" ${editable?'':'disabled'}>${fr.winner_side==='HOME'?'1':'0'}</button>
-        <div class="score-vs">vs</div>
+        <div class="score-vs"><span>vs</span><small class="score-breaker">BREAK ${esc(fr.break_label||'—')}</small></div>
         <button class="score-cell frame-win ${fr.winner_side==='AWAY'?'selected':''}" data-frame="${fr.id}" data-winner="AWAY" ${editable?'':'disabled'}>${fr.winner_side==='AWAY'?'1':'0'}</button>
         <div class="score-player away">${esc(fr.away_player_name)}</div>
         <div class="score-slot-no">${letters[(fr.away_slot||1)-1]}</div>
@@ -274,12 +274,13 @@
     return `<section class="print-round">
       <div class="print-round-head"><strong>ROUND ${round}</strong><span>${home} - ${away}</span></div>
       <table>
-        <thead><tr><th>#</th><th>Home</th><th>H</th><th>A</th><th>Away</th><th>#</th></tr></thead>
+        <thead><tr><th>#</th><th>Home</th><th>H</th><th>Break</th><th>A</th><th>Away</th><th>#</th></tr></thead>
         <tbody>
           ${frames.map(fr=>`<tr>
             <td>${fr.home_slot}</td>
             <td>${esc(fr.home_player_name)}</td>
             <td class="print-score">${fr.winner_side==='HOME'?'1':'0'}</td>
+            <td class="print-break">${esc(fr.break_label||'—')}</td>
             <td class="print-score">${fr.winner_side==='AWAY'?'1':'0'}</td>
             <td>${esc(fr.away_player_name)}</td>
             <td>${letters[(fr.away_slot||1)-1]}</td>
@@ -977,7 +978,7 @@ function formatEventDate(value){
         frame.innerHTML=
           '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+'/25</small>'+
           '<strong>'+esc(current.homePlayerName)+' <b>vs</b> '+esc(current.awayPlayerName)+'</strong>'+
-          '<span>Current frame</span>';
+          '<span>Break: '+esc(current.breakLabel||'—')+'</span>';
       }
 
       if(match.next){
@@ -1417,7 +1418,7 @@ function formatEventDate(value){
       }
       const audioStream=await navigator.mediaDevices.getUserMedia({
         video:false,
-        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+        audio:true
       });
       const track=audioStream.getAudioTracks()[0];
       if(!track)throw new Error('No microphone source was found.');
@@ -1674,35 +1675,41 @@ function formatEventDate(value){
           throw new Error('Live camera streaming is not supported on this device.');
         }
 
-        if(window.NCSFApp&&typeof window.NCSFApp.hasCameraPermission==='function'&&!window.NCSFApp.hasCameraPermission()){
-          const permissionResult=await requestNativeMediaPermissions();
-          if(!permissionResult.cameraGranted){
-            showPermissionRecovery();
-            try{window.NCSFApp?.openAppPermissionSettings?.()}catch(_e){}
-            throw new Error('Camera permission denied. Allow Camera and Microphone in the NCSF phone permissions screen.');
+        if(window.NCSFApp&&typeof window.NCSFApp.hasCameraPermission==='function'){
+          const cameraGranted=Boolean(window.NCSFApp.hasCameraPermission());
+          const microphoneGranted=typeof window.NCSFApp.hasMicrophonePermission!=='function'
+            ||Boolean(window.NCSFApp.hasMicrophonePermission());
+          if(!cameraGranted||!microphoneGranted){
+            const permissionResult=await requestNativeMediaPermissions();
+            if(!permissionResult.cameraGranted){
+              showPermissionRecovery();
+              try{window.NCSFApp?.openAppPermissionSettings?.()}catch(_e){}
+              throw new Error('Camera permission denied. Allow Camera and Microphone in the NCSF phone permissions screen.');
+            }
           }
         }
 
         await setBroadcastAwake(true);
         await new Promise(resolve=>setTimeout(resolve,350));
 
-        cameraStream=await navigator.mediaDevices.getUserMedia({video:videoConstraintsForQuality(),audio:false});
-        stream=await prepareLandscapeBroadcastStream(cameraStream);
-        withAudio=false;
         try{
-          const audioStream=await navigator.mediaDevices.getUserMedia({
-            video:false,
-            audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+          // Ask for camera and microphone in one WebView capture request. On Android
+          // this avoids opening a second media source after the camera is already live.
+          cameraStream=await navigator.mediaDevices.getUserMedia({
+            video:videoConstraintsForQuality(),
+            audio:true
           });
-          const audioTrack=audioStream.getAudioTracks()[0];
-          if(audioTrack){
-            stream.addTrack(audioTrack);
-            withAudio=true;
-          }
+          withAudio=Boolean(cameraStream.getAudioTracks().length);
         }catch(audioErr){
+          // Keep video usable when a device cannot open audio during the combined request.
+          cameraStream=await navigator.mediaDevices.getUserMedia({
+            video:videoConstraintsForQuality(),
+            audio:false
+          });
           withAudio=false;
           toast('Microphone unavailable — live video will continue. Tap Mic: Add to retry.');
         }
+        stream=await prepareLandscapeBroadcastStream(cameraStream);
         updateMicButton();
 
         preview.srcObject=stream;

@@ -992,6 +992,29 @@ async function teamBelongsToClub(teamId, clubId) {
   return rowCount > 0;
 }
 
+const MATCH_BREAK_SEQUENCE = [
+  { side: "HOME", slot: 1, label: "1" },
+  { side: "AWAY", slot: 2, label: "B" },
+  { side: "HOME", slot: 3, label: "3" },
+  { side: "AWAY", slot: 4, label: "D" },
+  { side: "HOME", slot: 5, label: "5" },
+  { side: "AWAY", slot: 1, label: "A" },
+  { side: "HOME", slot: 2, label: "2" },
+  { side: "AWAY", slot: 3, label: "C" },
+  { side: "HOME", slot: 4, label: "4" },
+  { side: "AWAY", slot: 5, label: "E" }
+];
+
+function assignBreakOrder(frames) {
+  for (const frame of frames) {
+    const index = ((Number(frame.round_no) - 1) * 5) + Number(frame.board_no) - 1;
+    const assignment = MATCH_BREAK_SEQUENCE[((index % MATCH_BREAK_SEQUENCE.length) + MATCH_BREAK_SEQUENCE.length) % MATCH_BREAK_SEQUENCE.length];
+    frame.break_side = assignment.side;
+    frame.break_slot = assignment.slot;
+    frame.break_label = assignment.label;
+  }
+}
+
 async function ensureFrames(fixtureId) {
   const { rows: lineups } = await pool.query(
     "SELECT side, slot, player_id FROM fixture_lineups WHERE fixture_id=$1 ORDER BY side, slot",
@@ -1184,6 +1207,8 @@ async function fixturePayload(fixture) {
       ORDER BY p.last_name,p.first_name,p.id
     `, [fixture.id])
   ]);
+
+  assignBreakOrder(frames);
 
   const scored = frames.filter(f => f.winner_side);
   const homeFrames = scored.filter(f => f.winner_side === "HOME").length;
@@ -1425,10 +1450,10 @@ function streamOnePageScoresheetPdf(res, payload) {
     const yHead = y + titleH;
     const slotW = 13;
     const scoreW = 18;
-    const vsW = 14;
+    const vsW = 30;
     const playerW = (w - (slotW * 2) - (scoreW * 2) - vsW) / 2;
     const widths = [slotW, playerW, scoreW, vsW, scoreW, playerW, slotW];
-    const labels = ["#", "HOME TEAM", "H", "vs", "A", "AWAY TEAM", "#"];
+    const labels = ["#", "HOME TEAM", "H", "BREAK", "A", "AWAY TEAM", "#"];
     let cx = x;
 
     labels.forEach((label, idx) => {
@@ -1449,7 +1474,7 @@ function streamOnePageScoresheetPdf(res, payload) {
         fr.home_slot,
         fr.home_player_name,
         fr.winner_side === "HOME" ? "1" : "0",
-        "vs",
+        fr.break_label || "",
         fr.winner_side === "AWAY" ? "1" : "0",
         fr.away_player_name,
         letters[(Number(fr.away_slot || 1) - 1)] || ""
@@ -2974,7 +2999,10 @@ async function buildLiveMatchState(fixtureId) {
     awayPlayerId: Number(fr.away_player_id),
     homePlayerName: fr.home_player_name,
     awayPlayerName: fr.away_player_name,
-    winnerSide: fr.winner_side || null
+    winnerSide: fr.winner_side || null,
+    breakLabel: fr.break_label || null,
+    breakSide: fr.break_side || null,
+    breakSlot: fr.break_slot || null
   }) : null;
 
   return {
