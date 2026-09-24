@@ -417,7 +417,11 @@ public class MainActivity extends Activity {
 
         webView.postDelayed(() -> {
             if (!liveFullscreen) {
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                // Keep an active broadcaster locked at the restored portrait
+                // orientation; normal viewers return to sensor-driven rotation.
+                setRequestedOrientation(broadcastActive
+                        ? ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                        : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                 webView.evaluateJavascript(
                         "window.__ncsfRestoreLivePage&&window.__ncsfRestoreLivePage();",
                         null);

@@ -817,7 +817,12 @@ function formatEventDate(value){
   function syncLiveVideoOrientation(stage,active){
     if(!stage)return;
     const portrait=window.innerHeight>window.innerWidth;
-    stage.classList.toggle('ncsf-live-rotated',Boolean(active&&portrait));
+    const usesNativeLandscape=stage.id==='broadcastStage'
+      &&window.NCSFApp
+      &&typeof window.NCSFApp.enterLiveFullscreen==='function';
+    // The broadcaster's native Android app can rotate the actual Activity.
+    // Do not CSS-rotate that page too, or it appears sideways during the change.
+    stage.classList.toggle('ncsf-live-rotated',Boolean(active&&portrait&&!usesNativeLandscape));
   }
 
   function enterNcsfLiveFullscreen(stage){
@@ -832,7 +837,11 @@ function formatEventDate(value){
     syncLiveLandscapeControl(stage,true);
 
     try{
-      if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
+      if(stage.id==='broadcastStage'&&window.NCSFApp&&typeof window.NCSFApp.enterLiveFullscreen==='function'){
+        // On the Android broadcaster, use native landscape so the camera, preview,
+        // and stage reflow together instead of leaving a portrait page rotated.
+        window.NCSFApp.enterLiveFullscreen();
+      }else if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
         window.NCSFApp.setVideoFullscreen(true);
       }else if(stage.requestFullscreen&&!document.fullscreenElement){
         stage.requestFullscreen().catch(()=>{});
@@ -854,7 +863,9 @@ function formatEventDate(value){
     ncsfFullscreenStage=null;
 
     try{
-      if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
+      if(stage?.id==='broadcastStage'&&window.NCSFApp&&typeof window.NCSFApp.exitLiveFullscreen==='function'){
+        window.NCSFApp.exitLiveFullscreen();
+      }else if(window.NCSFApp&&typeof window.NCSFApp.setVideoFullscreen==='function'){
         window.NCSFApp.setVideoFullscreen(false);
       }else if(document.fullscreenElement&&document.exitFullscreen){
         document.exitFullscreen().catch(()=>{});
