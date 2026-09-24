@@ -21,6 +21,7 @@
       <a href="/teams">Teams</a>
       <a href="/players">Players</a>
       <a href="/news">News & Events</a>
+      <a href="/opportunities">Opportunities</a>
       <a href="/rankings">Rankings</a>
     </nav>
     <div class="user-actions" id="userActions"></div>
@@ -37,6 +38,7 @@
     <button class="btn" data-admin-tab="clubs">Clubs & Teams</button>
     <button class="btn" data-admin-tab="fixtures">Fixtures</button>
     <button class="btn" data-admin-tab="content">News & Events</button>
+    <button class="btn" data-admin-tab="opportunities">Tournament Opportunities</button>
     <button class="btn" data-admin-tab="access">Access</button>
   </div>
 
@@ -177,6 +179,44 @@
         <div class="kicker">Public feed</div>
         <h2>News & Events</h2>
         <div id="adminPosts" class="empty">No posts yet.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="admin-pane" data-pane="opportunities">
+    <div class="grid two opportunity-admin-layout">
+      <div class="panel">
+        <div class="kicker">International competition</div>
+        <h2 id="opportunityFormTitle">Add tournament opportunity</h2>
+        <form id="opportunityForm" class="form-grid">
+          <input type="hidden" name="id">
+          <label class="full">Tournament name<input name="title" maxlength="180" required placeholder="World Heyball Masters Open"></label>
+          <label>Discipline<select name="discipline" required>
+            <option value="HEYBALL">Heyball</option><option value="BLACKBALL">Blackball / 8-ball</option><option value="8-BALL">8-ball</option><option value="9-BALL">9-ball</option><option value="10-BALL">10-ball</option><option value="OTHER">Other</option>
+          </select></label>
+          <label>Registration status<select name="status" required>
+            <option value="OPEN">Registration open</option><option value="COMING_SOON" selected>Coming soon</option><option value="WAITLIST">Waitlist</option><option value="INVITATION_ONLY">Invitation only</option><option value="CLOSED">Registration closed</option>
+          </select></label>
+          <label>Organizer<input name="organizer" maxlength="160" placeholder="Federation / promoter"></label>
+          <label>Location<input name="location" maxlength="200" placeholder="City, country"></label>
+          <label>Start date<input name="start_date" type="date"></label>
+          <label>End date<input name="end_date" type="date"></label>
+          <label>Registration deadline<input name="registration_deadline" type="date"></label>
+          <label>Entry fee<input name="entry_fee" maxlength="100" placeholder="e.g. USD 200"></label>
+          <label>Prize fund<input name="prize_fund" maxlength="100" placeholder="e.g. USD 63,000"></label>
+          <label class="full">Who can enter?<input name="eligibility" maxlength="240" placeholder="Open entry, qualifier required, federation nomination…"></label>
+          <label class="full">Official event page<input name="official_url" type="url" placeholder="https://…"></label>
+          <label class="full">Registration / waitlist link<input name="registration_url" type="url" placeholder="https://…"></label>
+          <label class="full">Details<textarea name="description" maxlength="1200" rows="3" placeholder="Important entry or qualification details"></textarea></label>
+          <label class="full"><span><input name="published" type="checkbox" checked style="width:auto"> Show publicly</span></label>
+          <div class="full opportunity-form-actions"><button class="btn primary" id="opportunitySubmit" type="submit">Add opportunity</button><button class="btn light hidden" id="cancelOpportunityEdit" type="button">Cancel edit</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <div class="kicker">All listings</div>
+        <h2>Manage tournament listings</h2>
+        <p class="muted">Only published listings appear to visitors. Review organizer details regularly and update registration status when it changes.</p>
+        <div id="adminOpportunities" class="empty">Loading tournament opportunities…</div>
       </div>
     </div>
   </section>

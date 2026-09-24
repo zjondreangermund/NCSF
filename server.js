@@ -323,6 +323,50 @@ async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_content_posts_public
       ON content_posts(published,type,event_date,created_at);
+
+    CREATE TABLE IF NOT EXISTS tournament_opportunities (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      discipline TEXT NOT NULL DEFAULT 'HEYBALL',
+      organizer TEXT,
+      location TEXT,
+      start_date DATE,
+      end_date DATE,
+      registration_deadline DATE,
+      entry_fee TEXT,
+      prize_fund TEXT,
+      eligibility TEXT,
+      status TEXT NOT NULL DEFAULT 'COMING_SOON'
+        CHECK (status IN ('OPEN','COMING_SOON','WAITLIST','INVITATION_ONLY','CLOSED')),
+      description TEXT,
+      registration_url TEXT,
+      official_url TEXT,
+      published BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tournament_opportunities_public
+      ON tournament_opportunities(published,start_date,end_date);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tournament_opportunities_title_unique
+      ON tournament_opportunities(LOWER(title));
+
+    INSERT INTO tournament_opportunities
+      (title,discipline,organizer,location,start_date,end_date,entry_fee,prize_fund,eligibility,status,description,registration_url,official_url)
+    SELECT seed.title,seed.discipline,seed.organizer,seed.location,seed.start_date::date,seed.end_date::date,
+           seed.entry_fee,seed.prize_fund,seed.eligibility,seed.status,seed.description,seed.registration_url,seed.official_url
+    FROM (VALUES
+      ('Universal Bangkok Open 2026','9-BALL','Bangkok Cuesports Festival / World Nineball Tour','Bangkok, Thailand','2026-11-17','2026-11-21','USD 200','USD 63,000','Open application for players 16+; all genders and nationalities. Application approval is required; entry is not guaranteed.','OPEN','WNT Silver Ranking event. Submit an application and wait for confirmation from the organizer.','https://www.bangkok-cuesports.com/events/bangkok-open/register','https://www.bangkok-cuesports.com/events/bangkok-open'),
+      ('Universal Bangkok Open 2026 Qualifier #5 – Pattaya','9-BALL','Bangkok Cuesports Festival / World Nineball Tour','Pattaya, Thailand','2026-09-26','2026-09-27','THB 2,000',NULL,'16+; open to all nationalities. Four qualifying spots.','OPEN','Official qualifier for the Universal Bangkok Open 2026. Registration is listed as open; confirm promptly with the organizer.','https://www.bangkok-cuesports.com/events/bangkok-open-2026-qualifier-5/register','https://www.bangkok-cuesports.com/events/bangkok-open-2026-qualifier-5'),
+      ('2026 Philippines Open Pool Championship','9-BALL','World Nineball Tour','Quezon City, Philippines','2026-10-20','2026-10-24','USD 350',NULL,'Public player entry; participants must be 16 or older. Check current availability with WNT.','OPEN','Official WNT player registration page showed public entries in stock when this listing was checked.','https://worldnineballtour.com/tickets/2026-philippines-open-pool-championship-player-registration-public/','https://worldnineballtour.com/events/2026-philippines-open-pool-championship/'),
+      ('Universal Open Ho Chi Minh 2026','9-BALL','World Nineball Tour','Ho Chi Minh City, Vietnam','2026-11-11','2026-11-15',NULL,'USD 63,000','Contact the WNT organizer to confirm entry requirements and availability.','COMING_SOON','Listed as a WNT ranking event; the event page directs players to contact the organizer for registration.','https://worldnineballtour.com/events/universal-open-ho-chi-minh-2026/','https://worldnineballtour.com/events/universal-open-ho-chi-minh-2026/'),
+      ('Qatar World Cup 10-Ball 2026','10-BALL','World Pool Association','Qatar','2026-12-05','2026-12-14',NULL,NULL,'Player entry and federation allocation details are not published on the WPA calendar; confirm with NCSF/WPA.','COMING_SOON','Listed on the WPA calendar. Confirm entry eligibility before making travel plans.',NULL,'https://wpapool.com/calendar/')
+    ) AS seed(title,discipline,organizer,location,start_date,end_date,entry_fee,prize_fund,eligibility,status,description,registration_url,official_url)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM tournament_opportunities existing
+      WHERE LOWER(existing.title)=LOWER(seed.title)
+    )
+    ON CONFLICT DO NOTHING;
   `);
 }
 
@@ -1745,6 +1789,18 @@ app.get("/api/public/posts", async (req, res) => {
   res.json({ posts: rows });
 });
 
+app.get("/api/public/opportunities", async (_req, res) => {
+  const { rows } = await pool.query(`
+    SELECT id,title,discipline,organizer,location,start_date,end_date,registration_deadline,
+           entry_fee,prize_fund,eligibility,status,description,registration_url,official_url,updated_at
+    FROM tournament_opportunities
+    WHERE published=TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+    ORDER BY start_date ASC NULLS LAST,title ASC
+    LIMIT 200
+  `);
+  res.json({ opportunities: rows });
+});
+
 app.get("/api/public/teams", async (req, res) => {
   const args = [];
   const where = ["t.active=TRUE"];
@@ -2110,6 +2166,112 @@ app.patch("/api/admin/posts/:id", requireRoles(ROLE.NCSF), async (req, res) => {
 app.delete("/api/admin/posts/:id", requireRoles(ROLE.NCSF), async (req, res) => {
   await pool.query("DELETE FROM content_posts WHERE id=$1", [Number(req.params.id)]);
   res.json({ ok: true });
+});
+
+const opportunityStatuses = new Set(["OPEN","COMING_SOON","WAITLIST","INVITATION_ONLY","CLOSED"]);
+const opportunityDisciplines = new Set(["HEYBALL","BLACKBALL","8-BALL","9-BALL","10-BALL","OTHER"]);
+
+function normalizeOpportunityInput(body={}, current=null) {
+  const value=(key,currentKey=key,fallback="")=>body[key]===undefined?(current?.[currentKey]??fallback):body[key];
+  const title=String(value("title")||"").trim();
+  if(!title) return {error:"Tournament name is required."};
+  if(title.length>180) return {error:"Tournament name must be 180 characters or fewer."};
+
+  const discipline=String(value("discipline","discipline","HEYBALL")||"HEYBALL").trim().toUpperCase();
+  if(!opportunityDisciplines.has(discipline)) return {error:"Choose a supported cue-sports discipline."};
+  const status=String(value("status","status","COMING_SOON")||"COMING_SOON").trim().toUpperCase();
+  if(!opportunityStatuses.has(status)) return {error:"Choose a valid registration status."};
+
+  const readText=(key,currentKey=key,max=500)=>{
+    const raw=value(key,currentKey,"");
+    const text=String(raw??"").trim();
+    return text?(text.length>max?false:text):null;
+  };
+  const organizer=readText("organizer","organizer",160);
+  const location=readText("location","location",200);
+  const entryFee=readText("entry_fee","entry_fee",100);
+  const prizeFund=readText("prize_fund","prize_fund",100);
+  const eligibility=readText("eligibility","eligibility",240);
+  const description=readText("description","description",1200);
+  if([organizer,location,entryFee,prizeFund,eligibility,description].includes(false)) return {error:"One of the tournament details is too long."};
+
+  const readDate=(key,currentKey=key)=>{
+    const raw=value(key,currentKey,"");
+    if(raw===null||raw==="") return null;
+    const date=String(raw).trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+"T00:00:00Z"))||new Date(date+"T00:00:00Z").toISOString().slice(0,10)!==date) return false;
+    return date;
+  };
+  const startDate=readDate("start_date"),endDate=readDate("end_date"),deadline=readDate("registration_deadline");
+  if(startDate===false||endDate===false||deadline===false) return {error:"Enter valid tournament dates."};
+  if(startDate&&endDate&&endDate<startDate) return {error:"End date cannot be before the start date."};
+
+  const readUrl=(key,currentKey=key)=>{
+    const raw=value(key,currentKey,"");
+    if(!raw) return null;
+    try{
+      const url=new URL(String(raw).trim());
+      if(!["http:","https:"].includes(url.protocol)) return false;
+      return url.toString();
+    }catch(_e){return false}
+  };
+  const registrationUrl=readUrl("registration_url"),officialUrl=readUrl("official_url");
+  if(registrationUrl===false||officialUrl===false) return {error:"Use a valid http or https link for event and registration URLs."};
+
+  const publishedRaw=value("published","published",true);
+  const published=typeof publishedRaw==="boolean"?publishedRaw:publishedRaw==="true"||publishedRaw==="on"||publishedRaw==="1";
+  return {data:{
+    title,discipline,organizer,location,start_date:startDate,end_date:endDate,registration_deadline:deadline,
+    entry_fee:entryFee,prize_fund:prizeFund,eligibility,status,description,
+    registration_url:registrationUrl,official_url:officialUrl,published
+  }};
+}
+
+app.get("/api/admin/opportunities", requireRoles(ROLE.NCSF), async (_req,res) => {
+  const {rows}=await pool.query("SELECT * FROM tournament_opportunities ORDER BY start_date ASC NULLS LAST,id DESC");
+  res.json({opportunities:rows});
+});
+
+app.post("/api/admin/opportunities", requireRoles(ROLE.NCSF), async (req,res) => {
+  const normalized=normalizeOpportunityInput(req.body);
+  if(normalized.error) return res.status(400).json({error:normalized.error});
+  const o=normalized.data;
+  const {rows}=await pool.query(`
+    INSERT INTO tournament_opportunities
+      (title,discipline,organizer,location,start_date,end_date,registration_deadline,entry_fee,prize_fund,
+       eligibility,status,description,registration_url,official_url,published,created_by)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+    RETURNING *
+  `,[o.title,o.discipline,o.organizer,o.location,o.start_date,o.end_date,o.registration_deadline,
+      o.entry_fee,o.prize_fund,o.eligibility,o.status,o.description,o.registration_url,o.official_url,o.published,req.user.id]);
+  res.status(201).json({opportunity:rows[0]});
+});
+
+app.patch("/api/admin/opportunities/:id", requireRoles(ROLE.NCSF), async (req,res) => {
+  const id=Number(req.params.id);
+  if(!Number.isInteger(id)||id<1) return res.status(400).json({error:"Invalid opportunity."});
+  const currentResult=await pool.query("SELECT * FROM tournament_opportunities WHERE id=$1",[id]);
+  if(!currentResult.rowCount) return res.status(404).json({error:"Opportunity not found."});
+  const normalized=normalizeOpportunityInput(req.body,currentResult.rows[0]);
+  if(normalized.error) return res.status(400).json({error:normalized.error});
+  const o=normalized.data;
+  const {rows}=await pool.query(`
+    UPDATE tournament_opportunities
+    SET title=$2,discipline=$3,organizer=$4,location=$5,start_date=$6,end_date=$7,registration_deadline=$8,
+        entry_fee=$9,prize_fund=$10,eligibility=$11,status=$12,description=$13,registration_url=$14,
+        official_url=$15,published=$16,updated_at=NOW()
+    WHERE id=$1 RETURNING *
+  `,[id,o.title,o.discipline,o.organizer,o.location,o.start_date,o.end_date,o.registration_deadline,
+      o.entry_fee,o.prize_fund,o.eligibility,o.status,o.description,o.registration_url,o.official_url,o.published]);
+  res.json({opportunity:rows[0]});
+});
+
+app.delete("/api/admin/opportunities/:id", requireRoles(ROLE.NCSF), async (req,res) => {
+  const id=Number(req.params.id);
+  if(!Number.isInteger(id)||id<1) return res.status(400).json({error:"Invalid opportunity."});
+  const result=await pool.query("DELETE FROM tournament_opportunities WHERE id=$1",[id]);
+  if(!result.rowCount) return res.status(404).json({error:"Opportunity not found."});
+  res.json({ok:true});
 });
 
 app.post("/api/admin/seasons", requireRoles(ROLE.NCSF), async (req, res) => {
@@ -2710,6 +2872,7 @@ const pageRoutes = {
   "/live": "live.html",
   "/broadcast": "broadcast.html",
   "/news": "news.html",
+  "/opportunities": "opportunities.html",
   "/rankings": "rankings.html",
   "/admin": "admin.html",
   "/club-admin": "club-admin.html",

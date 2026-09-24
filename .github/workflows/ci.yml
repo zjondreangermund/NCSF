@@ -50,6 +50,7 @@ jobs:
           done
           curl --fail --silent http://127.0.0.1:3000/api/health
           curl --fail --silent http://127.0.0.1:3000/api/setup/status
+          curl --fail --silent http://127.0.0.1:3000/api/public/opportunities
       - name: Print server log on failure
         if: failure()
         run: cat /tmp/ncsf.log || true

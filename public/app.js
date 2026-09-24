@@ -658,6 +658,58 @@ function formatEventDate(value){
       ? '<div class="news-feed">'+updates.map(p=>`<article class="news-card ${p.pinned?'pinned':''}"><div class="news-meta"><span class="content-type ${p.type}">${esc(p.type)}</span><span>${esc(new Date(p.created_at).toLocaleDateString())}</span></div><h3>${esc(p.title)}</h3>${p.body?`<p>${esc(p.body)}</p>`:''}</article>`).join('')+'</div>'
       : '<div class="empty">No news or announcements published.</div>';
   }
+  function tournamentDateRange(o){
+    const fmt=value=>{
+      if(!value)return "Date TBA";
+      const d=new Date(String(value).slice(0,10)+"T12:00:00");
+      return d.toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"});
+    };
+    if(!o.start_date)return "Dates to be announced";
+    if(o.end_date&&String(o.end_date).slice(0,10)!==String(o.start_date).slice(0,10))return fmt(o.start_date)+" – "+fmt(o.end_date);
+    return fmt(o.start_date);
+  }
+  function opportunityStatusLabel(status){
+    return ({OPEN:"Registration open",COMING_SOON:"Coming soon",WAITLIST:"Waitlist",INVITATION_ONLY:"Invitation only",CLOSED:"Registration closed"})[status]||"Status to be confirmed";
+  }
+  function renderPublicOpportunities(opportunities){
+    const box=$("#opportunityList");
+    if(!box)return;
+    const discipline=$("#opportunityDiscipline")?.value||"";
+    const status=$("#opportunityStatus")?.value||"";
+    const search=($("#opportunitySearch")?.value||"").trim().toLowerCase();
+    const rows=opportunities.filter(o=>
+      (!discipline||o.discipline===discipline)&&(!status||o.status===status)&&
+      (!search||[o.title,o.organizer,o.location,o.discipline].some(v=>String(v||"").toLowerCase().includes(search)))
+    );
+    if(!rows.length){
+      box.innerHTML=opportunities.length
+        ? '<div class="empty">No tournaments match those filters. Try changing your search.</div>'
+        : '<div class="empty opportunity-empty"><strong>No tournament opportunities listed yet.</strong><br>NCSF will publish confirmed events here as registration details become available.</div>';
+      return;
+    }
+    box.innerHTML='<div class="opportunity-grid">'+rows.map(o=>{
+      const dates=tournamentDateRange(o);
+      const updated=o.updated_at?'<p class="opportunity-updated">Listing updated '+esc(new Date(o.updated_at).toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"}))+'</p>':'';
+      const fee=o.entry_fee?'<div><small>Entry fee</small><strong>'+esc(o.entry_fee)+'</strong></div>':'';
+      const prize=o.prize_fund?'<div><small>Prize fund</small><strong>'+esc(o.prize_fund)+'</strong></div>':'';
+      const deadline=o.registration_deadline?'<p class="opportunity-deadline"><strong>Registration deadline:</strong> '+esc(tournamentDateRange({start_date:o.registration_deadline}))+'</p>':'';
+      const registrationLabel=o.status==="WAITLIST"?"Join waitlist":o.status==="INVITATION_ONLY"?"Entry information":o.status==="OPEN"?"Register":"Event details";
+      const registration=o.registration_url&&o.status!=="CLOSED"?'<a class="btn primary small" href="'+esc(o.registration_url)+'" target="_blank" rel="noopener noreferrer">'+registrationLabel+'</a>':'';
+      const official=o.official_url?'<a class="btn secondary small" href="'+esc(o.official_url)+'" target="_blank" rel="noopener noreferrer">Official event page</a>':'';
+      return '<article class="opportunity-card"><div class="opportunity-card-top"><span class="opportunity-discipline">'+esc(o.discipline.replaceAll("_"," "))+'</span><span class="opportunity-status '+esc(o.status)+'">'+esc(opportunityStatusLabel(o.status))+'</span></div><h2>'+esc(o.title)+'</h2><p class="opportunity-meta">'+esc([o.location,o.organizer].filter(Boolean).join(" · ")||"Location and organizer to be announced")+'</p><p class="opportunity-dates">'+esc(dates)+'</p>'+(o.eligibility?'<p class="opportunity-eligibility"><strong>Who can enter:</strong> '+esc(o.eligibility)+'</p>':'')+(fee||prize?'<div class="opportunity-prizes">'+fee+prize+'</div>':'')+(o.description?'<p class="opportunity-description">'+esc(o.description)+'</p>':'')+deadline+updated+'<div class="opportunity-actions">'+registration+official+'</div></article>';
+    }).join("")+'</div>';
+  }
+  async function initOpportunitiesPage(){
+    const box=$("#opportunityList");
+    try{
+      const data=await api("/api/public/opportunities");
+      const opportunities=data.opportunities||[];
+      ["#opportunityDiscipline","#opportunityStatus"].forEach(sel=>$(sel)?.addEventListener("change",()=>renderPublicOpportunities(opportunities)));
+      $("#opportunitySearch")?.addEventListener("input",()=>renderPublicOpportunities(opportunities));
+      renderPublicOpportunities(opportunities);
+    }catch(err){if(box)box.innerHTML='<div class="empty">'+esc(err.message)+'</div>'}
+  }
+
   function youtubeEmbedUrl(url){
     try{
       const u=new URL(url,location.origin);
@@ -2022,6 +2074,7 @@ function formatEventDate(value){
     syncFixtureTeams();
     loadAdminDashboard();
     loadAdminPosts();
+    loadAdminOpportunities();
   }
   async function loadAdminDashboard(){
     try{
@@ -2106,6 +2159,46 @@ async function loadAdminPosts(){
       }));
     }catch(err){box.innerHTML='<div class="empty">'+esc(err.message)+'</div>'}
   }
+  async function loadAdminOpportunities(){
+    const box=$("#adminOpportunities");
+    if(!box)return;
+    try{
+      const data=await api("/api/admin/opportunities");
+      const opportunities=data.opportunities||[];
+      box.innerHTML=opportunities.length
+        ? '<div class="card-list">'+opportunities.map(o=>'<div class="card-row opportunity-admin-row"><span><strong>'+esc(o.title)+'</strong><small>'+esc(o.discipline.replaceAll("_"," "))+' · '+esc(tournamentDateRange(o))+' · '+esc(opportunityStatusLabel(o.status))+(o.published?" · Published":" · Draft")+'</small></span><span><button class="btn small opportunity-edit" data-id="'+o.id+'">Edit</button> <button class="btn small danger opportunity-delete" data-id="'+o.id+'">Delete</button></span></div>').join("")+'</div>'
+        : '<div class="empty">No international tournaments have been added yet.</div>';
+      $(".opportunity-edit").forEach(btn=>btn.addEventListener("click",()=>{
+        const o=opportunities.find(item=>item.id===Number(btn.dataset.id));
+        const form=$("#opportunityForm"); if(!o||!form)return;
+        form.elements.namedItem("id").value=o.id;
+        for(const name of ["title","discipline","organizer","location","start_date","end_date","registration_deadline","entry_fee","prize_fund","eligibility","status","description","registration_url","official_url"]){
+          const input=form.elements.namedItem(name);
+          if(input)input.value=o[name]===null||o[name]===undefined?"":(name.endsWith("_date")?String(o[name]).slice(0,10):String(o[name]));
+        }
+        form.elements.namedItem("published").checked=Boolean(o.published);
+        $("#opportunityFormTitle").textContent="Edit tournament opportunity";
+        $("#opportunitySubmit").textContent="Save changes";
+        $("#cancelOpportunityEdit").classList.remove("hidden");
+        form.scrollIntoView({behavior:"smooth",block:"start"});
+      }));
+      $(".opportunity-delete").forEach(btn=>btn.addEventListener("click",async()=>{
+        const o=opportunities.find(item=>item.id===Number(btn.dataset.id));
+        if(!o||!confirm("Delete “"+o.title+"”? This cannot be undone."))return;
+        try{await api("/api/admin/opportunities/"+o.id,{method:"DELETE"});await loadAdminOpportunities();toast("Opportunity deleted")}
+        catch(err){toast(err.message,true)}
+      }));
+    }catch(err){box.innerHTML='<div class="empty">'+esc(err.message)+'</div>'}
+  }
+  function resetOpportunityForm(){
+    const form=$("#opportunityForm"); if(!form)return;
+    form.reset();
+    form.elements.namedItem("id").value="";
+    form.elements.namedItem("published").checked=true;
+    $("#opportunityFormTitle").textContent="Add tournament opportunity";
+    $("#opportunitySubmit").textContent="Add opportunity";
+    $("#cancelOpportunityEdit").classList.add("hidden");
+  }
   function renderAdminLists(){
     const m=state.meta;
     $('#adminClubList').innerHTML=m.clubs.length?'<div class="card-list">'+m.clubs.map(c=>`<div class="card-row"><span><strong>${esc(c.name)}</strong><small>${m.teams.filter(t=>t.club_id===c.id).map(t=>t.name).join(', ')||'No teams'}</small></span></div>`).join('')+'</div>':'<div class="empty">No clubs yet.</div>';
@@ -2135,6 +2228,23 @@ async function loadAdminPosts(){
     const contentType=$('#contentType'), contentDate=$('#contentEventDate');
     const syncContentType=()=>{if(contentDate){const event=contentType?.value==='EVENT';contentDate.disabled=!event;contentDate.required=event;if(!event)contentDate.value=''}};
     contentType?.addEventListener('change',syncContentType); syncContentType();
+    $("#cancelOpportunityEdit")?.addEventListener("click",resetOpportunityForm);
+    $("#opportunityForm")?.addEventListener("submit",async e=>{
+      e.preventDefault();
+      const form=e.currentTarget;
+      const submit=$("#opportunitySubmit");
+      if(submit?.disabled)return;
+      if(submit)submit.disabled=true;
+      try{
+        const payload=formObject(form);
+        const id=payload.id; delete payload.id;
+        await api(id?"/api/admin/opportunities/"+id:"/api/admin/opportunities",{method:id?"PATCH":"POST",body:payload});
+        resetOpportunityForm();
+        await loadAdminOpportunities();
+        toast(id?"Tournament opportunity updated":"Tournament opportunity added");
+      }catch(err){toast(err.message,true)}
+      finally{if(submit)submit.disabled=false}
+    });
     $('#contentPostForm')?.addEventListener('submit',async e=>{
       e.preventDefault();
       const form=e.currentTarget, submit=form.querySelector('[type="submit"]');
@@ -2190,6 +2300,7 @@ async function loadAdminPosts(){
     if(PAGE==='live-page')await initLivePage();
     if(PAGE==='broadcast-page')await initBroadcastPage();
     if(PAGE==='news-page')await initNewsPage();
+    if(PAGE==='opportunities-page')await initOpportunitiesPage();
     if(PAGE==='rankings-page')await initRankingsPage();
     if(PAGE==='scoresheet')await initScoresheet();
     if(PAGE==='team')await initTeam();

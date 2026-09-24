@@ -3927,3 +3927,107 @@ body.ncsf-live-fullscreen-active{
 .ncsf-live-fullscreen .broadcast-viewer-list{
   right:122px!important;
 }
+
+
+/* International tournament opportunity listings */
+.opportunity-intro{
+  margin:0 0 18px;
+  color:var(--muted);
+  line-height:1.6;
+}
+.opportunity-filters{
+  display:grid;
+  grid-template-columns:minmax(0,1.5fr) minmax(150px,1fr) minmax(150px,1fr);
+  gap:10px;
+  margin-bottom:18px;
+}
+.opportunity-filters input,
+.opportunity-filters select{
+  min-width:0;
+  width:100%;
+  padding:10px 12px;
+  border:1px solid #d5dee8;
+  border-radius:10px;
+  background:#fff;
+  color:var(--navy);
+  font:inherit;
+}
+.opportunity-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));
+  gap:14px;
+}
+.opportunity-card{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  padding:17px;
+  border:1px solid #dce5ee;
+  border-radius:15px;
+  background:linear-gradient(150deg,#fff,#f8fbfe);
+  box-shadow:0 8px 22px rgba(13,35,58,.07);
+}
+.opportunity-card-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.opportunity-discipline,
+.opportunity-status{
+  display:inline-flex;
+  align-items:center;
+  padding:5px 9px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:850;
+}
+.opportunity-discipline{background:#e7eff7;color:#183a5d}
+.opportunity-status{background:#edf0f4;color:#4c5c6c}
+.opportunity-status.OPEN{background:#e2f6eb;color:#17693c}
+.opportunity-status.WAITLIST{background:#fff3d8;color:#815500}
+.opportunity-status.INVITATION_ONLY{background:#eee8fb;color:#5d3d90}
+.opportunity-status.CLOSED{background:#fce8e8;color:#8c2a2a}
+.opportunity-card h2{margin:1px 0 0;font-size:20px;line-height:1.25}
+.opportunity-meta,.opportunity-description,.opportunity-eligibility,.opportunity-deadline{
+  margin:0;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.opportunity-dates{margin:0;color:var(--navy);font-size:14px;font-weight:850}
+.opportunity-prizes{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.opportunity-prizes>div{
+  min-width:0;
+  display:grid;
+  gap:3px;
+  padding:9px 10px;
+  border-radius:10px;
+  background:#f1f5f8;
+}
+.opportunity-prizes small{color:var(--muted);font-size:10px}
+.opportunity-prizes strong{overflow-wrap:anywhere;color:var(--navy);font-size:13px}
+.opportunity-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:5px}
+.opportunity-empty{line-height:1.8}
+.opportunity-updated{margin:0;color:var(--muted);font-size:10px}
+.opportunity-heyball-note{margin:18px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.opportunity-form-actions{display:flex;flex-wrap:wrap;gap:8px}
+.opportunity-admin-row{gap:12px}
+.opportunity-admin-row>span:first-child{min-width:0}
+.opportunity-admin-row small{overflow-wrap:anywhere}
+@media(max-width:760px){
+  .opportunity-filters{grid-template-columns:1fr 1fr}
+  .opportunity-filters input{grid-column:1/-1}
+  .opportunity-admin-layout{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  .opportunity-card{padding:14px}
+  .opportunity-prizes{grid-template-columns:1fr}
+}
