@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        applyImmersiveMode();
         getWindow().setStatusBarColor(Color.rgb(7, 24, 44));
         getWindow().setNavigationBarColor(Color.rgb(7, 24, 44));
 
@@ -62,6 +63,7 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
         setContentView(root);
+        applyImmersiveMode();
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -107,10 +109,7 @@ public class MainActivity extends Activity {
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
                 webView.postDelayed(() ->
                         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE), 180);
-                getWindow().getDecorView().setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_FULLSCREEN |
-                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+                applyImmersiveMode();
             }
 
             @Override
@@ -120,7 +119,7 @@ public class MainActivity extends Activity {
                 customView = null;
                 webView.setVisibility(View.VISIBLE);
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+                applyImmersiveMode();
                 if (customViewCallback != null) {
                     customViewCallback.onCustomViewHidden();
                     customViewCallback = null;
@@ -201,6 +200,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void applyImmersiveMode() {
+        int flags = View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+        getWindow().getDecorView().setSystemUiVisibility(flags);
+    }
+
     private class AppBridge {
         @JavascriptInterface
         public void printPage() {
@@ -269,7 +278,7 @@ public class MainActivity extends Activity {
                             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
                 } else {
-                    getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+                    applyImmersiveMode();
                 }
             });
         }
@@ -399,20 +408,13 @@ public class MainActivity extends Activity {
                 },
                 280);
 
-        if (immersive) {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_FULLSCREEN |
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        } else {
-            // Broadcaster uses landscape capture but remains a normal scrollable page.
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
-        }
+        // Keep the whole app immersive in both landscape capture and video views.
+        applyImmersiveMode();
     }
 
     private void restorePortraitOrientation(boolean fromFullscreen) {
         liveFullscreen = false;
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        applyImmersiveMode();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
         webView.postDelayed(() -> {
@@ -434,8 +436,15 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) applyImmersiveMode();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        applyImmersiveMode();
         if (webView != null) {
             webView.postDelayed(() -> notifyWebMediaPermissionResult(), 250);
         }
