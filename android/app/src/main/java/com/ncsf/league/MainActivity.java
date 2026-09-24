@@ -45,6 +45,8 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingMediaPermission;
     private boolean liveFullscreen = false;
+    private boolean broadcastActive = false;
+    private int orientationBeforeBroadcast = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -239,8 +241,21 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (active) {
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    if (!broadcastActive) {
+                        orientationBeforeBroadcast = getRequestedOrientation();
+                        broadcastActive = true;
+                        // Keep the app's current orientation while streaming so camera
+                        // metadata and the live preview do not rotate when the phone moves.
+                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LOCKED);
+                    }
                 } else {
                     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    if (broadcastActive) {
+                        broadcastActive = false;
+                        if (!liveFullscreen) {
+                            setRequestedOrientation(orientationBeforeBroadcast);
+                        }
+                    }
                 }
             });
         }

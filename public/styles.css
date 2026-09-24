@@ -4031,3 +4031,31 @@ body.ncsf-live-fullscreen-active{
   .opportunity-card{padding:14px}
   .opportunity-prizes{grid-template-columns:1fr}
 }
+
+
+/* Link international tournaments from the News & Events section. */
+.news-opportunities-callout{
+  margin:0 0 18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.news-opportunities-callout strong{
+  display:block;
+  color:var(--navy);
+  font-size:17px;
+}
+.news-opportunities-callout p{
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.45;
+}
+@media(max-width:620px){
+  .news-opportunities-callout{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .news-opportunities-callout .btn{width:100%;text-align:center}
+}
