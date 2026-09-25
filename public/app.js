@@ -307,7 +307,21 @@
     const homeRoster=selectedRoster('HOME');
     const awayRoster=selectedRoster('AWAY');
     const side=userSide(f);
-    const subSides=state.user?.role==='NCSF_ADMIN'?['HOME','AWAY']:(side&&side!=='NCSF'?[side]:[]);
+    const permittedSubSides=state.user?.role==='NCSF_ADMIN'?['HOME','AWAY']:(side&&side!=='NCSF'?[side]:[]);
+    const subCountFor=teamSide=>(data.substitutions||[]).filter(sub=>sub.side===teamSide).length;
+    const subSides=permittedSubSides.filter(teamSide=>subCountFor(teamSide)<3);
+    let completedRounds=0;
+    for(let round=1;round<=5;round++){
+      const roundFrames=data.frames.filter(frame=>frame.round_no===round);
+      if(roundFrames.length!==5||roundFrames.some(frame=>!frame.winner_side))break;
+      completedRounds=round;
+    }
+    const nextEffectiveRound=completedRounds+1;
+    const nextRoundStarted=nextEffectiveRound<=5&&data.frames.some(frame=>frame.round_no===nextEffectiveRound&&frame.winner_side);
+    const canRecordSub=completedRounds>0&&nextEffectiveRound<=5&&!nextRoundStarted;
+    const effectiveRounds=canRecordSub
+      ?[...Array(6-nextEffectiveRound)].map((_,index)=>nextEffectiveRound+index).filter(round=>!data.frames.some(frame=>frame.round_no===round&&frame.winner_side))
+      :[];
     const date=f.fixtureDate?new Date(f.fixtureDate):null;
     const dateText=date?date.toLocaleDateString([], {year:'numeric',month:'2-digit',day:'2-digit'}):'TBA';
     const timeText=date?date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'TBA';
@@ -392,18 +406,19 @@
           <tr><td><strong>${esc(f.awayTeamName)}</strong></td><td>${matchComplete?1:0}</td><td>${aWin}</td><td>${draw}</td><td>${matchComplete&&!aWin&&!draw?1:0}</td><td>${t.away}</td><td>${t.home}</td></tr>
         </tbody></table></div>
       </section>
-      ${subSides.length?`<section class="substitution-card no-print">
-        <div class="section-head"><div><span class="eyebrow">RESERVES</span><h3>Record a Substitution</h3></div></div>
+
+      ${permittedSubSides.length?`<section class="substitution-card no-print">
+        <div class="section-head"><div><span class="eyebrow">RESERVES</span><h3>Record a Substitution</h3></div><small>${Math.max(0,3-Math.max(...permittedSubSides.map(subCountFor)))} of 3 remaining per side</small></div>
+        ${!canRecordSub?'<p class="muted sub-guidance">Complete a full round before recording a substitution. The next round will be selected automatically.</p>':!subSides.length?'<p class="muted sub-guidance">Three substitutions have been used for each side you manage.</p>':`
         <form id="subForm" class="form-grid">
-          <label>Side<select name="side" id="subSide">${subSides.map(s=>`<option value="${s}">${s}</option>`).join('')}</select></label>
-          <label>Effective Round<select name="effectiveRound">${[1,2,3,4,5].map(r=>`<option value="${r}">${r}</option>`).join('')}</select></label>
+          <label>Side<select name="side" id="subSide">${subSides.map(s=>'<option value="'+s+'">'+s+' — '+(3-subCountFor(s))+' remaining</option>').join('')}</select></label>
+          <label>Effective Round<select name="effectiveRound" id="subEffectiveRound">${effectiveRounds.map((r,index)=>'<option value="'+r+'" '+(index===0?'selected':'')+'>'+r+(r===nextEffectiveRound?' — next round':'')+'</option>').join('')}</select></label>
           <label>Player Out<select name="outPlayerId" id="subOut"></select></label>
-          <label>Reserve In<select name="inPlayerId" id="subIn"></select></label>
+          <label>Player In<select name="inPlayerId" id="subIn"></select></label>
           <button class="btn secondary full" type="submit">Apply Substitution</button>
-        </form>
-        ${data.substitutions.length?'<div class="card-list">'+data.substitutions.map(s=>`<div class="card-row"><span><strong>${esc(s.side)}: ${esc(s.out_player_name)} → ${esc(s.in_player_name)}</strong><small>From round ${s.effective_round}</small></span></div>`).join('')+'</div>':''}
-      </section>`:''}
-      <section class="compact-print-sheet print-only">
+        </form>`}
+        ${data.substitutions.length?'<div class="card-list">'+data.substitutions.map(s=>'<div class="card-row"><span><strong>'+esc(s.side)+': '+esc(s.out_player_name)+' → '+esc(s.in_player_name)+'</strong><small>From round '+esc(s.effective_round)+'</small></span></div>').join('')+'</div>':''}
+      </section>`:''}      <section class="compact-print-sheet print-only">
         <header class="print-head">
           <img src="/ncsf-logo.jpg" alt="NCSF">
           <div>
@@ -453,12 +468,20 @@
     const uploadLabel=$('#scoreUpload')?.closest('label');
     if(uploadLabel)uploadLabel.classList.toggle('hidden',!state.user||f.status==='APPROVED');
     function fillSubs(){
-      const s=$('#subSide')?.value;if(!s)return;
-      const starters=s==='HOME'?currentHome:currentAway;
-      $('#subOut').innerHTML=options(starters,'player_id',p=>p.first_name+' '+p.last_name,null,'Select player out');
-      $('#subIn').innerHTML=options(reserveOptions(s),'id',p=>p.first_name+' '+p.last_name,null,'Select selected reserve');
+      const s=$('#subSide')?.value;
+      const round=Number($('#subEffectiveRound')?.value||nextEffectiveRound);
+      if(!s||!round)return;
+      const roster=selectedRoster(s);
+      const field=s==='HOME'?'home_player_id':'away_player_id';
+      const activeIds=new Set(data.frames.filter(frame=>frame.round_no===round).map(frame=>Number(frame[field])).filter(Boolean));
+      const active=roster.filter(player=>activeIds.has(player.player_id));
+      const available=roster.filter(player=>!activeIds.has(player.player_id));
+      $('#subOut').innerHTML=options(active,'player_id',p=>p.first_name+' '+p.last_name,null,'Select player out');
+      $('#subIn').innerHTML=options(available,'player_id',p=>p.first_name+' '+p.last_name,null,'Select player in');
     }
-    $('#subSide')?.addEventListener('change',fillSubs); fillSubs();
+    $('#subSide')?.addEventListener('change',fillSubs);
+    $('#subEffectiveRound')?.addEventListener('change',fillSubs);
+    fillSubs();
   }
   function bindSheetControls(){
     $$('.save-lineup').forEach(btn=>btn.addEventListener('click',async()=>{
