@@ -3252,10 +3252,57 @@ body:not(.ncsf-live-fullscreen-active){
   color:var(--muted);
   font-weight:600;
 }
+.award-multi-dropdown{
+  position:relative;
+}
+.award-multi-dropdown[open]{
+  z-index:40;
+}
+.award-multi-dropdown[data-disabled="true"]{
+  opacity:.65;
+}
+.award-multi-dropdown summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:42px;
+  padding:8px 12px;
+  border:1px solid #cbd6e1;
+  border-radius:9px;
+  background:#fff;
+  cursor:pointer;
+  list-style:none;
+  font-weight:700;
+}
+.award-multi-dropdown summary::-webkit-details-marker{display:none}
+.award-multi-dropdown summary::after{
+  content:"⌄";
+  color:#526275;
+  font-size:16px;
+}
+.award-multi-dropdown summary strong{
+  margin-left:auto;
+  color:#526275;
+  font-size:11px;
+  font-weight:600;
+}
 .award-choice-list{
+  position:absolute;
+  z-index:100;
+  top:calc(100% + 5px);
+  left:0;
+  right:0;
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
   gap:7px;
+  max-height:270px;
+  overflow-y:auto;
+  padding:9px;
+  border:1px solid #cbd6e1;
+  border-radius:10px;
+  background:#fff;
+  box-shadow:0 12px 28px rgba(7,24,44,.2);
 }
 .award-choice{
   display:flex;

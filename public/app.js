@@ -353,17 +353,20 @@
           </div>
 
           <fieldset class="award-multi-field">
-            <legend>Break & Run <small>Select every player who achieved it</small></legend>
-            <div class="award-choice-list">
-              ${players.map(p=>{
-                const id=Number(p.id);
-                const name=(p.first_name+' '+p.last_name).trim();
-                return '<label class="award-choice"><input type="checkbox" name="breakRunPlayerIds" value="'+esc(id)+'" '+(breakRunIds.has(id)?'checked':'')+' '+(awardsEditable?'':'disabled')+'><span>'+esc(name)+(p.ncsf_number?'<small>'+esc(p.ncsf_number)+'</small>':'')+'</span></label>';
-              }).join('')}
-            </div>
+            <legend>Break & Run <small>Select player(s)</small></legend>
+            <details class="award-multi-dropdown" ${awardsEditable?'':'data-disabled="true"'}>
+              <summary><span>Choose player(s)</span><strong data-break-run-count>${breakRunIds.size} selected</strong></summary>
+              <div class="award-choice-list">
+                ${players.map(p=>{
+                  const id=Number(p.id);
+                  const name=(p.first_name+' '+p.last_name).trim();
+                  return '<label class="award-choice"><input type="checkbox" name="breakRunPlayerIds" value="'+esc(id)+'" '+(breakRunIds.has(id)?'checked':'')+' '+(awardsEditable?'':'disabled')+'><span>'+esc(name)+(p.ncsf_number?'<small>'+esc(p.ncsf_number)+'</small>':'')+'</span></label>';
+                }).join('')}
+              </div>
+            </details>
           </fieldset>
 
-          <label>Rack & Run<select name="rackRunPlayerId" ${awardsEditable?'':'disabled'}>${options(players,'id',p=>p.first_name+' '+p.last_name,f.rackRunPlayerId,'— Blank —')}</select></label>
+          <label>Rack & Run<select class="award-player-select" name="rackRunPlayerId" ${awardsEditable?'':'disabled'}>${options(players,'id',p=>p.first_name+' '+p.last_name,f.rackRunPlayerId,'— Blank —')}</select></label>
 
           <div class="auto-award-field bonus">
             <span>Bonus Team <em>AUTO</em></span>
@@ -477,6 +480,12 @@
         renderScoresheet(); $('#saveState').textContent='Saved';
       }catch(err){$('#saveState').textContent='Not saved';toast(err.message,true)}
     }));
+    $('#extrasForm')?.addEventListener('change',e=>{
+      if(e.target?.name!=='breakRunPlayerIds')return;
+      const count=$('input[name="breakRunPlayerIds"]:checked',e.currentTarget).length;
+      const summary=$('[data-break-run-count]',e.currentTarget);
+      if(summary)summary.textContent=count===1?'1 selected':count+' selected';
+    });
     $('#extrasForm')?.addEventListener('submit',async e=>{
       e.preventDefault(); try{
         const body=formObject(e.currentTarget);
