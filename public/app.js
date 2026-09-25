@@ -202,15 +202,18 @@
       <div class="score-grid score-grid-head">
         <div>#</div><div>HOME TEAM</div><div></div><div>VS</div><div></div><div>AWAY TEAM</div><div>#</div>
       </div>
-      ${frames.map(fr=>`<div class="score-grid">
-        <div class="score-slot-no">${fr.home_slot}</div>
-        <div class="score-player">${esc(fr.home_player_name)}</div>
-        <button class="score-cell frame-win ${fr.winner_side==='HOME'?'selected':''}" data-frame="${fr.id}" data-winner="HOME" ${editable?'':'disabled'}>${fr.winner_side==='HOME'?'1':'0'}</button>
-        <div class="score-vs"><span>vs</span><small class="score-breaker">BREAK ${esc(fr.break_label||'—')}</small></div>
-        <button class="score-cell frame-win ${fr.winner_side==='AWAY'?'selected':''}" data-frame="${fr.id}" data-winner="AWAY" ${editable?'':'disabled'}>${fr.winner_side==='AWAY'?'1':'0'}</button>
-        <div class="score-player away">${esc(fr.away_player_name)}</div>
-        <div class="score-slot-no">${letters[(fr.away_slot||1)-1]}</div>
-      </div>`).join('')}
+      ${frames.map(fr=>{
+        const homeBreaker=fr.break_side==='HOME';
+        return `<div class="score-grid break-row ${homeBreaker?'break-home':'break-away'}">
+          <div class="score-slot-no">${fr.home_slot}</div>
+          <div class="score-player ${homeBreaker?'break-player':''}" ${homeBreaker?'title="Player to break"':''}>${esc(fr.home_player_name)}</div>
+          <button class="score-cell frame-win ${fr.winner_side==='HOME'?'selected':''}" data-frame="${fr.id}" data-winner="HOME" ${editable?'':'disabled'}>${fr.winner_side==='HOME'?'1':'0'}</button>
+          <div class="score-vs"><span>vs</span></div>
+          <button class="score-cell frame-win ${fr.winner_side==='AWAY'?'selected':''}" data-frame="${fr.id}" data-winner="AWAY" ${editable?'':'disabled'}>${fr.winner_side==='AWAY'?'1':'0'}</button>
+          <div class="score-player away ${!homeBreaker?'break-player':''}" ${!homeBreaker?'title="Player to break"':''}>${esc(fr.away_player_name)}</div>
+          <div class="score-slot-no">${letters[(fr.away_slot||1)-1]}</div>
+        </div>`;
+      }).join('')}
       <div class="score-total-row"><strong>TOTAL</strong><strong>${home}</strong><span></span><strong>${away}</strong><strong>TOTAL</strong></div>
       <div class="score-progressive-row"><em>Progressive Total</em><strong>${pHome}</strong><span></span><strong>${pAway}</strong><em>Progressive Total</em></div>
     </section>`;
@@ -274,17 +277,20 @@
     return `<section class="print-round">
       <div class="print-round-head"><strong>ROUND ${round}</strong><span>${home} - ${away}</span></div>
       <table>
-        <thead><tr><th>#</th><th>Home</th><th>H</th><th>Break</th><th>A</th><th>Away</th><th>#</th></tr></thead>
+        <thead><tr><th>#</th><th>Home</th><th>H</th><th>VS</th><th>A</th><th>Away</th><th>#</th></tr></thead>
         <tbody>
-          ${frames.map(fr=>`<tr>
-            <td>${fr.home_slot}</td>
-            <td>${esc(fr.home_player_name)}</td>
-            <td class="print-score">${fr.winner_side==='HOME'?'1':'0'}</td>
-            <td class="print-break">${esc(fr.break_label||'—')}</td>
-            <td class="print-score">${fr.winner_side==='AWAY'?'1':'0'}</td>
-            <td>${esc(fr.away_player_name)}</td>
-            <td>${letters[(fr.away_slot||1)-1]}</td>
-          </tr>`).join('')}
+          ${frames.map(fr=>{
+            const homeBreaker=fr.break_side==='HOME';
+            return `<tr class="break-row ${homeBreaker?'break-home':'break-away'}">
+              <td>${fr.home_slot}</td>
+              <td class="${homeBreaker?'break-player':''}">${esc(fr.home_player_name)}</td>
+              <td class="print-score">${fr.winner_side==='HOME'?'1':'0'}</td>
+              <td class="print-vs">vs</td>
+              <td class="print-score">${fr.winner_side==='AWAY'?'1':'0'}</td>
+              <td class="${!homeBreaker?'break-player':''}">${esc(fr.away_player_name)}</td>
+              <td>${letters[(fr.away_slot||1)-1]}</td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </section>`;

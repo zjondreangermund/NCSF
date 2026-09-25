@@ -4122,3 +4122,24 @@ body.ncsf-live-fullscreen-active{
   text-align:center;
   line-height:1.1;
 }
+
+/* Clearly mark the breaker without squeezing labels between frame scores. */
+.score-grid.break-row{
+  background-color:rgba(207,160,38,.055);
+  background-image:repeating-linear-gradient(135deg,rgba(207,160,38,.055) 0,rgba(207,160,38,.055) 4px,transparent 4px,transparent 10px);
+}
+.score-grid.break-row .score-slot-no{background:rgba(207,160,38,.07)}
+.score-grid.break-row .score-cell:not(.selected){background:rgba(255,255,255,.72)}
+.score-grid.break-row .score-player.break-player{
+  background-color:rgba(236,190,63,.18);
+  font-weight:900;
+}
+.score-grid.break-home .score-player.break-player{box-shadow:inset 3px 0 #d0a02e}
+.score-grid.break-away .score-player.break-player{box-shadow:inset -3px 0 #d0a02e}
+.print-round tr.break-row td{background:#fffaf0!important}
+.print-round tr.break-home td:nth-child(2),
+.print-round tr.break-away td:nth-child(6){
+  background:#fff0bd!important;
+  font-weight:700;
+}
+.print-vs{text-align:center!important;color:#667486!important;font-style:italic}

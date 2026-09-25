@@ -1453,7 +1453,7 @@ function streamOnePageScoresheetPdf(res, payload) {
     const vsW = 30;
     const playerW = (w - (slotW * 2) - (scoreW * 2) - vsW) / 2;
     const widths = [slotW, playerW, scoreW, vsW, scoreW, playerW, slotW];
-    const labels = ["#", "HOME TEAM", "H", "BREAK", "A", "AWAY TEAM", "#"];
+    const labels = ["#", "HOME TEAM", "H", "VS", "A", "AWAY TEAM", "#"];
     let cx = x;
 
     labels.forEach((label, idx) => {
@@ -1470,11 +1470,12 @@ function streamOnePageScoresheetPdf(res, payload) {
 
     frames.forEach((fr, i) => {
       const yy = yHead + headH + i * rowH;
+      const homeBreaker = fr.break_side === "HOME";
       const vals = [
         fr.home_slot,
         fr.home_player_name,
         fr.winner_side === "HOME" ? "1" : "0",
-        fr.break_label || "",
+        "vs",
         fr.winner_side === "AWAY" ? "1" : "0",
         fr.away_player_name,
         letters[(Number(fr.away_slot || 1) - 1)] || ""
@@ -1483,8 +1484,9 @@ function streamOnePageScoresheetPdf(res, payload) {
       vals.forEach((val, idx) => {
         drawCell(doc, cx, yy, widths[idx], rowH, val, {
           size: idx === 1 || idx === 5 ? 5.25 : idx === 3 ? 4.6 : 5.8,
-          bold: idx === 2 || idx === 4,
+          bold: idx === 2 || idx === 4 || (homeBreaker && idx === 1) || (!homeBreaker && idx === 5),
           align: "center",
+          fill: (homeBreaker && idx === 1) || (!homeBreaker && idx === 5) ? "#fff0bd" : undefined,
           stroke: line,
           lineWidth: 0.45
         });
