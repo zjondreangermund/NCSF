@@ -408,7 +408,7 @@
       </section>
 
       ${permittedSubSides.length?`<section class="substitution-card no-print">
-        <div class="section-head"><div><span class="eyebrow">RESERVES</span><h3>Record a Substitution</h3></div><small>${Math.max(0,3-Math.max(...permittedSubSides.map(subCountFor)))} of 3 remaining per side</small></div>
+        <div class="section-head"><div><span class="eyebrow">RESERVES</span><h3>Record a Substitution</h3></div><small>Up to 3 substitutions per side</small></div>
         ${!canRecordSub?'<p class="muted sub-guidance">Complete a full round before recording a substitution. The next round will be selected automatically.</p>':!subSides.length?'<p class="muted sub-guidance">Three substitutions have been used for each side you manage.</p>':`
         <form id="subForm" class="form-grid">
           <label>Side<select name="side" id="subSide">${subSides.map(s=>'<option value="'+s+'">'+s+' — '+(3-subCountFor(s))+' remaining</option>').join('')}</select></label>
