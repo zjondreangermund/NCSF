@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="title">
+  <title id="title">Boiler Room mark</title>
+  <rect width="120" height="120" rx="28" fill="#f04452"/>
+  <path d="M22 15h52l24 24v66H22z" fill="#171820" stroke="#f4ece4" stroke-width="3"/>
+  <path d="M74 15v24h24" fill="none" stroke="#f4ece4" stroke-width="3"/>
+  <text x="31" y="72" fill="#f7f3ec" font-family="Arial, sans-serif" font-size="32" font-weight="900" letter-spacing="-3">BR</text>
+  <circle cx="84" cy="84" r="8" fill="#2d6bf2" stroke="#f7f3ec" stroke-width="2"/>
+  <circle cx="60" cy="97" r="4" fill="#f04452"/>
+</svg>

@@ -1,29 +1,31 @@
-# NCSF League Manager
+# Boiler Room Pool Lounge
 
-A responsive competition-management platform for the Namibia Cue Sports Federation.
+A pool lounge and league site built on the NCSF live match system. It keeps the existing club, team, player, fixture, scoresheet, standings, rankings, and broadcast workflows, then adds a public challenge board and a simple audited stock list.
 
-## Phase 1
-- 5-a-side team league with reserves
-- Home-and-away fixtures
-- 5 rounds / 25 frames per fixture (every starter meets every opposing starter once)
-- Digital scoresheet with autosave
-- Signed scoresheet image/PDF upload
-- Team standings ranked by frames won
-- Individual rankings ranked by frames won
-- NCSF admin, club admin and team admin access
-- Club admins can create/manage players and distribute team access
-- Fixture submission, opponent confirmation, club/NCSF approval and audit trail
-- Print/PDF-friendly match sheet
-- PostgreSQL-backed persistent data and uploaded score sheets
+## Boiler Room features
+
+- Live tables, fixtures, results, club and player directories, standings, and rankings
+- Player callouts reviewed by a Room Admin before they appear on the public board
+- Challenge scheduling, live score updates, and match results
+- Stock items with quick **Add**, **Use**, and **Count** actions and low-stock alerts
+- Separate Boiler Room posts so lounge announcements and federation notices cannot leak between sites
+
+## Keeping existing league data
+
+To retain the current players, clubs, teams, fixtures, and results, deploy this branch as a separate service and point `DATABASE_URL` to the existing NCSF PostgreSQL database. A separate database starts without those records.
+
+On startup, Boiler Room creates or updates the application schema and adds its stock and challenge tables. It does not run the legacy roster and fixture import jobs. One of those jobs contains a delete-and-reload step, so it must stay out of the Boiler Room startup path when sharing the live league database.
+
+Set a separate long random `SESSION_SECRET` for the Boiler Room service. Lounge posts use their own `boiler_room_posts` table, leaving the existing NCSF posts untouched.
 
 ## Railway deployment
-1. Create a PostgreSQL service.
-2. Deploy this repository as a Node service.
-3. Set `DATABASE_URL` to the PostgreSQL connection string.
-4. Set `SESSION_SECRET` to a long random value.
-5. The first visit will offer a one-time "Create first NCSF admin" setup if there are no users.
 
-The server creates the required database tables automatically on startup.
+1. Create a new Railway service from the `boiler-room` branch; leave the existing NCSF service on its current branch.
+2. Set `DATABASE_URL` to the existing NCSF PostgreSQL connection string to reuse the current league data.
+3. Set a unique `SESSION_SECRET` and deploy with `npm start`.
+4. Use the existing active admin login. The initial setup form is only available when the database has no users.
+
+Startup creates the Boiler Room post, stock, and challenge tables. No sample stock or fake venue contact details are added.
 
 ## Local development
 
@@ -35,4 +37,5 @@ DATABASE_URL=postgres://... SESSION_SECRET=dev-secret npm run dev
 Open http://localhost:3000.
 
 ## Ranking rule
-Both team and individual leaderboards use **frames won** as the primary ranking value. Ties are displayed with frame difference / win percentage as secondary ordering only so the primary NCSF rule remains frames won.
+
+Team and individual leaderboards retain the existing rule: frames won is the primary ranking value, with frame difference and win percentage as secondary ordering.

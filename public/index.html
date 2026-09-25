@@ -3,80 +3,110 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b223f">
-  <title>NCSF League Manager</title>
+  <meta name="theme-color" content="#101116">
+  <meta name="description" content="Pool, pressure and good company. Follow Boiler Room live matches, meet the league and line up your next challenge.">
+  <title>Boiler Room | Pool Lounge</title>
+  <link rel="icon" href="/boiler-room-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/boiler-room.css">
 </head>
-<body data-page="home">
+<body class="boiler-room-theme" data-page="home">
 <header class="topbar">
   <div class="topbar-inner">
-    <a class="brand" href="/">
-      <img class="js-logo" src="/ncsf-logo.jpg" alt="NCSF logo">
-      <span><strong>Namibia Cue Sports Federation</strong><small>League Manager</small></span>
+    <a class="brand" href="/" aria-label="Boiler Room home">
+      <img class="js-logo" src="/boiler-room-mark.svg" alt="Boiler Room">
+      <span><strong>BOILER ROOM</strong><small>POOL LOUNGE</small></span>
     </a>
-    <nav class="nav">
-      <a href="/">Home</a>
-      <a href="/fixtures">Fixtures</a>
-      <a href="/results">Results</a>
-      <a href="/teams">Teams</a>
+    <nav class="nav" aria-label="Main navigation">
+      <a class="active" href="/">Home</a>
+      <a href="/live">Live tables</a>
+      <a href="/challenges">Challenges</a>
+      <a href="/fixtures">Pool league</a>
+      <a href="/teams">Crews</a>
       <a href="/players">Players</a>
-      <a href="/news">News & Events</a>
       <a href="/rankings">Rankings</a>
     </nav>
     <div class="user-actions" id="userActions"></div>
   </div>
 </header>
-<main class="page">
-  <section class="hero" id="home">
-    <div class="hero-card">
-      <div class="kicker">Official competition platform</div>
-      <h1>NCSF Blackball League</h1>
-      <p>One official platform for fixtures, 5-a-side digital scoresheets, verified match results, team standings and individual rankings.</p>
-      <div class="filters">
-        <select id="divisionSelect" aria-label="Division"></select>
-        <button class="btn primary" id="refreshPublic">Refresh League</button>
-        <a class="btn secondary" href="/fixtures">View Fixtures</a><a class="btn light" href="/opportunities">International Events</a>
-      </div>
-      <div class="hero-badges">
-        <span>25 frames per fixture</span><span>Home & away</span><span>Automatic rankings</span>
-      </div>
-      <div class="app-download-card">
-        <div><strong>NCSF Android App v1.16</strong><small>Latest build • video-only fullscreen landscape • full-width live preview • transparent live chat • live audio.</small></div>
-        <a class="btn primary" href="https://github.com/zjondreangermund/NCSF/releases/download/android-latest/NCSF-v1.16.0.apk">Download APK v1.16</a>
-      </div>
-    </div>
-    <div class="hero-card logo-card"><img class="js-logo" src="/ncsf-logo.jpg" alt="NCSF"></div>
-  </section>
 
-  <section class="grid two">
-    <div class="panel" id="standings">
-      <div class="panel-head"><div><div class="kicker">Ranked by frames won</div><h2>Team Rankings</h2></div></div>
-      <div id="standingsTable" class="empty">No standings yet.</div>
+<main class="page br-home">
+  <section class="br-hero" aria-labelledby="heroTitle">
+    <div class="br-hero-copy">
+      <span class="br-kicker"><i></i> THE LIGHTS ARE ON</span>
+      <h1 id="heroTitle">MAKE<br><em>YOUR</em><br>MOVE.</h1>
+      <p>Pool, pressure and good company. Catch the live action, find your crew and call your next challenge.</p>
+      <div class="br-hero-actions">
+        <a class="btn br-btn-hot" href="/challenges">Call someone out <span aria-hidden="true">↗</span></a>
+        <a class="btn br-btn-outline" href="/live">Watch the tables</a>
+      </div>
+      <div class="br-hero-caption"><span>BOILER ROOM</span><b>WHERE THE NEXT FRAME STARTS.</b></div>
     </div>
-    <div class="panel" id="players">
-      <div class="panel-head"><div><div class="kicker">Ranked by frames won</div><h2>Individual Rankings</h2></div></div>
-      <div id="playerRankings" class="empty">No player results yet.</div>
+    <div class="br-hero-visual">
+      <img src="/boiler-room/room-main.webp" alt="A blue pool table ready for the next game at Boiler Room">
+      <div class="br-hero-visual-shade"></div>
+      <div class="br-photo-stamp"><span>01</span><strong>TABLE<br>IS OPEN</strong></div>
+      <div class="br-photo-bottom"><span class="br-live-pulse"></span> YOUR NIGHT. YOUR SHOT.</div>
     </div>
   </section>
 
-  <section class="panel" id="fixtures" style="margin-top:18px">
-    <div class="panel-head"><div><div class="kicker">Home & away</div><h2>Fixtures & Results</h2></div></div>
-    <div id="fixtureList" class="empty">No fixtures yet.</div>
+  <div class="br-strip" aria-label="Boiler Room activities"><span>RACK UP</span><b>✳</b><span>CALL THE SHOT</span><b>✳</b><span>RUN IT BACK</span><b>✳</b><span>BOILER ROOM</span><b>✳</b><span>RACK UP</span></div>
+
+  <section class="br-section br-action-section" id="live-tables">
+    <div class="br-section-head">
+      <div><span class="br-kicker">THE ACTION BOARD</span><h2>What's happening<br><em>at the tables?</em></h2></div>
+      <a class="br-text-link" href="/live">Enter live match centre <span aria-hidden="true">↗</span></a>
+    </div>
+    <div class="br-board-wrap">
+      <div id="fixtureList" class="br-match-list empty">Loading the tables…</div>
+      <div class="br-board-side">
+        <div class="br-board-side-image"><img src="/boiler-room/bar.webp" alt="The Boiler Room bar, ready for match night"></div>
+        <div><span class="br-kicker">YOUR NEXT MOVE</span><h3>Bring a rival.<br>Leave with a story.</h3><a href="/challenges" class="br-text-link">Get on the challenge board ↗</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="br-section br-league-section" id="league">
+    <div class="br-section-head br-section-head-tight">
+      <div><span class="br-kicker">THE BOILER ROOM LEAGUE</span><h2>Every frame<br><em>counts.</em></h2></div>
+      <div class="filters br-league-filter"><label class="sr-only" for="divisionSelect">Choose league</label><select id="divisionSelect" aria-label="Choose league"></select><button class="btn br-btn-blue" id="refreshPublic">Refresh scores</button></div>
+    </div>
+    <div class="grid two br-league-grid">
+      <div class="panel br-dark-panel"><div class="panel-head"><div><span class="br-kicker">CLUBS & CREWS</span><h2>Team standings</h2></div><a class="br-mini-link" href="/teams">All crews ↗</a></div><div id="standingsTable" class="empty">Standings will show here once results are in.</div></div>
+      <div class="panel br-dark-panel"><div class="panel-head"><div><span class="br-kicker">ON THE RISE</span><h2>Player rankings</h2></div><a class="br-mini-link" href="/players">All players ↗</a></div><div id="playerRankings" class="empty">Player rankings will show here once results are in.</div></div>
+    </div>
+    <a class="br-bottom-link" href="/fixtures">See fixtures and match results <span aria-hidden="true">↗</span></a>
+  </section>
+
+  <section class="br-challenge-callout">
+    <div class="br-challenge-art"><img src="/boiler-room/draught.webp" alt="The Boiler Room bar taps and match-night setup"><span class="br-roundel">YOUR<br>TABLE.<br>YOUR<br>RULES.</span></div>
+    <div class="br-challenge-copy"><span class="br-kicker">NO CROWD REQUIRED. JUST COURAGE.</span><h2>Got a name<br>on your <em>mind?</em></h2><p>Send in the callout. We’ll get it on the board and line up the next match.</p><a class="btn br-btn-hot" href="/challenges">Start a pool challenge <span aria-hidden="true">↗</span></a></div>
+    <div id="challengePreview" class="br-challenge-preview"><span class="br-kicker">CHALLENGE BOARD</span><div class="empty">Loading challenges…</div></div>
+  </section>
+
+  <section class="br-section br-room-section">
+    <div class="br-section-head"><div><span class="br-kicker">MORE THAN A MATCH</span><h2>Stay for<br><em>one more.</em></h2></div><p class="br-section-note">Good tables. Good people. A little friendly pressure.<br>See you in the room.</p></div>
+    <div class="br-gallery">
+      <figure class="br-gallery-main"><img src="/boiler-room/poolside.webp" alt="Pool and games waiting at Boiler Room"><figcaption>THE ROOM IS READY</figcaption></figure>
+      <figure><img src="/boiler-room/foosball.webp" alt="Foosball table for a change of pace"><figcaption>TAKE A BREATHER</figcaption></figure>
+      <figure><img src="/boiler-room/bar.webp" alt="Bar area at Boiler Room"><figcaption>THEN BACK TO THE TABLE</figcaption></figure>
+    </div>
   </section>
 </main>
-<div class="footer">Namibia Cue Sports Federation • Digital League Manager</div>
+
+<footer class="br-footer"><a class="brand" href="/"><img src="/boiler-room-mark.svg" alt=""><span><strong>BOILER ROOM</strong><small>POOL LOUNGE</small></span></a><span>Pool. Pressure. Good company.</span><a href="/challenges">Challenge board ↗</a></footer>
 
 <div class="modal-backdrop hidden" id="authModal">
   <div class="modal">
     <button class="btn small" style="float:right" id="closeAuth">Close</button>
     <div id="setupBlock" class="hidden">
-      <h2>Create first NCSF administrator</h2>
+      <h2>Create the first Boiler Room administrator</h2>
       <p class="muted">This one-time setup is available only while the database has no users.</p>
       <form id="setupForm" class="form-grid">
         <label class="full">Full name<input name="displayName" required></label>
         <label class="full">Email<input name="email" type="email" required></label>
         <label class="full">Password<input name="password" type="password" minlength="8" required></label>
-        <button class="btn primary full" type="submit">Create NCSF Admin</button>
+        <button class="btn primary full" type="submit">Create Boiler Room Admin</button>
       </form>
     </div>
     <div id="loginBlock">
@@ -91,4 +121,6 @@
 </div>
 <div id="toast" class="toast hidden"></div>
 <script src="/app.js"></script>
-</body></html>
+<script src="/boiler-room.js"></script>
+</body>
+</html>

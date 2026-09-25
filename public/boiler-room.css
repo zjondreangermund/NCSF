@@ -1,0 +1,254 @@
+:root{
+  --navy:#14161d;
+  --navy-2:#2767ee;
+  --navy-3:#154bc5;
+  --gold:#f04452;
+  --gold-soft:#322127;
+  --green:#27a875;
+  --red:#f04452;
+  --ink:#f3f0e8;
+  --muted:#a3a6af;
+  --line:#30333c;
+  --panel:#171920;
+  --bg:#101116;
+  --shadow:0 16px 44px rgba(0,0,0,.28);
+  --shadow-lg:0 28px 80px rgba(0,0,0,.46);
+  --radius:18px;
+}
+body.boiler-room-theme{color:var(--ink);background:#101116;min-height:100vh}
+body.boiler-room-theme::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 5% 20%,rgba(240,68,82,.09),transparent 27%),radial-gradient(ellipse at 96% 46%,rgba(39,103,238,.09),transparent 28%)}
+.boiler-room-theme .topbar{background:rgba(14,15,20,.94);border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 10px 36px rgba(0,0,0,.28);backdrop-filter:blur(15px)}
+.boiler-room-theme .topbar-inner{max-width:1380px;padding:12px 22px;gap:22px}
+.boiler-room-theme .brand{min-width:205px;gap:10px}
+.boiler-room-theme .brand img{width:45px;height:45px;border-radius:12px;background:transparent;object-fit:contain}
+.boiler-room-theme .brand strong{font-size:15px;font-weight:950;letter-spacing:.12em;color:#fff}
+.boiler-room-theme .brand small{font-size:10px;color:#9c9da5;font-weight:800;letter-spacing:.18em;margin-top:2px}
+.boiler-room-theme .nav{gap:3px}
+.boiler-room-theme .nav a{padding:10px 11px;color:#c9c9ce;font-size:12px;font-weight:800;letter-spacing:.01em}
+.boiler-room-theme .nav a:hover,.boiler-room-theme .nav a.active{background:rgba(240,68,82,.14);color:#fff}
+.boiler-room-theme .user-actions .btn{border-radius:999px}
+.boiler-room-theme .page{max-width:1380px;padding:24px 22px 74px}
+.boiler-room-theme .panel,.boiler-room-theme .hero-card{background:#171920;border:1px solid #2b2d35;border-radius:18px;box-shadow:var(--shadow);color:var(--ink)}
+.boiler-room-theme .panel h2,.boiler-room-theme .panel h3,.boiler-room-theme .section-title h1{color:#f3f0e8;letter-spacing:-.025em}
+.boiler-room-theme .kicker{color:#f04452}
+.boiler-room-theme .btn{border:1px solid #333640;border-radius:11px;padding:11px 15px;background:#242630;color:#f5f2eb;transition:transform .18s ease,filter .18s ease,background .18s ease}
+.boiler-room-theme .btn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.boiler-room-theme .btn.primary{background:#f04452;border-color:#f04452;color:#fff}
+.boiler-room-theme .btn.secondary{background:#2767ee;border-color:#2767ee;color:#fff}
+.boiler-room-theme .btn.light{background:#f4f1ea;border-color:#f4f1ea;color:#15161d}
+.boiler-room-theme .btn.success{background:#138258;border-color:#138258;color:#fff}
+.boiler-room-theme .btn.danger{background:#6e232b;border-color:#9e3741;color:#fff}
+.boiler-room-theme .btn.small{padding:8px 11px}
+.boiler-room-theme .pill{background:#282b34;color:#ededee;border:1px solid #393c46;font-size:12px}
+.boiler-room-theme .pill.APPROVED{background:#17372c;color:#86e4bd;border-color:#28684c}
+.boiler-room-theme .pill.CONFIRMED{background:#1a2b4c;color:#a4c2ff;border-color:#354f83}
+.boiler-room-theme .pill.SUBMITTED{background:#47351d;color:#ffd889;border-color:#72552a}
+.boiler-room-theme .pill.IN_PROGRESS{background:#44272c;color:#ff9da6;border-color:#78343d}
+.boiler-room-theme .table-wrap{border-color:#333640;border-radius:13px;background:#15171d}
+.boiler-room-theme table{background:#15171d;color:#efede8}
+.boiler-room-theme th{background:#20232b;color:#aeb1bc;border-color:#333640}
+.boiler-room-theme td{border-color:#30333c}
+.boiler-room-theme .rank,.boiler-room-theme .match-score,.boiler-room-theme .big-score{color:#fff}
+.boiler-room-theme .muted,.boiler-room-theme .match-meta{color:#a3a6af}
+.boiler-room-theme .empty{background:#191b22;border:1px dashed #454854;border-radius:14px;color:#b8bac2;padding:25px}
+.boiler-room-theme label{color:#d5d3cd;font-size:13px}
+.boiler-room-theme input,.boiler-room-theme select,.boiler-room-theme textarea{border:1px solid #3a3d47;border-radius:10px;background:#101218;color:#f3f0e8;min-height:42px}
+.boiler-room-theme input::placeholder,.boiler-room-theme textarea::placeholder{color:#747984}
+.boiler-room-theme input:focus,.boiler-room-theme select:focus,.boiler-room-theme textarea:focus{outline:2px solid rgba(39,103,238,.3);border-color:#5587f5}
+.boiler-room-theme option{background:#171920;color:#f3f0e8}
+.boiler-room-theme .admin-tabs button.active{background:#f04452;border-color:#f04452;color:#fff}
+.boiler-room-theme .card-row{background:#1b1e26;border-color:#343741;color:#eee}
+.boiler-room-theme .notice{background:#1b2f4e;color:#b8d1ff;border:1px solid #2e4d79}
+.boiler-room-theme .notice.success{background:#183729;color:#a2f0cf;border-color:#286447}
+.boiler-room-theme .notice.error{background:#46242a;color:#ffadb4;border-color:#78363f}
+.boiler-room-theme .modal{background:#171920;color:#f3f0e8;border:1px solid #383b44}
+.boiler-room-theme .footer{color:#8b8e98}
+.boiler-room-theme .br-kicker{display:inline-flex;align-items:center;gap:8px;color:#fa6873;font-size:11px;font-weight:950;letter-spacing:.18em;text-transform:uppercase}
+.boiler-room-theme .br-kicker i,.br-board-marker i,.br-live-pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:#fa4b5a;box-shadow:0 0 14px rgba(250,75,90,.8)}
+.boiler-room-theme .br-btn-hot{display:inline-flex;align-items:center;justify-content:center;gap:16px;background:#f04452!important;border:1px solid #f04452!important;color:#fff!important;font-weight:900}
+.boiler-room-theme .br-btn-blue{background:#2767ee!important;border-color:#2767ee!important;color:#fff!important}
+.boiler-room-theme .br-btn-outline{display:inline-flex;align-items:center;justify-content:center;background:rgba(16,18,24,.45)!important;border:1px solid rgba(255,255,255,.35)!important;color:#fff!important}
+.boiler-room-theme .br-home{padding-top:27px}
+.br-hero{display:grid;grid-template-columns:.9fr 1.1fr;min-height:560px;gap:16px;margin-bottom:18px}
+.br-hero-copy{position:relative;display:flex;flex-direction:column;justify-content:center;padding:clamp(28px,5vw,68px);overflow:hidden;background:linear-gradient(142deg,#1b1c24 0%,#14161d 58%,#1d1720 100%);border:1px solid #30313a;border-radius:21px;box-shadow:var(--shadow-lg)}
+.br-hero-copy::after{content:"";position:absolute;width:340px;height:340px;right:-175px;bottom:-205px;border-radius:50%;border:1px solid rgba(255,255,255,.1);box-shadow:0 0 0 28px rgba(255,255,255,.025),0 0 0 58px rgba(255,255,255,.018)}
+.br-hero h1,.br-page-hero h1{margin:17px 0 16px;font-size:clamp(64px,9vw,128px);line-height:.78;letter-spacing:-.075em;font-weight:1000;color:#f7f2e9;text-transform:uppercase;position:relative;z-index:1}
+.br-hero h1 em,.br-page-hero h1 em,.br-section-head h2 em,.br-challenge-copy h2 em,.br-challenge-form-panel h2 em{font-style:normal;color:#f04452}
+.br-hero-copy p{max-width:420px;margin:0;color:#c0c0c6;font-size:18px;line-height:1.6}
+.br-hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:27px}
+.br-hero-caption{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:39px;color:#9699a3;font-size:10px;letter-spacing:.12em}
+.br-hero-caption span{color:#f9f5ed;font-weight:950}
+.br-hero-caption b{font-weight:750}
+.br-hero-visual{position:relative;min-height:560px;overflow:hidden;border:1px solid #292b33;border-radius:21px;background:#14161c;box-shadow:var(--shadow-lg)}
+.br-hero-visual img{width:100%;height:100%;position:absolute;inset:0;object-fit:cover;object-position:52% 55%;filter:saturate(1.1) contrast(1.04)}
+.br-hero-visual-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,11,15,.06) 20%,rgba(10,11,15,.08) 48%,rgba(10,11,15,.83) 100%),linear-gradient(90deg,rgba(8,10,15,.12),transparent 48%)}
+.br-photo-stamp{position:absolute;top:20px;right:20px;display:flex;gap:10px;align-items:center;padding:12px 14px;background:rgba(16,18,24,.78);border:1px solid rgba(255,255,255,.23);border-radius:12px;backdrop-filter:blur(8px)}
+.br-photo-stamp span{display:grid;place-items:center;width:32px;height:32px;background:#f04452;border-radius:50%;font-weight:950;font-size:12px}
+.br-photo-stamp strong{font-size:11px;line-height:1.05;letter-spacing:.12em}
+.br-photo-bottom{position:absolute;left:22px;bottom:22px;display:flex;gap:10px;align-items:center;font-size:11px;font-weight:950;letter-spacing:.16em;color:#fff}
+.br-photo-bottom .br-live-pulse{background:#3bce8e;box-shadow:0 0 14px rgba(59,206,142,.8)}
+.br-strip{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:15px 20px;margin:19px 0 54px;background:#f04452;border-radius:10px;color:#fff;overflow:hidden;font-size:clamp(11px,1.4vw,15px);font-weight:950;letter-spacing:.13em;white-space:nowrap}
+.br-strip b{font-size:17px;color:#231419}
+.br-section{margin:64px 0}
+.br-section-head{display:flex;justify-content:space-between;align-items:end;gap:22px;margin-bottom:20px}
+.br-section-head h2,.br-challenge-copy h2,.br-challenge-form-panel h2{margin:9px 0 0;color:#f4f0e8;font-size:clamp(34px,5vw,62px);line-height:.94;letter-spacing:-.06em;text-transform:uppercase}
+.br-section-head-tight{align-items:center}
+.br-text-link,.br-mini-link,.br-bottom-link{color:#f3f0e8;font-size:13px;font-weight:900;border-bottom:1px solid rgba(240,68,82,.75);padding-bottom:5px}
+.br-text-link span,.br-bottom-link span{color:#f04452}
+.br-text-link:hover,.br-mini-link:hover,.br-bottom-link:hover{color:#ff727d}
+.br-board-wrap{display:grid;grid-template-columns:1.25fr .75fr;gap:17px}
+.br-match-list{min-height:235px;padding:16px;background:#171920;border:1px solid #2b2d35;border-radius:17px}
+.boiler-room-theme .br-match-list .empty{min-height:190px;display:grid;place-items:center}
+.br-match-list .match-card{padding:17px 3px;border-color:#2e3039}
+.br-match-list .team-name{color:#f5f2eb;font-size:15px}
+.br-match-list .match-score{background:#232631;border:1px solid #343743;border-radius:10px;padding:7px 11px;color:#fff}
+.br-match-list .match-meta{color:#a8abb4}
+.br-match-list .pill{border-radius:7px}
+.br-board-side{display:grid;grid-template-columns:.9fr 1.1fr;gap:17px;align-items:center;overflow:hidden;background:#171920;border:1px solid #2b2d35;border-radius:17px;padding:13px}
+.br-board-side-image{height:100%;min-height:220px;overflow:hidden;border-radius:12px}
+.br-board-side-image img{width:100%;height:100%;object-fit:cover}
+.br-board-side h3{font-size:clamp(22px,2.5vw,32px);line-height:1.05;letter-spacing:-.04em;margin:9px 0 16px;color:#fff}
+.br-mini-link{font-size:11px;white-space:nowrap}
+.br-league-filter{align-items:center}
+.br-league-filter select{min-width:190px;width:auto}
+.br-league-grid{margin-top:20px}
+.br-dark-panel{background:#171920!important;border:1px solid #2c2f38!important;color:#f3f0e8}
+.br-dark-panel .panel-head{align-items:center}
+.br-dark-panel .panel-head h2{margin:6px 0 0;font-size:22px}
+.br-dark-panel .empty{min-height:110px}
+.br-bottom-link{display:inline-block;margin-top:20px}
+.br-challenge-callout{position:relative;display:grid;grid-template-columns:.8fr 1fr 1fr;align-items:center;gap:25px;margin:70px 0;padding:24px;background:#191a21;border:1px solid #30313a;border-radius:20px;overflow:hidden}
+.br-challenge-art{position:relative;height:280px;overflow:hidden;border-radius:14px}
+.br-challenge-art img{width:100%;height:100%;object-fit:cover;filter:brightness(.76) saturate(1.12)}
+.br-roundel{position:absolute;top:16px;left:16px;display:grid;place-items:center;width:114px;height:114px;border-radius:50%;background:#2767ee;color:#fff;text-align:center;font-size:12px;font-weight:950;line-height:1.17;letter-spacing:.07em;transform:rotate(-9deg);border:4px solid #101116;box-shadow:0 8px 26px rgba(0,0,0,.32)}
+.br-challenge-copy{padding:18px 0}
+.br-challenge-copy p{color:#b8bac1;font-size:15px;line-height:1.6;max-width:310px;margin:17px 0 19px}
+.br-challenge-copy h2{font-size:clamp(38px,4vw,58px)}
+.br-challenge-preview{align-self:stretch;display:flex;flex-direction:column;justify-content:center;padding:22px;background:#111319;border:1px solid #30323b;border-radius:14px;min-width:0}
+.br-challenge-preview .br-challenge-card{margin-top:13px}
+.br-section-note{color:#b8bac1;font-size:15px;line-height:1.6;max-width:350px;margin:0 0 4px}
+.br-gallery{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:13px}
+.br-gallery figure{position:relative;margin:0;height:230px;overflow:hidden;border-radius:15px;background:#171920;border:1px solid #2b2d35}
+.br-gallery figure.br-gallery-main{height:280px}
+.br-gallery img{width:100%;height:100%;object-fit:cover;transition:transform .35s ease;filter:saturate(1.06)}
+.br-gallery figure:hover img{transform:scale(1.035)}
+.br-gallery figure::after{content:"";position:absolute;inset:35% 0 0;background:linear-gradient(transparent,rgba(10,11,15,.82))}
+.br-gallery figcaption{position:absolute;left:16px;bottom:14px;z-index:1;color:#fff;font-size:11px;font-weight:950;letter-spacing:.14em}
+.br-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:22px max(22px,calc((100vw - 1336px)/2));border-top:1px solid #2b2d35;background:#0c0d12;color:#aaaeb7;font-size:13px}
+.br-footer .brand{min-width:0}
+.br-footer>a:last-child{color:#f3f0e8;font-weight:850}
+.boiler-room-theme .br-page-hero{display:grid;grid-template-columns:.8fr 1.2fr;align-items:center;gap:22px;min-height:430px;padding:clamp(26px,5vw,56px);background:linear-gradient(132deg,#1b1d25,#14161d 60%,#25151a);border:1px solid #30313a;border-radius:21px;overflow:hidden;box-shadow:var(--shadow-lg)}
+.br-page-hero h1{font-size:clamp(60px,8vw,104px);margin:18px 0}
+.br-page-hero p{max-width:370px;color:#c2c1c6;font-size:17px;line-height:1.6}
+.br-page-hero-image{position:relative;min-height:330px;align-self:stretch;border-radius:15px;overflow:hidden}
+.br-page-hero-image img{width:100%;height:100%;position:absolute;inset:0;object-fit:cover}
+.br-page-hero-image::after{content:"";position:absolute;inset:40% 0 0;background:linear-gradient(transparent,rgba(9,10,14,.83))}
+.br-page-hero-image span{position:absolute;z-index:1;bottom:18px;left:18px;color:#fff;font-size:12px;font-weight:950;letter-spacing:.15em}
+.br-challenges-layout{display:grid;grid-template-columns:1.2fr .8fr;align-items:start;gap:17px;margin-top:20px}
+.br-challenge-board-panel,.br-challenge-form-panel{padding:22px}
+.br-board-marker{display:inline-flex;align-items:center;gap:8px;color:#b8bac1;font-size:10px;font-weight:900;letter-spacing:.08em}
+.br-board-marker i{width:7px;height:7px;background:#42d193}
+.br-challenge-form-panel{background:#1d1b20;border:1px solid #3c2c32;border-radius:18px;box-shadow:var(--shadow)}
+.br-challenge-form-panel h2{font-size:40px;margin-bottom:13px}
+.br-challenge-form-panel>p{color:#bcbec5;font-size:14px;line-height:1.6;margin:0 0 18px}
+.br-form{gap:12px}
+.br-form .full{grid-column:1/-1}
+.br-form button{min-height:48px}
+.br-privacy-note{margin:0;color:#999ca5;font-size:12px;line-height:1.45}
+.br-challenge-card{padding:15px;margin-bottom:10px;background:#20222b;border:1px solid #383b47;border-radius:13px}
+.br-challenge-card:last-child{margin-bottom:0}
+.br-challenge-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}
+.br-challenge-card-head .pill{white-space:nowrap}
+.br-challenge-names{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:9px}
+.br-challenge-names strong{font-size:15px;color:#fff;overflow-wrap:anywhere}
+.br-challenge-names strong:last-child{text-align:right}
+.br-challenge-names span{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#f04452;color:#fff;font-size:10px;font-weight:950}
+.br-challenge-meta{display:flex;flex-wrap:wrap;gap:7px 14px;margin-top:11px;color:#a8aab3;font-size:12px}
+.br-challenge-meta b{color:#f4f1ea}
+.br-challenge-score{display:flex;align-items:center;gap:8px;color:#fff;font-weight:950;font-size:20px}
+.br-stock-number{margin-top:7px;color:#fff;font-size:45px;font-weight:950;letter-spacing:-.06em}
+.br-stock-stats .panel{padding:19px}
+.br-stock-help{max-width:330px;margin:0;color:#a8abb4;font-size:12px;line-height:1.45}
+.br-stock-actions{display:flex;gap:6px;flex-wrap:wrap}
+.br-stock-actions .btn{min-width:50px;padding:7px 9px;font-size:12px}
+.br-stock-status{display:inline-block;padding:5px 8px;border-radius:7px;background:#18372c;color:#9ce6c6;font-size:11px;font-weight:900;white-space:nowrap}
+.br-stock-status.low{background:#42351f;color:#ffda86}
+.br-stock-status.out{background:#472329;color:#ffb2b9}
+.br-dialog{width:min(480px,calc(100% - 28px));max-width:480px;padding:24px;background:#171920;color:#f3f0e8;border:1px solid #3c3f49;border-radius:17px;box-shadow:var(--shadow-lg)}
+.br-dialog::backdrop{background:rgba(0,0,0,.7);backdrop-filter:blur(4px)}
+.br-dialog h2{margin:7px 0 0;color:#fff}
+.boiler-room-theme .live-hero,.boiler-room-theme .sheet-toolbar{background:#171920;border:1px solid #30333c}
+.boiler-room-theme .live-hero h1{color:#fff}
+.boiler-room-theme .sheet-team,.boiler-room-theme .round,.boiler-room-theme .match-roster,.boiler-room-theme .match-extras-card,.boiler-room-theme .league-calculations,.boiler-room-theme .substitution-card,.boiler-room-theme .signed-sheet-card{background:#171920;border-color:#30333c;color:#f2f0ea}
+.boiler-room-theme .round-title,.boiler-room-theme .round-total,.boiler-room-theme .frame-num{background:#20232b;color:#f1efe9;border-color:#333640}
+.boiler-room-theme .frame-row{border-color:#343741}
+.boiler-room-theme .frame-row>*{color:#f1efe9}
+.boiler-room-theme .frame-vs{color:#aeb1ba}
+.boiler-room-theme .win-btn,.boiler-room-theme .score-cell{background:#22252d;border-color:#41444f;color:#fff}
+.boiler-room-theme .win-btn.selected,.boiler-room-theme .score-cell.selected{background:#f04452;border-color:#f04452;color:#fff}
+.boiler-room-theme .login-card{background:#171920;border-color:#343741;color:#f3f0e8}
+.boiler-room-theme .toast{background:#22252d;color:#fff;border:1px solid #41444f}
+.boiler-room-theme .toast.error{background:#48232a}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:1050px){
+  .boiler-room-theme .topbar-inner{flex-wrap:wrap}
+  .boiler-room-theme .brand{min-width:0}
+  .boiler-room-theme .nav{order:3;width:100%;padding-bottom:2px}
+  .br-board-wrap{grid-template-columns:1fr}
+  .br-challenge-callout{grid-template-columns:.85fr 1fr}
+  .br-challenge-preview{grid-column:1/-1}
+  .br-hero,.boiler-room-theme .br-page-hero{grid-template-columns:1fr 1fr}
+}
+@media(max-width:720px){
+  .boiler-room-theme .topbar-inner{padding:10px 13px}
+  .boiler-room-theme .page{padding:15px 12px 50px}
+  .boiler-room-theme .brand img{width:40px;height:40px}
+  .boiler-room-theme .nav{gap:2px}
+  .boiler-room-theme .nav a{padding:9px 10px;font-size:12px}
+  .br-hero,.boiler-room-theme .br-page-hero{grid-template-columns:1fr;min-height:0}
+  .br-hero-copy{min-height:480px;padding:30px 24px}
+  .br-hero h1{font-size:clamp(65px,18vw,104px)}
+  .br-hero-visual{min-height:350px}
+  .br-strip{justify-content:flex-start;overflow:hidden;margin-bottom:38px;padding:13px 15px}
+  .br-section{margin:48px 0}
+  .br-section-head,.br-section-head-tight{align-items:flex-start;flex-direction:column}
+  .br-section-head h2{font-size:clamp(35px,10vw,52px)}
+  .br-board-side{grid-template-columns:1fr 1fr}
+  .br-board-side-image{min-height:190px}
+  .br-league-filter{width:100%}
+  .br-league-filter select{width:100%}
+  .br-league-filter button{white-space:nowrap}
+  .br-challenge-callout{grid-template-columns:1fr;padding:14px;margin:48px 0}
+  .br-challenge-art{height:260px}
+  .br-challenge-copy{padding:8px 7px}
+  .br-challenge-preview{grid-column:auto}
+  .br-gallery{grid-template-columns:1fr 1fr}
+  .br-gallery figure,.br-gallery figure.br-gallery-main{height:210px}
+  .br-gallery figure.br-gallery-main{grid-column:1/-1;height:240px}
+  .boiler-room-theme .br-page-hero{padding:24px}
+  .br-page-hero h1{font-size:clamp(62px,17vw,92px)}
+  .br-page-hero-image{min-height:260px}
+  .br-challenges-layout{grid-template-columns:1fr}
+  .br-challenge-board-panel,.br-challenge-form-panel{padding:17px}
+  .br-footer{align-items:flex-start;flex-direction:column;padding:20px 16px}
+  .br-footer>span{order:2}
+  .br-stock-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .br-stock-stats .panel{padding:13px 10px}
+  .br-stock-number{font-size:34px}
+  .br-stock-help{display:none}
+}
+@media(max-width:440px){
+  .br-hero-copy{min-height:430px}
+  .br-hero-copy p{font-size:16px}
+  .br-hero-actions .btn{width:100%}
+  .br-board-side{grid-template-columns:1fr}
+  .br-board-side-image{min-height:165px}
+  .br-stock-stats{grid-template-columns:1fr}
+  .br-stock-stats .panel{display:flex;align-items:center;justify-content:space-between}
+  .br-stock-number{margin:0;font-size:30px}
+  .br-challenge-card-head{align-items:flex-start;flex-direction:column}
+}
+@media print{
+  body.boiler-room-theme{background:#fff!important;color:#111!important}
+  .boiler-room-theme .panel,.boiler-room-theme .round,.boiler-room-theme .sheet-team,.boiler-room-theme .match-roster,.boiler-room-theme .signed-sheet-card{background:#fff!important;color:#111!important;border-color:#ddd!important}
+}

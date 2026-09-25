@@ -6,7 +6,7 @@
   const IS_NCSF_ANDROID=/\bNCSFAndroid\//i.test(navigator.userAgent||'');
   if(IS_NCSF_ANDROID)document.documentElement.classList.add('is-ncsf-app');
 
-  $$('.js-logo').forEach(img=>img.src='/ncsf-logo.jpg');
+  $$('.js-logo').forEach(img=>img.src='/boiler-room-mark.svg');
 
   async function api(url,options={}){
     const opts={credentials:'same-origin',...options};
@@ -53,7 +53,7 @@
       return;
     }
     let links='';
-    if(state.user.role==='NCSF_ADMIN')links+='<a class="btn light small" href="/admin">NCSF Admin</a>';
+    if(state.user.role==='NCSF_ADMIN')links+='<a class="btn light small" href="/admin">Room Admin</a><a class="btn light small" href="/admin#stock">Stock</a>';
     if(state.user.role==='CLUB_ADMIN')links+='<a class="btn light small" href="/club-admin">Club Admin</a>';
     links+='<a class="btn light small" href="/team">Match Centre</a>';
     box.innerHTML='<span class="who"><strong>'+esc(state.user.displayName)+'</strong></span>'+links+'<button class="btn light small" id="logoutBtn">Sign out</button>';
@@ -87,7 +87,7 @@
       e.preventDefault();
       try{
         const data=await api('/api/setup',{method:'POST',body:formObject(e.currentTarget)});
-        state.user=data.user; toast('NCSF administrator created'); location.href='/admin';
+        state.user=data.user; toast('Boiler Room administrator created'); location.href='/admin';
       }catch(err){toast(err.message,true)}
     });
   }
@@ -118,9 +118,9 @@
   async function loadPublicDivision(){
     const id=Number($('#divisionSelect')?.value||0);
     if(!id){
-      $('#standingsTable').innerHTML='<div class="empty">No division configured yet.</div>';
-      $('#playerRankings').innerHTML='<div class="empty">No division configured yet.</div>';
-      $('#fixtureList').innerHTML='<div class="empty">No fixtures configured yet.</div>';
+      ['#standingsTable','#playerRankings','#fixtureList'].forEach(selector=>{
+        const node=$(selector);if(node){node.classList.add('empty');node.textContent='No division configured yet.'}
+      });
       return;
     }
     try{
@@ -129,9 +129,13 @@
         api('/api/divisions/'+id+'/individual-rankings'),
         api('/api/fixtures?divisionId='+id)
       ]);
-      $('#standingsTable').innerHTML=st.standings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>Frames Won</th><th>Frames Lost</th><th>+/-</th></tr></thead><tbody>${st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Rankings appear after approved score sheets.</div>';
-      $('#playerRankings').innerHTML=pr.rankings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Played</th><th>Won</th><th>Win %</th></tr></thead><tbody>${pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong>${r.ncsf_number?`<br><small class="muted">${esc(r.ncsf_number)}</small>`:''}</td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.win_percentage}%</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Individual rankings appear after approved score sheets.</div>';
-      $('#fixtureList').innerHTML=fixtureCards(fx.fixtures,true);
+      const standingsNode=$('#standingsTable'),playersNode=$('#playerRankings'),fixturesNode=$('#fixtureList');
+      standingsNode.classList.toggle('empty',!st.standings.length);
+      standingsNode.innerHTML=st.standings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>Frames Won</th><th>Frames Lost</th><th>+/-</th></tr></thead><tbody>${st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td></tr>`).join('')}</tbody></table></div>`:'Rankings appear after approved score sheets.';
+      playersNode.classList.toggle('empty',!pr.rankings.length);
+      playersNode.innerHTML=pr.rankings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Played</th><th>Won</th><th>Win %</th></tr></thead><tbody>${pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong>${r.ncsf_number?`<br><small class="muted">${esc(r.ncsf_number)}</small>`:''}</td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.win_percentage}%</td></tr>`).join('')}</tbody></table></div>`:'Individual rankings appear after approved score sheets.';
+      fixturesNode.classList.toggle('empty',!fx.fixtures.length);
+      fixturesNode.innerHTML=fx.fixtures.length?fixtureCards(fx.fixtures,true):'No fixtures found.';
     }catch(err){toast(err.message,true)}
   }
   function userSide(f){
@@ -341,8 +345,8 @@
     const bonusText=f.bonusTeamName?(f.bonusTeamName+' • +1 bonus point'):'No bonus yet • requires 18+ frames';
     $('#scoreSheetRoot').innerHTML=`
       <section class="official-sheet-head">
-        <img class="js-score-logo" src="/ncsf-logo.jpg" alt="NCSF">
-        <div><span class="eyebrow">NAMIBIA CUE SPORTS FEDERATION</span><h1>Blackball League Scoresheet</h1><p>${esc(f.seasonName)} • ${esc(f.divisionName)} • Round ${esc(f.roundNo)}</p></div>
+        <img class="js-score-logo" src="/boiler-room-mark.svg" alt="Boiler Room">
+        <div><span class="eyebrow">THE BOILER ROOM</span><h1>Pool League Scoresheet</h1><p>${esc(f.seasonName)} • ${esc(f.divisionName)} • Round ${esc(f.roundNo)}</p></div>
         <div class="sheet-meta"><span>STARTING TIME<strong>${esc(timeText)}</strong></span><span>DATE<strong>${esc(dateText)}</strong></span><span>VENUE<strong>${esc(f.venue||'TBA')}</strong></span></div>
       </section>
       <section class="fixture-score-hero">
@@ -420,10 +424,10 @@
         ${data.substitutions.length?'<div class="card-list">'+data.substitutions.map(s=>'<div class="card-row"><span><strong>'+esc(s.side)+': '+esc(s.out_player_name)+' → '+esc(s.in_player_name)+'</strong><small>From round '+esc(s.effective_round)+'</small></span></div>').join('')+'</div>':''}
       </section>`:''}      <section class="compact-print-sheet print-only">
         <header class="print-head">
-          <img src="/ncsf-logo.jpg" alt="NCSF">
+          <img src="/boiler-room-mark.svg" alt="Boiler Room">
           <div>
-            <h1>NAMIBIA CUE SPORTS FEDERATION</h1>
-            <h2>Blackball League Scoresheet</h2>
+            <h1>THE BOILER ROOM</h1>
+            <h2>Pool League Scoresheet</h2>
             <p>${esc(f.seasonName)} • ${esc(f.divisionName)} • Round ${esc(f.roundNo)}</p>
           </div>
           <div class="print-meta">
@@ -637,7 +641,7 @@
       const q=String($('#playerSearch')?.value||'').trim().toLowerCase();
       const rows=!q?players:players.filter(p=>(p.first_name+' '+p.last_name+' '+(p.ncsf_number||'')+' '+p.club_name+' '+p.team_name).toLowerCase().includes(q));
       $('#publicPlayers').innerHTML=rows.length
-        ? '<div class="table-wrap"><table><thead><tr><th>Player</th><th>NCSF Number</th><th>Club</th><th>Team</th><th>Frames</th><th>Won</th><th>Win %</th></tr></thead><tbody>'+rows.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td>${esc(p.club_name)}</td><td>${esc(p.team_name)}</td><td>${p.frames_played}</td><td><strong>${p.frames_won}</strong></td><td>${p.win_percentage}%</td></tr>`).join('')+'</tbody></table></div>'
+        ? '<div class="table-wrap"><table><thead><tr><th>Player</th><th>Player number</th><th>Club</th><th>Team</th><th>Frames</th><th>Won</th><th>Win %</th></tr></thead><tbody>'+rows.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td>${esc(p.club_name)}</td><td>${esc(p.team_name)}</td><td>${p.frames_played}</td><td><strong>${p.frames_won}</strong></td><td>${p.win_percentage}%</td></tr>`).join('')+'</tbody></table></div>'
         : '<div class="empty">No players found.</div>';
     };
     const load=async()=>{
@@ -723,7 +727,7 @@ function formatEventDate(value){
     if(!rows.length){
       box.innerHTML=opportunities.length
         ? '<div class="empty">No tournaments match those filters. Try changing your search.</div>'
-        : '<div class="empty opportunity-empty"><strong>No tournament opportunities listed yet.</strong><br>NCSF will publish confirmed events here as registration details become available.</div>';
+        : '<div class="empty opportunity-empty"><strong>No tournament opportunities listed yet.</strong><br>New tournaments and events will appear here when the Boiler Room team adds them.</div>';
       return;
     }
     box.innerHTML='<div class="opportunity-grid">'+rows.map(o=>{
@@ -780,7 +784,7 @@ function formatEventDate(value){
     }
     const yt=youtubeEmbedUrl(live.streamUrl);
     if(yt){
-      box.innerHTML='<div class="video-frame"><iframe src="'+esc(yt)+'?autoplay=1" title="'+esc(live.title||'NCSF Live')+'" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
+      box.innerHTML='<div class="video-frame"><iframe src="'+esc(yt)+'?autoplay=1" title="'+esc(live.title||'Boiler Room Live')+'" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
       return;
     }
     if(/\.(m3u8|mp4)(\?|#|$)/i.test(live.streamUrl)){
@@ -1399,12 +1403,12 @@ function formatEventDate(value){
       try{
         if(window.NCSFApp&&typeof window.NCSFApp.openAppPermissionSettings==='function'){
           window.NCSFApp.openAppPermissionSettings();
-          toast('Opening NCSF phone permissions…');
+          toast('Opening phone permissions…');
         }else{
-          toast('Open Phone Settings > Apps > NCSF > Permissions and allow Camera and Microphone.',true);
+          toast('Open Phone Settings > Apps > Boiler Room > Permissions and allow Camera and Microphone.',true);
         }
       }catch(_e){
-        toast('Open Phone Settings > Apps > NCSF > Permissions and allow Camera and Microphone.',true);
+        toast('Open Phone Settings > Apps > Boiler Room > Permissions and allow Camera and Microphone.',true);
       }
     });
 
@@ -1677,7 +1681,7 @@ function formatEventDate(value){
         await new Promise((resolve,reject)=>{
           const timer=setTimeout(()=>reject(new Error('Live server connection timed out.')),10000);
           ws.onopen=()=>{clearTimeout(timer);resolve()};
-          ws.onerror=()=>{clearTimeout(timer);reject(new Error('Could not connect to the NCSF live server.'))};
+          ws.onerror=()=>{clearTimeout(timer);reject(new Error('Could not connect to the Boiler Room live server.'))};
         });
 
         if(manualStop||!stream){
@@ -1727,7 +1731,7 @@ function formatEventDate(value){
             if(!permissionResult.cameraGranted){
               showPermissionRecovery();
               try{window.NCSFApp?.openAppPermissionSettings?.()}catch(_e){}
-              throw new Error('Camera permission denied. Allow Camera and Microphone in the NCSF phone permissions screen.');
+              throw new Error('Camera permission denied. Allow Camera and Microphone in the Boiler Room phone permissions screen.');
             }
           }
         }
@@ -1785,7 +1789,7 @@ function formatEventDate(value){
           try{window.NCSFApp?.openAppPermissionSettings?.()}catch(_e){}
         }
         stop();
-        toast(denied?'Camera permission denied. Enable Camera and Microphone in NCSF phone permissions.':(msg||'Could not start live stream.'),true);
+        toast(denied?'Camera permission denied. Enable Camera and Microphone in Boiler Room phone permissions.':(msg||'Could not start live stream.'),true);
       }finally{
         starting=false;
         startBtn.disabled=false;
@@ -1822,7 +1826,7 @@ function formatEventDate(value){
   }
 
   function liveChatRoleLabel(role){
-    if(role==='NCSF_ADMIN')return 'NCSF';
+    if(role==='NCSF_ADMIN')return 'Room Admin';
     if(role==='CLUB_ADMIN')return 'Club';
     if(role==='TEAM_ADMIN')return 'Team';
     return '';
@@ -2067,9 +2071,9 @@ function formatEventDate(value){
     if(state.user.role==='TEAM_ADMIN'){
       $('#teamIdentity').innerHTML='<strong>'+esc(state.user.teamName||'My Team')+'</strong> • '+esc(state.user.clubName||'');
       const squad=await api('/api/teams/'+state.user.teamId+'/players');
-      $('#mySquad').innerHTML=squad.players.length?'<div class="card-list">'+squad.players.map(p=>`<div class="card-row"><span><strong>${esc(p.first_name+' '+p.last_name)}</strong><small>${esc(p.ncsf_number||'No NCSF Number')}</small></span>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}</div>`).join('')+'</div>':'<div class="empty">No players assigned to this team yet.</div>';
+      $('#mySquad').innerHTML=squad.players.length?'<div class="card-list">'+squad.players.map(p=>`<div class="card-row"><span><strong>${esc(p.first_name+' '+p.last_name)}</strong><small>${esc(p.ncsf_number||'No player number')}</small></span>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}</div>`).join('')+'</div>':'<div class="empty">No players assigned to this team yet.</div>';
     }else{
-      $('#teamIdentity').innerHTML=state.user.role==='CLUB_ADMIN'?'<strong>'+esc(state.user.clubName||'Club')+'</strong> • club fixture access':'<strong>NCSF Administration</strong> • all fixtures';
+      $('#teamIdentity').innerHTML=state.user.role==='CLUB_ADMIN'?'<strong>'+esc(state.user.clubName||'Club')+'</strong> • club fixture access':'<strong>Boiler Room Administration</strong> • all fixtures';
       $('#mySquad').innerHTML='<div class="muted">Squad lists are available inside each team/scoresheet.</div>';
     }
   }
@@ -2090,7 +2094,7 @@ function formatEventDate(value){
     $('#playerTeamSelect').innerHTML=options(teams,'id',t=>t.name,null,'Unassigned / reserve pool');
     $('#userTeamSelect').innerHTML=options(teams,'id',t=>t.name,null,'Select team');
     $('#playerCount').textContent=state.meta.players.length;
-    $('#clubPlayers').innerHTML=state.meta.players.length?`<div class="table-wrap"><table><thead><tr><th>Player</th><th>NCSF Number</th><th>Team</th><th>Status</th></tr></thead><tbody>${state.meta.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td><select class="player-team-change" data-player="${p.id}">${options(teams,'id',t=>t.name,p.team_id,'Unassigned')}</select></td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}<br><button class="btn small player-suspend" data-player="${p.id}" data-suspended="${p.suspended}">${p.suspended?'Reactivate':'Suspend'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No players registered.</div>';
+    $('#clubPlayers').innerHTML=state.meta.players.length?`<div class="table-wrap"><table><thead><tr><th>Player</th><th>Player number</th><th>Team</th><th>Status</th></tr></thead><tbody>${state.meta.players.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td><select class="player-team-change" data-player="${p.id}">${options(teams,'id',t=>t.name,p.team_id,'Unassigned')}</select></td><td>${p.suspended?'<span class="pill FORFEIT">Suspended</span>':'<span class="pill APPROVED">Eligible</span>'}<br><button class="btn small player-suspend" data-player="${p.id}" data-suspended="${p.suspended}">${p.suspended?'Reactivate':'Suspend'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No players registered.</div>';
     $$('.player-team-change').forEach(sel=>sel.addEventListener('change',async()=>{
       try{await api('/api/admin/players/'+sel.dataset.player,{method:'PATCH',body:{teamId:sel.value||null}});toast('Player assignment updated');await reloadClub()}catch(err){toast(err.message,true)}
     }));
@@ -2119,7 +2123,8 @@ function formatEventDate(value){
       $$('.admin-pane').forEach(p=>p.classList.toggle('hidden',p.dataset.pane!==name));
     };
     $$('.admin-tabs button').forEach(btn=>btn.addEventListener('click',()=>showPane(btn.dataset.adminTab)));
-    showPane($('.admin-tabs button.active')?.dataset.adminTab||'dashboard');
+    const requestedPane=location.hash.replace(/^#/,'');
+    showPane(['stock','challenges'].includes(requestedPane)?requestedPane:($('.admin-tabs button.active')?.dataset.adminTab||'dashboard'));
     await reloadAdmin();
     bindAdminForms();
   }
@@ -2264,7 +2269,7 @@ async function loadAdminPosts(){
     const m=state.meta;
     $('#adminClubList').innerHTML=m.clubs.length?'<div class="card-list">'+m.clubs.map(c=>`<div class="card-row"><span><strong>${esc(c.name)}</strong><small>${m.teams.filter(t=>t.club_id===c.id).map(t=>t.name).join(', ')||'No teams'}</small></span></div>`).join('')+'</div>':'<div class="empty">No clubs yet.</div>';
     api('/api/fixtures').then(d=>renderAdminFixtures(d.fixtures)).catch(err=>toast(err.message,true));
-    $('#adminUsers').innerHTML=m.users.length?'<div class="card-list">'+m.users.map(u=>`<div class="card-row"><span><strong>${esc(u.display_name)}</strong><small>${esc(u.email)} • ${esc(u.role.replaceAll('_',' '))} • ${u.active?'Active':'Disabled'}</small></span><span><span class="muted">${esc(u.team_name||u.club_name||'NCSF')}</span><br><button class="btn small admin-user-password" data-id="${u.id}">Reset Password</button> ${u.id!==state.user.id?`<button class="btn small ${u.active?'danger':''} admin-user-active" data-id="${u.id}" data-active="${u.active}">${u.active?'Disable':'Enable'}</button>`:''}</span></div>`).join('')+'</div>':'<div class="empty">No users.</div>';
+    $('#adminUsers').innerHTML=m.users.length?'<div class="card-list">'+m.users.map(u=>`<div class="card-row"><span><strong>${esc(u.display_name)}</strong><small>${esc(u.email)} • ${esc((u.role==='NCSF_ADMIN'?'BOILER ROOM ADMIN':u.role.replaceAll('_',' ')))} • ${u.active?'Active':'Disabled'}</small></span><span><span class="muted">${esc(u.team_name||u.club_name||'Boiler Room')}</span><br><button class="btn small admin-user-password" data-id="${u.id}">Reset Password</button> ${u.id!==state.user.id?`<button class="btn small ${u.active?'danger':''} admin-user-active" data-id="${u.id}" data-active="${u.active}">${u.active?'Disable':'Enable'}</button>`:''}</span></div>`).join('')+'</div>':'<div class="empty">No users.</div>';
     $$('.admin-user-password').forEach(btn=>btn.addEventListener('click',async()=>{
       const password=prompt('Enter a new temporary password (minimum 8 characters):');
       if(password===null)return;

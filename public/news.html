@@ -3,24 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b223f">
-  <title>NCSF News & Events</title>
+  <meta name="theme-color" content="#101116">
+  <title>What’s On | Boiler Room</title>
+  <link rel="icon" href="/boiler-room-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/boiler-room.css">
 </head>
-<body data-page="news-page">
+<body class="boiler-room-theme" data-page="news-page">
 <header class="topbar">
   <div class="topbar-inner">
-    <a class="brand" href="/">
-      <img class="js-logo" src="/ncsf-logo.jpg" alt="NCSF logo">
-      <span><strong>Namibia Cue Sports Federation</strong><small>League Manager</small></span>
-    </a>
-    <nav class="nav">
+    <a class="brand" href="/" aria-label="Boiler Room home"><img class="js-logo" src="/boiler-room-mark.svg" alt="Boiler Room"><span><strong>BOILER ROOM</strong><small>POOL LOUNGE</small></span></a>
+    <nav class="nav" aria-label="Main navigation">
       <a href="/">Home</a>
-      <a href="/fixtures">Fixtures</a>
-      <a href="/results">Results</a>
-      <a href="/teams">Teams</a>
+      <a href="/live">Live tables</a>
+      <a href="/challenges">Challenges</a>
+      <a href="/fixtures">Pool league</a>
+      <a href="/teams">Crews</a>
       <a href="/players">Players</a>
-      <a href="/news" class="active">News & Events</a>
       <a href="/rankings">Rankings</a>
     </nav>
     <div class="user-actions" id="userActions"></div>
@@ -28,24 +27,24 @@
 </header>
 <main class="page">
   <div class="section-title">
-    <div><div class="kicker">Federation updates</div><h1>News & Events</h1></div>
+    <div><div class="br-kicker">ROOM UPDATES</div><h1>What’s on</h1></div>
+    <a class="btn secondary" href="/challenges">Make a challenge</a>
   </div>
-  <section class="panel news-opportunities-callout">
-    <div><strong>International Events</strong><p>Explore upcoming open tournaments, qualifiers and international cue-sports opportunities.</p></div>
-    <a class="btn primary" href="/opportunities">View International Events</a>
+  <section class="panel br-dark-panel news-lounge-callout">
+    <div><strong>League nights, callouts and room events.</strong><p>Check back for the next reason to rack ’em up.</p></div>
   </section>
   <div class="grid two news-layout">
     <section class="panel">
-      <div class="panel-head"><div><div class="kicker">Calendar</div><h2>Upcoming Events</h2></div></div>
+      <div class="panel-head"><div><div class="br-kicker">ON THE CALENDAR</div><h2>Upcoming events</h2></div></div>
       <div id="publicEvents" class="empty">Loading events…</div>
     </section>
     <section class="panel">
-      <div class="panel-head"><div><div class="kicker">Official updates</div><h2>Announcements & News</h2></div></div>
+      <div class="panel-head"><div><div class="br-kicker">FROM THE ROOM</div><h2>Updates</h2></div></div>
       <div id="publicNews" class="empty">Loading updates…</div>
     </section>
   </div>
 </main>
-<div class="footer">Namibia Cue Sports Federation • Digital League Manager</div>
+<div class="footer">The Boiler Room • Pool League</div>
 <div id="toast" class="toast hidden"></div>
 <script src="/app.js"></script>
 </body>

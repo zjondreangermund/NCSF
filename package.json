@@ -1,8 +1,8 @@
 {
-  "name": "ncsf-league-manager",
+  "name": "boiler-room-pool-lounge",
   "version": "0.1.0",
   "private": true,
-  "description": "Namibia Cue Sports Federation pool league, scoresheets and rankings",
+  "description": "Boiler Room pool lounge, league, challenges and stock management",
   "main": "server.js",
   "engines": {
     "node": ">=20"
