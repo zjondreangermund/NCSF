@@ -2662,12 +2662,63 @@ app.post("/api/fixtures/:id/substitutions", requireAuth, async (req, res) => {
   );
   if (eligible.length !== 2) return res.status(400).json({ error: "Both players must be eligible members of this team." });
 
-  const field = side === "HOME" ? "home_player_id" : "away_player_id";
-  const { rows: alreadyScored } = await pool.query(
-    `SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND round_no >= $2 AND ${field}=$3 AND winner_side IS NOT NULL`,
-    [fixture.id, effectiveRound, outPlayerId]
+  const { rows: subCountRows } = await pool.query(
+    "SELECT COUNT(*)::int count FROM substitutions WHERE fixture_id=$1 AND side=$2",
+    [fixture.id, side]
   );
-  if (alreadyScored[0].count > 0 && user.role !== ROLE.NCSF) return res.status(409).json({ error: "A substitution cannot rewrite frames that are already scored." });
+  if (subCountRows[0].count >= 3) return res.status(409).json({ error: "A side may make up to three substitutions in this match." });
+
+  const { rows: roundProgressRows } = await pool.query(
+    `SELECT round_no, COUNT(*)::int frame_count,
+            COUNT(*) FILTER (WHERE winner_side IS NOT NULL)::int completed_count
+     FROM frames WHERE fixture_id=$1 GROUP BY round_no ORDER BY round_no`,
+    [fixture.id]
+  );
+  const roundProgress = new Map(roundProgressRows.map(row=>[Number(row.round_no),row]));
+  let completedRounds=0;
+  for(let round=1;round<=5;round++){
+    const progress=roundProgress.get(round);
+    if(!progress||progress.frame_count!==5||progress.completed_count!==5)break;
+    completedRounds=round;
+  }
+  const nextEffectiveRound=completedRounds+1;
+  if(completedRounds<1||nextEffectiveRound>5){
+    return res.status(409).json({error:"Substitutions can only be made after a completed round."});
+  }
+  const currentRound=roundProgress.get(nextEffectiveRound);
+  if(currentRound?.completed_count>0){
+    return res.status(409).json({error:"Finish the current round before recording a substitution."});
+  }
+  if(effectiveRound<nextEffectiveRound){
+    return res.status(409).json({error:"The effective round must be the next round or later."});
+  }
+
+  const field = side === "HOME" ? "home_player_id" : "away_player_id";
+  const { rows: rosterRows } = await pool.query(
+    `SELECT player_id FROM fixture_lineups WHERE fixture_id=$1 AND side=$2
+     UNION SELECT player_id FROM fixture_reserves WHERE fixture_id=$1 AND side=$2`,
+    [fixture.id, side]
+  );
+  const rosterIds=new Set(rosterRows.map(row=>Number(row.player_id)));
+  if(!rosterIds.has(outPlayerId)||!rosterIds.has(inPlayerId)){
+    return res.status(400).json({error:"Both players must be on this side's match roster."});
+  }
+  const { rows: roundPlayers } = await pool.query(
+    `SELECT DISTINCT ${field} player_id FROM frames WHERE fixture_id=$1 AND round_no=$2`,
+    [fixture.id, effectiveRound]
+  );
+  const activeIds=new Set(roundPlayers.map(row=>Number(row.player_id)));
+  if(!activeIds.has(outPlayerId)){
+    return res.status(400).json({error:"Player Out must be active in the selected effective round."});
+  }
+  if(activeIds.has(inPlayerId)){
+    return res.status(400).json({error:"Player In is already active in the selected effective round."});
+  }
+  const { rows: alreadyScored } = await pool.query(
+    `SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND round_no >= $2 AND winner_side IS NOT NULL`,
+    [fixture.id, effectiveRound]
+  );
+  if (alreadyScored[0].count > 0) return res.status(409).json({ error: "A substitution cannot rewrite rounds that are already scored." });
 
   await pool.query(
     "INSERT INTO substitutions(fixture_id,side,out_player_id,in_player_id,effective_round,created_by) VALUES($1,$2,$3,$4,$5,$6)",
