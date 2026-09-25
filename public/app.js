@@ -981,10 +981,15 @@ function formatEventDate(value){
       overlay.classList.remove('is-final');
       const current=match.current;
       if(current){
+        const breakPlayerName=current.breakSide==='HOME'
+          ? current.homePlayerName
+          : current.breakSide==='AWAY'
+            ? current.awayPlayerName
+            : '';
         frame.innerHTML=
           '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+'/25</small>'+
           '<strong>'+esc(current.homePlayerName)+' <b>vs</b> '+esc(current.awayPlayerName)+'</strong>'+
-          '<span>Break: '+esc(current.breakLabel||'—')+'</span>';
+          '<span>Breaking: '+esc(breakPlayerName||'—')+'</span>';
       }
 
       if(match.next){

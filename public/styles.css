@@ -4143,3 +4143,7 @@ body.ncsf-live-fullscreen-active{
   font-weight:700;
 }
 .print-vs{text-align:center!important;color:#667486!important;font-style:italic}
+
+/* Keep the live score overlay lower in the video frame. */
+.live-match-overlay{bottom:38px!important}
+.ncsf-live-fullscreen .live-match-overlay{bottom:34px!important}
