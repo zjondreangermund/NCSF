@@ -3,24 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b223f">
-  <title>NCSF Federation Admin</title>
+  <meta name="theme-color" content="#101116">
+  <title>Boiler Room | Operations</title>
+  <link rel="icon" href="/boiler-room-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/boiler-room.css">
 </head>
-<body data-page="admin">
+<body class="boiler-room-theme" data-page="admin">
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="/">
-      <img class="js-logo" src="/ncsf-logo.jpg" alt="NCSF logo">
-      <span><strong>Namibia Cue Sports Federation</strong><small>League Manager</small></span>
+      <img class="js-logo" src="/boiler-room-mark.svg" alt="Boiler Room">
+      <span><strong>BOILER ROOM</strong><small>POOL LOUNGE</small></span>
     </a>
     <nav class="nav">
       <a href="/">Home</a>
-      <a href="/fixtures">Fixtures</a>
-      <a href="/results">Results</a>
-      <a href="/teams">Teams</a>
+      <a href="/live">Live tables</a>
+      <a href="/challenges">Challenges</a>
+      <a href="/fixtures">Pool league</a>
+      <a href="/teams">Crews</a>
       <a href="/players">Players</a>
-      <a href="/news">News & Events</a>
       <a href="/rankings">Rankings</a>
     </nav>
     <div class="user-actions" id="userActions"></div>
@@ -28,16 +30,17 @@
 </header>
 <main class="page">
   <div class="section-title">
-    <div><div class="kicker">Federation controls</div><h1>NCSF Administration</h1></div>
-    <a class="btn secondary" href="/team">Match Centre</a>
+    <div><div class="br-kicker">ROOM OPERATIONS</div><h1>Boiler Room control room</h1></div>
+    <a class="btn secondary" href="/team">Match centre</a>
   </div>
   <div class="admin-tabs">
     <button class="btn active" data-admin-tab="dashboard">Dashboard</button>
-    <button class="btn" data-admin-tab="setup">League Setup</button>
-    <button class="btn" data-admin-tab="clubs">Clubs & Teams</button>
+    <button class="btn" data-admin-tab="setup">League setup</button>
+    <button class="btn" data-admin-tab="clubs">Clubs & crews</button>
     <button class="btn" data-admin-tab="fixtures">Fixtures</button>
-    <button class="btn" data-admin-tab="content">News & Events</button>
-    <button class="btn" data-admin-tab="opportunities">International Events</button>
+    <button class="btn" data-admin-tab="challenges">Challenges</button>
+    <button class="btn" data-admin-tab="stock">Stock</button>
+    <button class="btn" data-admin-tab="content">What’s on</button>
     <button class="btn" data-admin-tab="access">Access</button>
   </div>
 
@@ -49,7 +52,7 @@
     </div>
     <div class="grid two" style="margin-top:18px">
       <div class="panel">
-        <div class="panel-head"><div><div class="kicker">Needs attention</div><h2>Submitted / Confirmed Results</h2></div><span class="pill" id="pendingCount">0</span></div>
+        <div class="panel-head"><div><div class="kicker">Needs attention</div><h2>Match results to review</h2></div><span class="pill" id="pendingCount">0</span></div>
         <div id="pendingResults" class="empty">No results waiting for approval.</div>
       </div>
       <div class="panel">
@@ -68,7 +71,7 @@
       <div class="panel">
         <h2>Create season</h2>
         <form id="seasonForm" class="form-grid">
-          <label class="full">Season name<input name="name" placeholder="2026 NCSF League" required></label>
+          <label class="full">Season name<input name="name" placeholder="Boiler Room Pool League" required></label>
           <label>Start date<input name="startDate" type="date"></label>
           <label>End date<input name="endDate" type="date"></label>
           <label class="full"><span><input name="active" type="checkbox" style="width:auto"> Make active season</span></label>
@@ -114,7 +117,7 @@
           <label>Team<select name="teamId" id="adminPlayerTeam"></select></label>
           <label>First name<input name="firstName" required></label>
           <label>Last name<input name="lastName" required></label>
-          <label class="full">NCSF Number<input name="ncsfNumber"></label>
+          <label class="full">Player number<input name="ncsfNumber"></label>
           <button class="btn primary full" type="submit">Register Player</button>
         </form>
       </div>
@@ -153,11 +156,66 @@
     <div class="panel" style="margin-top:18px"><h2>Fixtures</h2><div id="adminFixtures"></div></div>
   </section>
 
+  <section class="admin-pane" data-pane="challenges">
+    <div class="grid two">
+      <div class="panel br-dark-panel">
+        <span class="br-kicker">PUT A MATCH ON THE BOARD</span>
+        <h2>Create a pool challenge</h2>
+        <form id="challengeCreateForm" class="form-grid br-form">
+          <label>Player one<select id="challengePlayerOne" name="playerOneId" required></select></label>
+          <label>Player two<select id="challengePlayerTwo" name="playerTwoId" required></select></label>
+          <label>Game<select name="gameType" required><option value="BLACKBALL">Blackball</option><option value="8_BALL">8-ball</option><option value="9_BALL">9-ball</option></select></label>
+          <label>Race to<input name="raceTo" type="number" min="1" max="25" value="5" required></label>
+          <label class="full">Date and time<input name="scheduledAt" type="datetime-local"></label>
+          <label class="full">Match note<textarea name="notes" rows="2" maxlength="400" placeholder="Optional"></textarea></label>
+          <button class="btn br-btn-hot full" type="submit">Add to challenge board</button>
+        </form>
+      </div>
+      <div class="panel br-dark-panel">
+        <div class="panel-head"><div><span class="br-kicker">PLAYER CALLOUTS</span><h2>Requests to review</h2></div><span class="pill" id="challengeRequestCount">0</span></div>
+        <div id="adminChallengeRequests" class="empty">No new challenge requests.</div>
+      </div>
+    </div>
+    <div class="panel br-dark-panel" style="margin-top:18px">
+      <div class="panel-head"><div><span class="br-kicker">OPEN · SCHEDULED · ON TABLE</span><h2>Manage challenges</h2></div></div>
+      <div id="adminChallengeList" class="empty">Loading challenges…</div>
+    </div>
+  </section>
+
+  <section class="admin-pane" data-pane="stock">
+    <div class="grid three br-stock-stats" id="stockStats">
+      <div class="panel br-dark-panel"><span class="br-kicker">ITEMS TRACKED</span><div class="br-stock-number" id="stockItemCount">0</div></div>
+      <div class="panel br-dark-panel"><span class="br-kicker">LOW STOCK</span><div class="br-stock-number" id="stockLowCount">0</div></div>
+      <div class="panel br-dark-panel"><span class="br-kicker">OUT OF STOCK</span><div class="br-stock-number" id="stockOutCount">0</div></div>
+    </div>
+    <div class="grid two" style="margin-top:18px">
+      <div class="panel br-dark-panel">
+        <span class="br-kicker">KEEP IT SIMPLE</span><h2>Add a stock item</h2>
+        <form id="stockItemForm" class="form-grid br-form">
+          <label class="full">Item name<input name="name" maxlength="100" required placeholder="e.g. Bottled water"></label>
+          <label>Category<select name="category"><option>Bar</option><option>Snacks</option><option>Pool supplies</option><option>Other</option></select></label>
+          <label>Counted as<select name="unit"><option value="bottles">Bottles</option><option value="cans">Cans</option><option value="cases">Cases</option><option value="each">Each</option><option value="bags">Bags</option><option value="kg">Kg</option></select></label>
+          <label>Starting quantity<input name="quantity" type="number" min="0" step="0.01" value="0" required></label>
+          <label>Low-stock alert at<input name="reorderLevel" type="number" min="0" step="0.01" value="0" required></label>
+          <button class="btn br-btn-blue full" type="submit">Add item</button>
+        </form>
+      </div>
+      <div class="panel br-dark-panel">
+        <div class="panel-head"><div><span class="br-kicker">RECENT CHANGES</span><h2>Stock movement</h2></div></div>
+        <div id="stockMovementList" class="empty">No stock movements yet.</div>
+      </div>
+    </div>
+    <div class="panel br-dark-panel" style="margin-top:18px">
+      <div class="panel-head"><div><span class="br-kicker">ON HAND NOW</span><h2>Stock list</h2></div><p class="br-stock-help">Use “Add” when stock arrives, “Use” when stock is taken out, or “Count” after a shelf check.</p></div>
+      <div id="stockItemList" class="empty">No items tracked yet.</div>
+    </div>
+  </section>
+
   <section class="admin-pane" data-pane="content">
     <div class="grid two">
       <div class="panel">
-        <div class="kicker">Public communication</div>
-        <h2>Publish news, announcement or event</h2>
+        <div class="br-kicker">PUBLIC UPDATES</div>
+        <h2>Post what’s on</h2>
         <form id="contentPostForm" class="form-grid">
           <label>Type
             <select name="type" id="contentType">
@@ -182,43 +240,7 @@
     </div>
   </section>
 
-  <section class="admin-pane" data-pane="opportunities">
-    <div class="grid two opportunity-admin-layout">
-      <div class="panel">
-        <div class="kicker">International competition</div>
-        <h2 id="opportunityFormTitle">Add tournament opportunity</h2>
-        <form id="opportunityForm" class="form-grid">
-          <input type="hidden" name="id">
-          <label class="full">Tournament name<input name="title" maxlength="180" required placeholder="World Heyball Masters Open"></label>
-          <label>Discipline<select name="discipline" required>
-            <option value="HEYBALL">Heyball</option><option value="BLACKBALL">Blackball / 8-ball</option><option value="8-BALL">8-ball</option><option value="9-BALL">9-ball</option><option value="10-BALL">10-ball</option><option value="OTHER">Other</option>
-          </select></label>
-          <label>Registration status<select name="status" required>
-            <option value="OPEN">Registration open</option><option value="COMING_SOON" selected>Coming soon</option><option value="WAITLIST">Waitlist</option><option value="INVITATION_ONLY">Invitation only</option><option value="CLOSED">Registration closed</option>
-          </select></label>
-          <label>Organizer<input name="organizer" maxlength="160" placeholder="Federation / promoter"></label>
-          <label>Location<input name="location" maxlength="200" placeholder="City, country"></label>
-          <label>Start date<input name="start_date" type="date"></label>
-          <label>End date<input name="end_date" type="date"></label>
-          <label>Registration deadline<input name="registration_deadline" type="date"></label>
-          <label>Entry fee<input name="entry_fee" maxlength="100" placeholder="e.g. USD 200"></label>
-          <label>Prize fund<input name="prize_fund" maxlength="100" placeholder="e.g. USD 63,000"></label>
-          <label class="full">Who can enter?<input name="eligibility" maxlength="240" placeholder="Open entry, qualifier required, federation nomination…"></label>
-          <label class="full">Official event page<input name="official_url" type="url" placeholder="https://…"></label>
-          <label class="full">Registration / waitlist link<input name="registration_url" type="url" placeholder="https://…"></label>
-          <label class="full">Details<textarea name="description" maxlength="1200" rows="3" placeholder="Important entry or qualification details"></textarea></label>
-          <label class="full"><span><input name="published" type="checkbox" checked style="width:auto"> Show publicly</span></label>
-          <div class="full opportunity-form-actions"><button class="btn primary" id="opportunitySubmit" type="submit">Add opportunity</button><button class="btn light hidden" id="cancelOpportunityEdit" type="button">Cancel edit</button></div>
-        </form>
-      </div>
-      <div class="panel">
-        <div class="kicker">All listings</div>
-        <h2>Manage tournament listings</h2>
-        <p class="muted">Only published listings appear to visitors. Review organizer details regularly and update registration status when it changes.</p>
-        <div id="adminOpportunities" class="empty">Loading tournament opportunities…</div>
-      </div>
-    </div>
-  </section>
+
 
   <section class="admin-pane" data-pane="access">
     <div class="grid two">
@@ -228,7 +250,7 @@
           <label class="full">Name<input name="displayName" required></label>
           <label>Email<input name="email" type="email" required></label>
           <label>Password<input name="password" type="password" minlength="8" required></label>
-          <label>Role<select name="role" id="adminUserRole"><option value="CLUB_ADMIN">Club Admin</option><option value="TEAM_ADMIN">Team Admin</option><option value="NCSF_ADMIN">NCSF Admin</option></select></label>
+          <label>Role<select name="role" id="adminUserRole"><option value="CLUB_ADMIN">Club Admin</option><option value="TEAM_ADMIN">Team Admin</option><option value="NCSF_ADMIN">Boiler Room Admin</option></select></label>
           <label>Club<select name="clubId" id="adminUserClub"></select></label>
           <label class="full">Team<select name="teamId" id="adminUserTeam"></select></label>
           <button class="btn primary full" type="submit">Create Login</button>
@@ -238,6 +260,18 @@
     </div>
   </section>
 </main>
+<dialog id="stockMoveDialog" class="br-dialog">
+  <form id="stockMovementForm" class="form-grid br-form">
+    <div class="full"><span class="br-kicker" id="stockMoveAction">UPDATE STOCK</span><h2 id="stockMoveTitle">Record stock</h2></div>
+    <input type="hidden" name="itemId">
+    <input type="hidden" name="movementType">
+    <label class="full">Quantity<input name="quantity" type="number" min="0" step="0.01" required></label>
+    <label class="full">Note <textarea name="note" rows="2" maxlength="160" placeholder="Optional"></textarea></label>
+    <button class="btn br-btn-hot full" type="submit">Save stock change</button>
+    <button class="btn br-btn-outline full" type="button" id="closeStockMove">Cancel</button>
+  </form>
+</dialog>
 <div id="toast" class="toast hidden"></div>
 <script src="/app.js"></script>
+<script src="/boiler-room.js"></script>
 </body></html>

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101116">
+  <meta name="description" content="Call out a rival, send a Boiler Room pool challenge request and follow the challenge board.">
+  <title>Pool Challenges | Boiler Room</title>
+  <link rel="icon" href="/boiler-room-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/boiler-room.css">
+</head>
+<body class="boiler-room-theme" data-page="challenges-page">
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/" aria-label="Boiler Room home"><img class="js-logo" src="/boiler-room-mark.svg" alt="Boiler Room"><span><strong>BOILER ROOM</strong><small>POOL LOUNGE</small></span></a>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="/">Home</a><a href="/live">Live tables</a><a class="active" href="/challenges">Challenges</a><a href="/fixtures">Pool league</a><a href="/teams">Crews</a><a href="/players">Players</a><a href="/rankings">Rankings</a>
+    </nav>
+    <div class="user-actions" id="userActions"></div>
+  </div>
+</header>
+<main class="page br-challenges-page">
+  <section class="br-page-hero">
+    <div><span class="br-kicker"><i></i> ONE TABLE. TWO NAMES.</span><h1>CALL<br><em>YOUR</em><br>SHOT.</h1><p>Got a rival? Send in the challenge. We’ll review it, set the table and put it on the board.</p></div>
+    <div class="br-page-hero-image"><img src="/boiler-room/room-main.webp" alt="Blue pool table waiting for a Boiler Room challenge"><span>THE ROOM IS READY</span></div>
+  </section>
+  <section class="br-challenges-layout">
+    <div class="panel br-dark-panel br-challenge-board-panel">
+      <div class="panel-head"><div><span class="br-kicker">THE BOARD</span><h2>Open challenges</h2></div><span class="br-board-marker"><i></i> UPDATES AS MATCHES CHANGE</span></div>
+      <div id="publicChallengeList" class="empty">Loading the challenge board…</div>
+    </div>
+    <aside class="panel br-challenge-form-panel">
+      <span class="br-kicker">PUT IT ON THE TABLE</span>
+      <h2>Start a<br><em>challenge.</em></h2>
+      <p>Tell us who’s playing and when you’d like to come in. The Boiler Room team will confirm it before it appears on the board.</p>
+      <form id="challengeRequestForm" class="form-grid br-form">
+        <label class="full">Your name<input name="challengerName" maxlength="80" autocomplete="name" required placeholder="Who’s calling it?"></label>
+        <label class="full">Who are you challenging?<input name="opponentName" maxlength="80" required placeholder="Name your rival"></label>
+        <label>Game<select name="gameType" required><option value="BLACKBALL">Blackball</option><option value="8_BALL">8-ball</option><option value="9_BALL">9-ball</option></select></label>
+        <label>Race to<input name="raceTo" type="number" min="1" max="25" value="5" required></label>
+        <label class="full">Best time to play<input name="preferredAt" type="datetime-local"></label>
+        <label class="full">Contact number<input name="contact" type="tel" maxlength="40" autocomplete="tel" required placeholder="For confirming your challenge"></label>
+        <label class="full">Anything else? <textarea name="notes" maxlength="400" rows="3" placeholder="Optional note"></textarea></label>
+        <p class="br-privacy-note full">We’ll use your contact number only to confirm this challenge request.</p>
+        <button class="btn br-btn-hot full" type="submit">Send the callout <span aria-hidden="true">↗</span></button>
+      </form>
+      <div id="challengeRequestStatus" class="notice hidden" role="status" aria-live="polite"></div>
+    </aside>
+  </section>
+</main>
+<footer class="br-footer"><a class="brand" href="/"><img src="/boiler-room-mark.svg" alt=""><span><strong>BOILER ROOM</strong><small>POOL LOUNGE</small></span></a><span>Pool. Pressure. Good company.</span><a href="/">Back to the room ↗</a></footer>
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+<script src="/boiler-room.js"></script>
+</body>
+</html>

@@ -2,7 +2,6 @@ require("dotenv").config();
 require("express-async-errors");
 
 const path = require("path");
-const fs = require("fs");
 const http = require("http");
 const crypto = require("crypto");
 const express = require("express");
@@ -255,6 +254,77 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS stock_items (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Other',
+      unit TEXT NOT NULL DEFAULT 'each',
+      quantity NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+      reorder_level NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (reorder_level >= 0),
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_items_active_name_unique
+      ON stock_items(LOWER(name)) WHERE active=TRUE;
+
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id BIGSERIAL PRIMARY KEY,
+      item_id INTEGER NOT NULL REFERENCES stock_items(id) ON DELETE RESTRICT,
+      movement_type TEXT NOT NULL CHECK (movement_type IN ('IN','OUT','COUNT')),
+      quantity NUMERIC(12,2) NOT NULL CHECK (quantity >= 0),
+      quantity_before NUMERIC(12,2) NOT NULL CHECK (quantity_before >= 0),
+      quantity_after NUMERIC(12,2) NOT NULL CHECK (quantity_after >= 0),
+      note TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_created
+      ON stock_movements(created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_item_created
+      ON stock_movements(item_id, created_at DESC, id DESC);
+
+    CREATE TABLE IF NOT EXISTS pool_challenges (
+      id SERIAL PRIMARY KEY,
+      player_one_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+      player_two_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+      player_one_name TEXT NOT NULL,
+      player_two_name TEXT NOT NULL,
+      game_type TEXT NOT NULL DEFAULT 'BLACKBALL',
+      race_to INTEGER NOT NULL DEFAULT 5 CHECK (race_to BETWEEN 1 AND 25),
+      scheduled_at TIMESTAMPTZ,
+      status TEXT NOT NULL DEFAULT 'OPEN'
+        CHECK (status IN ('OPEN','SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED')),
+      score_one INTEGER NOT NULL DEFAULT 0 CHECK (score_one >= 0),
+      score_two INTEGER NOT NULL DEFAULT 0 CHECK (score_two >= 0),
+      notes TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (player_one_id IS NULL OR player_two_id IS NULL OR player_one_id <> player_two_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pool_challenges_status_date
+      ON pool_challenges(status, scheduled_at, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS challenge_requests (
+      id SERIAL PRIMARY KEY,
+      challenger_name TEXT NOT NULL,
+      opponent_name TEXT NOT NULL,
+      contact TEXT NOT NULL,
+      game_type TEXT NOT NULL DEFAULT 'BLACKBALL',
+      race_to INTEGER NOT NULL DEFAULT 5 CHECK (race_to BETWEEN 1 AND 25),
+      preferred_at TIMESTAMPTZ,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW','APPROVED','DECLINED')),
+      challenge_id INTEGER REFERENCES pool_challenges(id) ON DELETE SET NULL,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_challenge_requests_status_created
+      ON challenge_requests(status, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS live_chat_messages (
       id BIGSERIAL PRIMARY KEY,
       fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
@@ -321,8 +391,21 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_content_posts_public
-      ON content_posts(published,type,event_date,created_at);
+
+    CREATE TABLE IF NOT EXISTS boiler_room_posts (
+      id SERIAL PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('NEWS','ANNOUNCEMENT','EVENT')),
+      title TEXT NOT NULL,
+      body TEXT,
+      event_date TIMESTAMPTZ,
+      published BOOLEAN NOT NULL DEFAULT TRUE,
+      pinned BOOLEAN NOT NULL DEFAULT FALSE,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_boiler_room_posts_public
+      ON boiler_room_posts(published,type,event_date,created_at);
 
     CREATE TABLE IF NOT EXISTS tournament_opportunities (
       id SERIAL PRIMARY KEY,
@@ -351,22 +434,6 @@ async function initDatabase() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tournament_opportunities_title_unique
       ON tournament_opportunities(LOWER(title));
 
-    INSERT INTO tournament_opportunities
-      (title,discipline,organizer,location,start_date,end_date,entry_fee,prize_fund,eligibility,status,description,registration_url,official_url)
-    SELECT seed.title,seed.discipline,seed.organizer,seed.location,seed.start_date::date,seed.end_date::date,
-           seed.entry_fee,seed.prize_fund,seed.eligibility,seed.status,seed.description,seed.registration_url,seed.official_url
-    FROM (VALUES
-      ('Universal Bangkok Open 2026','9-BALL','Bangkok Cuesports Festival / World Nineball Tour','Bangkok, Thailand','2026-11-17','2026-11-21','USD 200','USD 63,000','Open application for players 16+; all genders and nationalities. Application approval is required; entry is not guaranteed.','OPEN','WNT Silver Ranking event. Submit an application and wait for confirmation from the organizer.','https://www.bangkok-cuesports.com/events/bangkok-open/register','https://www.bangkok-cuesports.com/events/bangkok-open'),
-      ('Universal Bangkok Open 2026 Qualifier #5 – Pattaya','9-BALL','Bangkok Cuesports Festival / World Nineball Tour','Pattaya, Thailand','2026-09-26','2026-09-27','THB 2,000',NULL,'16+; open to all nationalities. Four qualifying spots.','OPEN','Official qualifier for the Universal Bangkok Open 2026. Registration is listed as open; confirm promptly with the organizer.','https://www.bangkok-cuesports.com/events/bangkok-open-2026-qualifier-5/register','https://www.bangkok-cuesports.com/events/bangkok-open-2026-qualifier-5'),
-      ('2026 Philippines Open Pool Championship','9-BALL','World Nineball Tour','Quezon City, Philippines','2026-10-20','2026-10-24','USD 350',NULL,'Public player entry; participants must be 16 or older. Check current availability with WNT.','OPEN','Official WNT player registration page showed public entries in stock when this listing was checked.','https://worldnineballtour.com/tickets/2026-philippines-open-pool-championship-player-registration-public/','https://worldnineballtour.com/events/2026-philippines-open-pool-championship/'),
-      ('Universal Open Ho Chi Minh 2026','9-BALL','World Nineball Tour','Ho Chi Minh City, Vietnam','2026-11-11','2026-11-15',NULL,'USD 63,000','Contact the WNT organizer to confirm entry requirements and availability.','COMING_SOON','Listed as a WNT ranking event; the event page directs players to contact the organizer for registration.','https://worldnineballtour.com/events/universal-open-ho-chi-minh-2026/','https://worldnineballtour.com/events/universal-open-ho-chi-minh-2026/'),
-      ('Qatar World Cup 10-Ball 2026','10-BALL','World Pool Association','Qatar','2026-12-05','2026-12-14',NULL,NULL,'Player entry and federation allocation details are not published on the WPA calendar; confirm with NCSF/WPA.','COMING_SOON','Listed on the WPA calendar. Confirm entry eligibility before making travel plans.',NULL,'https://wpapool.com/calendar/')
-    ) AS seed(title,discipline,organizer,location,start_date,end_date,entry_fee,prize_fund,eligibility,status,description,registration_url,official_url)
-    WHERE NOT EXISTS (
-      SELECT 1 FROM tournament_opportunities existing
-      WHERE LOWER(existing.title)=LOWER(seed.title)
-    )
-    ON CONFLICT DO NOTHING;
   `);
 }
 
@@ -1372,13 +1439,13 @@ function streamOnePageScoresheetPdf(res, payload) {
     layout: "portrait",
     margin: 12,
     autoFirstPage: true,
-    info: { Title: `NCSF ${f.homeTeamName} vs ${f.awayTeamName}` }
+    info: { Title: `Boiler Room ${f.homeTeamName} vs ${f.awayTeamName}` }
   });
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="NCSF-${String(f.homeTeamName).replace(/[^a-z0-9]+/gi,"-")}-vs-${String(f.awayTeamName).replace(/[^a-z0-9]+/gi,"-")}.pdf"`
+    `attachment; filename="Boiler-Room-${String(f.homeTeamName).replace(/[^a-z0-9]+/gi,"-")}-vs-${String(f.awayTeamName).replace(/[^a-z0-9]+/gi,"-")}.pdf"`
   );
   res.setHeader("Cache-Control", "no-store");
   doc.pipe(res);
@@ -1578,14 +1645,14 @@ function streamOnePageScoresheetPdf(res, payload) {
     return yy + totalH;
   };
 
-  try {
-    doc.image(getNcsfLogoJpeg(), left + 2, 13, { fit: [38, 38], align: "center", valign: "center" });
-  } catch (_e) {}
+  doc.roundedRect(left + 2, 14, 36, 36, 8).fillColor("#f04452").fill();
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(13)
+    .text("BR", left + 2, 26, { width: 36, align: "center", lineBreak: false });
 
-  drawPdfTextFit(doc, "NAMIBIA CUE SPORTS FEDERATION", 56, 15, usable - 90, {
+  drawPdfTextFit(doc, "THE BOILER ROOM", 56, 15, usable - 90, {
     size: 12.5, minSize: 10.5, bold: true, align: "center", color: line, height: 16
   });
-  drawPdfTextFit(doc, "Blackball League Scoresheet", 56, 30, usable - 90, {
+  drawPdfTextFit(doc, "Pool League Scoresheet", 56, 30, usable - 90, {
     size: 9.1, minSize: 7.5, bold: true, align: "center", color: line, height: 12
   });
   drawPdfTextFit(doc, `${f.seasonName || ""} - ${f.divisionName || ""} - Round ${f.roundNo || ""}`, 56, 43, usable - 90, {
@@ -1689,7 +1756,7 @@ function streamOnePageScoresheetPdf(res, payload) {
   doc.moveTo(awaySigX, signY + 25).lineTo(awaySigX + sigW, signY + 25).strokeColor(line).lineWidth(0.55).stroke();
 
   doc.font("Helvetica").fontSize(4.2).fillColor("#777777")
-    .text("Generated by NCSF League Manager", left, H - 22, { width: usable, height: 7, align: "center", lineBreak: false });
+    .text("Generated by Boiler Room Pool Lounge", left, H - 22, { width: usable, height: 7, align: "center", lineBreak: false });
 
   doc.end();
 }
@@ -1808,7 +1875,7 @@ app.get("/api/public/posts", async (req, res) => {
     where.push("type=$" + args.length);
   }
   const { rows } = await pool.query(
-    "SELECT id,type,title,body,event_date,pinned,created_at,updated_at FROM content_posts WHERE " +
+    "SELECT id,type,title,body,event_date,pinned,created_at,updated_at FROM boiler_room_posts WHERE " +
     where.join(" AND ") +
     " ORDER BY pinned DESC, CASE WHEN type='EVENT' AND event_date >= NOW() THEN 0 WHEN type='ANNOUNCEMENT' THEN 1 WHEN type='NEWS' THEN 2 ELSE 3 END, CASE WHEN type='EVENT' THEN event_date END ASC NULLS LAST, created_at DESC LIMIT 100",
     args
@@ -1881,6 +1948,55 @@ app.get("/api/public/players", async (req, res) => {
     ORDER BY p.last_name,p.first_name
   `, args);
   res.json({ players: rows });
+});
+
+app.get("/api/public/challenges", async (_req, res) => {
+  const { rows } = await pool.query(`
+    SELECT id,player_one_name,player_two_name,game_type,race_to,scheduled_at,status,
+           score_one,score_two,created_at
+    FROM pool_challenges
+    WHERE status <> 'CANCELED'
+      AND (status <> 'COMPLETED' OR created_at >= NOW() - INTERVAL '21 days')
+    ORDER BY CASE status
+      WHEN 'IN_PROGRESS' THEN 0 WHEN 'SCHEDULED' THEN 1 WHEN 'OPEN' THEN 2
+      WHEN 'COMPLETED' THEN 3 ELSE 4 END,
+      scheduled_at NULLS LAST,created_at DESC
+    LIMIT 50
+  `);
+  res.json({ challenges: rows });
+});
+
+app.post("/api/public/challenge-requests", async (req, res) => {
+  const challengerName = String(req.body.challengerName || "").trim().slice(0, 80);
+  const opponentName = String(req.body.opponentName || "").trim().slice(0, 80);
+  const contact = String(req.body.contact || "").trim().slice(0, 40);
+  const gameType = String(req.body.gameType || "BLACKBALL").toUpperCase();
+  const raceTo = Number(req.body.raceTo || 5);
+  const preferredAt = req.body.preferredAt ? new Date(req.body.preferredAt) : null;
+  const notes = String(req.body.notes || "").trim().slice(0, 400) || null;
+
+  if (!challengerName || !opponentName || !contact) {
+    return res.status(400).json({ error: "Your name, opponent and contact number are required." });
+  }
+  if (challengerName.toLowerCase() === opponentName.toLowerCase()) {
+    return res.status(400).json({ error: "Choose two different players for the challenge." });
+  }
+  if (!["BLACKBALL","8_BALL","9_BALL"].includes(gameType)) {
+    return res.status(400).json({ error: "Choose a supported pool game." });
+  }
+  if (!Number.isInteger(raceTo) || raceTo < 1 || raceTo > 25) {
+    return res.status(400).json({ error: "Race to must be between 1 and 25." });
+  }
+  if (preferredAt && (!Number.isFinite(preferredAt.getTime()) || preferredAt.getTime() < Date.now())) {
+    return res.status(400).json({ error: "Choose a future time, or leave the time blank." });
+  }
+
+  const { rows } = await pool.query(`
+    INSERT INTO challenge_requests(challenger_name,opponent_name,contact,game_type,race_to,preferred_at,notes)
+    VALUES($1,$2,$3,$4,$5,$6,$7)
+    RETURNING id,created_at
+  `, [challengerName,opponentName,contact,gameType,raceTo,preferredAt,notes]);
+  res.status(201).json({ request: rows[0] });
 });
 
 app.get("/api/divisions/:id/standings", async (req, res) => {
@@ -1975,7 +2091,7 @@ app.post("/api/live/:id/chat", requireAuth, async (req, res) => {
   if (!fixture.stream_active) return res.status(409).json({ error: "Live chat is available while the fixture is live." });
 
   const user = await currentUserById(req.session.userId);
-  if (!user || !user.active) return res.status(403).json({ error: "Active NCSF sign-in required." });
+  if (!user || !user.active) return res.status(403).json({ error: "Active Boiler Room sign-in required." });
 
   const message = String(req.body.message || "").replace(/\s+/g, " ").trim();
   if (!message) return res.status(400).json({ error: "Enter a chat message." });
@@ -2150,8 +2266,228 @@ app.get("/api/admin/meta", requireRoles(ROLE.NCSF, ROLE.CLUB, ROLE.TEAM), async 
 });
 
 
+app.get("/api/admin/challenges", requireRoles(ROLE.NCSF), async (_req, res) => {
+  const { rows } = await pool.query(`
+    SELECT id,player_one_id,player_two_id,player_one_name,player_two_name,game_type,race_to,
+           scheduled_at,status,score_one,score_two,notes,created_at,updated_at
+    FROM pool_challenges
+    ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'OPEN' THEN 1 WHEN 'SCHEDULED' THEN 2
+      WHEN 'COMPLETED' THEN 3 ELSE 4 END,scheduled_at NULLS LAST,created_at DESC
+    LIMIT 100
+  `);
+  res.json({ challenges: rows });
+});
+
+app.get("/api/admin/challenge-requests", requireRoles(ROLE.NCSF), async (_req, res) => {
+  const { rows } = await pool.query(`
+    SELECT id,challenger_name,opponent_name,contact,game_type,race_to,preferred_at,notes,created_at
+    FROM challenge_requests WHERE status='NEW' ORDER BY created_at DESC LIMIT 100
+  `);
+  res.json({ requests: rows });
+});
+
+app.post("/api/admin/challenges", requireRoles(ROLE.NCSF), async (req, res) => {
+  const playerOneId = Number(req.body.playerOneId);
+  const playerTwoId = Number(req.body.playerTwoId);
+  const gameType = String(req.body.gameType || "BLACKBALL").toUpperCase();
+  const raceTo = Number(req.body.raceTo || 5);
+  const scheduledAt = req.body.scheduledAt ? new Date(req.body.scheduledAt) : null;
+  const notes = String(req.body.notes || "").trim().slice(0,400) || null;
+  if (!Number.isInteger(playerOneId) || !Number.isInteger(playerTwoId) || playerOneId < 1 || playerTwoId < 1 || playerOneId === playerTwoId) {
+    return res.status(400).json({ error: "Choose two different players." });
+  }
+  if (!["BLACKBALL","8_BALL","9_BALL"].includes(gameType)) return res.status(400).json({ error: "Choose a supported pool game." });
+  if (!Number.isInteger(raceTo) || raceTo < 1 || raceTo > 25) return res.status(400).json({ error: "Race to must be between 1 and 25." });
+  if (scheduledAt && (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now())) {
+    return res.status(400).json({ error: "Choose a future time, or leave the time blank." });
+  }
+  const { rows: players } = await pool.query("SELECT id,first_name,last_name FROM players WHERE id=ANY($1::int[]) AND active=TRUE ORDER BY id", [[playerOneId,playerTwoId]]);
+  if (players.length !== 2) return res.status(400).json({ error: "Both selected players must be active." });
+  const playerMap = new Map(players.map(player => [player.id,`${player.first_name} ${player.last_name}`.trim()]));
+  const { rows } = await pool.query(`
+    INSERT INTO pool_challenges(player_one_id,player_two_id,player_one_name,player_two_name,game_type,race_to,scheduled_at,status,notes,created_by)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    RETURNING *
+  `, [playerOneId,playerTwoId,playerMap.get(playerOneId),playerMap.get(playerTwoId),gameType,raceTo,scheduledAt,scheduledAt?"SCHEDULED":"OPEN",notes,req.user.id]);
+  res.status(201).json({ challenge: rows[0] });
+});
+
+app.patch("/api/admin/challenges/:id", requireRoles(ROLE.NCSF), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "Invalid challenge." });
+  const currentResult = await pool.query("SELECT * FROM pool_challenges WHERE id=$1", [id]);
+  if (!currentResult.rowCount) return res.status(404).json({ error: "Challenge not found." });
+  const current = currentResult.rows[0];
+  const status = req.body.status === undefined ? current.status : String(req.body.status).toUpperCase();
+  const scoreOne = req.body.scoreOne === undefined ? Number(current.score_one) : Number(req.body.scoreOne);
+  const scoreTwo = req.body.scoreTwo === undefined ? Number(current.score_two) : Number(req.body.scoreTwo);
+  const scheduledAt = req.body.scheduledAt === undefined ? current.scheduled_at : (req.body.scheduledAt ? new Date(req.body.scheduledAt) : null);
+  const notes = req.body.notes === undefined ? current.notes : (String(req.body.notes || "").trim().slice(0,400) || null);
+  if (!["OPEN","SCHEDULED","IN_PROGRESS","COMPLETED","CANCELED"].includes(status)) return res.status(400).json({ error: "Invalid challenge status." });
+  if (![scoreOne,scoreTwo].every(n => Number.isInteger(n) && n >= 0 && n <= Number(current.race_to))) {
+    return res.status(400).json({ error: `Scores must be between 0 and ${current.race_to}.` });
+  }
+  if (status === "COMPLETED" && (scoreOne === scoreTwo || Math.max(scoreOne,scoreTwo) !== Number(current.race_to))) {
+    return res.status(400).json({ error: `A completed challenge needs a winner at ${current.race_to} frames.` });
+  }
+  if (scheduledAt && (!Number.isFinite(new Date(scheduledAt).getTime()) || new Date(scheduledAt).getTime() < Date.now()) && ["OPEN","SCHEDULED"].includes(status)) {
+    return res.status(400).json({ error: "Choose a future time, or clear the scheduled time." });
+  }
+  const { rows } = await pool.query(`
+    UPDATE pool_challenges SET status=$2,score_one=$3,score_two=$4,scheduled_at=$5,notes=$6,updated_at=NOW()
+    WHERE id=$1 RETURNING *
+  `, [id,status,scoreOne,scoreTwo,scheduledAt,notes]);
+  res.json({ challenge: rows[0] });
+});
+
+app.post("/api/admin/challenge-requests/:id/review", requireRoles(ROLE.NCSF), async (req, res) => {
+  const id = Number(req.params.id);
+  const decision = String(req.body.decision || "").toUpperCase();
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "Invalid challenge request." });
+  if (!["APPROVED","DECLINED"].includes(decision)) return res.status(400).json({ error: "Choose approve or decline." });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const requestResult = await client.query("SELECT * FROM challenge_requests WHERE id=$1 FOR UPDATE", [id]);
+    if (!requestResult.rowCount || requestResult.rows[0].status !== "NEW") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "This request has already been reviewed." });
+    }
+    const request = requestResult.rows[0];
+    let challengeId = null;
+    if (decision === "APPROVED") {
+      const hasTime = request.preferred_at && new Date(request.preferred_at).getTime() > Date.now();
+      const created = await client.query(`
+        INSERT INTO pool_challenges(player_one_name,player_two_name,game_type,race_to,scheduled_at,status,notes,created_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id
+      `, [request.challenger_name,request.opponent_name,request.game_type,request.race_to,hasTime?request.preferred_at:null,hasTime?"SCHEDULED":"OPEN",request.notes,req.user.id]);
+      challengeId = created.rows[0].id;
+    }
+    await client.query(`
+      UPDATE challenge_requests SET status=$2,challenge_id=$3,reviewed_by=$4,reviewed_at=NOW() WHERE id=$1
+    `, [id,decision,challengeId,req.user.id]);
+    await client.query("COMMIT");
+    res.json({ ok:true,challengeId });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/admin/stock", requireRoles(ROLE.NCSF), async (_req, res) => {
+  const [items, movements] = await Promise.all([
+    pool.query(`
+      SELECT id,name,category,unit,quantity,reorder_level,created_at,updated_at
+      FROM stock_items WHERE active=TRUE ORDER BY category,name
+    `),
+    pool.query(`
+      SELECT m.id,m.movement_type,m.quantity,m.quantity_before,m.quantity_after,m.note,m.created_at,
+             i.name item_name,i.unit,u.display_name
+      FROM stock_movements m
+      JOIN stock_items i ON i.id=m.item_id
+      LEFT JOIN users u ON u.id=m.created_by
+      ORDER BY m.created_at DESC,m.id DESC
+      LIMIT 30
+    `)
+  ]);
+  res.json({ items: items.rows, movements: movements.rows });
+});
+
+app.post("/api/admin/stock/items", requireRoles(ROLE.NCSF), async (req, res) => {
+  const name = String(req.body.name || "").trim().slice(0,100);
+  const category = String(req.body.category || "Other").trim().slice(0,40) || "Other";
+  const unit = String(req.body.unit || "each").trim().slice(0,20) || "each";
+  const quantity = Number(req.body.quantity ?? 0);
+  const reorderLevel = Number(req.body.reorderLevel ?? 0);
+  if (!name) return res.status(400).json({ error: "Enter an item name." });
+  if (![quantity,reorderLevel].every(Number.isFinite) || quantity < 0 || reorderLevel < 0 || quantity > 1000000 || reorderLevel > 1000000) {
+    return res.status(400).json({ error: "Quantities must be zero or higher." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const created = await client.query(`
+      INSERT INTO stock_items(name,category,unit,quantity,reorder_level,created_by)
+      VALUES($1,$2,$3,$4,$5,$6)
+      RETURNING id,name,category,unit,quantity,reorder_level,created_at,updated_at
+    `, [name,category,unit,quantity,reorderLevel,req.user.id]);
+    if (quantity > 0) {
+      await client.query(`
+        INSERT INTO stock_movements(item_id,movement_type,quantity,quantity_before,quantity_after,note,created_by)
+        VALUES($1,'IN',$2,0,$2,'Opening count',$3)
+      `, [created.rows[0].id,quantity,req.user.id]);
+    }
+    await client.query("COMMIT");
+    res.status(201).json({ item: created.rows[0] });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/admin/stock/items/:id", requireRoles(ROLE.NCSF), async (req, res) => {
+  const itemId = Number(req.params.id);
+  const reorderLevel = Number(req.body.reorderLevel);
+  if (!Number.isInteger(itemId) || itemId < 1) return res.status(400).json({ error: "Invalid stock item." });
+  if (!Number.isFinite(reorderLevel) || reorderLevel < 0 || reorderLevel > 1000000) {
+    return res.status(400).json({ error: "The low-stock alert must be zero or higher." });
+  }
+  const { rows } = await pool.query(`
+    UPDATE stock_items SET reorder_level=$2,updated_at=NOW()
+    WHERE id=$1 AND active=TRUE
+    RETURNING id,name,category,unit,quantity,reorder_level,created_at,updated_at
+  `, [itemId,reorderLevel]);
+  if (!rows[0]) return res.status(404).json({ error: "Stock item not found." });
+  res.json({ item: rows[0] });
+});
+
+app.post("/api/admin/stock/items/:id/movements", requireRoles(ROLE.NCSF), async (req, res) => {
+  const itemId = Number(req.params.id);
+  const movementType = String(req.body.movementType || "").toUpperCase();
+  const quantity = Number(req.body.quantity);
+  const note = String(req.body.note || "").trim().slice(0,160) || null;
+  if (!Number.isInteger(itemId) || itemId < 1) return res.status(400).json({ error: "Invalid stock item." });
+  if (!["IN","OUT","COUNT"].includes(movementType)) return res.status(400).json({ error: "Choose add, use or count." });
+  if (!Number.isFinite(quantity) || quantity < 0 || quantity > 1000000 || (movementType !== "COUNT" && quantity <= 0)) {
+    return res.status(400).json({ error: movementType === "COUNT" ? "Enter a valid shelf count." : "Enter a quantity greater than zero." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query("SELECT id,quantity FROM stock_items WHERE id=$1 AND active=TRUE FOR UPDATE", [itemId]);
+    if (!found.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Stock item not found." });
+    }
+    const before = Number(found.rows[0].quantity);
+    const after = movementType === "IN" ? before + quantity : movementType === "OUT" ? before - quantity : quantity;
+    if (after < 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "There isn’t enough stock on hand for that change." });
+    }
+    await client.query("UPDATE stock_items SET quantity=$2,updated_at=NOW() WHERE id=$1", [itemId,after]);
+    await client.query(`
+      INSERT INTO stock_movements(item_id,movement_type,quantity,quantity_before,quantity_after,note,created_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7)
+    `, [itemId,movementType,quantity,before,after,note,req.user.id]);
+    await client.query("COMMIT");
+    res.json({ ok:true, quantity:after });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/admin/posts", requireRoles(ROLE.NCSF), async (_req, res) => {
-  const { rows } = await pool.query("SELECT * FROM content_posts ORDER BY pinned DESC, COALESCE(event_date,created_at) DESC, id DESC");
+  const { rows } = await pool.query("SELECT * FROM boiler_room_posts ORDER BY pinned DESC, COALESCE(event_date,created_at) DESC, id DESC");
   res.json({ posts: rows });
 });
 
@@ -2164,7 +2500,7 @@ app.post("/api/admin/posts", requireRoles(ROLE.NCSF), async (req, res) => {
   const eventDate = type === "EVENT" ? (req.body.eventDate || null) : null;
   if (type === "EVENT" && !eventDate) return res.status(400).json({ error: "Event date/time is required." });
   const { rows } = await pool.query(
-    "INSERT INTO content_posts(type,title,body,event_date,published,pinned,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+    "INSERT INTO boiler_room_posts(type,title,body,event_date,published,pinned,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
     [type,title,body,eventDate,req.body.published !== false,Boolean(req.body.pinned),req.user.id]
   );
   res.status(201).json({ post: rows[0] });
@@ -2172,7 +2508,7 @@ app.post("/api/admin/posts", requireRoles(ROLE.NCSF), async (req, res) => {
 
 app.patch("/api/admin/posts/:id", requireRoles(ROLE.NCSF), async (req, res) => {
   const id = Number(req.params.id);
-  const current = await pool.query("SELECT * FROM content_posts WHERE id=$1", [id]);
+  const current = await pool.query("SELECT * FROM boiler_room_posts WHERE id=$1", [id]);
   if (!current.rowCount) return res.status(404).json({ error: "Post not found." });
   const p = current.rows[0];
   const type = req.body.type === undefined ? p.type : String(req.body.type).toUpperCase();
@@ -2184,14 +2520,14 @@ app.patch("/api/admin/posts/:id", requireRoles(ROLE.NCSF), async (req, res) => {
   const published = req.body.published === undefined ? p.published : Boolean(req.body.published);
   const pinned = req.body.pinned === undefined ? p.pinned : Boolean(req.body.pinned);
   const { rows } = await pool.query(
-    "UPDATE content_posts SET type=$2,title=$3,body=$4,event_date=$5,published=$6,pinned=$7,updated_at=NOW() WHERE id=$1 RETURNING *",
+    "UPDATE boiler_room_posts SET type=$2,title=$3,body=$4,event_date=$5,published=$6,pinned=$7,updated_at=NOW() WHERE id=$1 RETURNING *",
     [id,type,title,body,eventDate,published,pinned]
   );
   res.json({ post: rows[0] });
 });
 
 app.delete("/api/admin/posts/:id", requireRoles(ROLE.NCSF), async (req, res) => {
-  await pool.query("DELETE FROM content_posts WHERE id=$1", [Number(req.params.id)]);
+  await pool.query("DELETE FROM boiler_room_posts WHERE id=$1", [Number(req.params.id)]);
   res.json({ ok: true });
 });
 
@@ -2894,7 +3230,7 @@ app.post("/api/fixtures/:id/confirm", requireAuth, async (req, res) => {
   if (!["HOME","AWAY"].includes(confirmingSide)) {
     return res.status(403).json({ error: "Only the opposing participating team can confirm the submitted result." });
   }
-  if (!fixture.submitted_side) return res.status(409).json({ error: "The submitting team could not be identified. Ask NCSF administration to review this fixture." });
+  if (!fixture.submitted_side) return res.status(409).json({ error: "The submitting team could not be identified. Ask a Room Admin to review this fixture." });
   if (confirmingSide === fixture.submitted_side) {
     return res.status(403).json({ error: "The team that submitted the result cannot confirm its own submission." });
   }
@@ -2917,7 +3253,7 @@ app.post("/api/fixtures/:id/confirm", requireAuth, async (req, res) => {
 app.post("/api/fixtures/:id/approve", requireRoles(ROLE.NCSF), async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   if (!fixture) return res.status(404).json({ error: "Fixture not found." });
-  if (fixture.status !== "CONFIRMED") return res.status(409).json({ error: "The opposing team must confirm the submitted result before NCSF approval." });
+  if (fixture.status !== "CONFIRMED") return res.status(409).json({ error: "The opposing team must confirm the result before a Room Admin can approve it." });
 
   const payload = await fixturePayload(fixture);
   if (payload.totals.completed !== 25) return res.status(409).json({ error: "All 25 frames must be scored." });
@@ -2950,7 +3286,8 @@ const pageRoutes = {
   "/live": "live.html",
   "/broadcast": "broadcast.html",
   "/news": "news.html",
-  "/opportunities": "opportunities.html",
+  "/challenges": "challenges.html",
+  "/opportunities": "challenges.html",
   "/rankings": "rankings.html",
   "/admin": "admin.html",
   "/club-admin": "club-admin.html",
@@ -2961,19 +3298,9 @@ for (const [route, file] of Object.entries(pageRoutes)) {
   app.get(route, (_req, res) => res.sendFile(path.join(__dirname, "public", file)));
 }
 
-let cachedNcsfLogoJpeg = null;
-function getNcsfLogoJpeg() {
-  if (cachedNcsfLogoJpeg) return cachedNcsfLogoJpeg;
-  const svg = fs.readFileSync(path.join(__dirname, "public", "ncsf-logo.svg"), "utf8");
-  const match = svg.match(/data:image\/jpeg;base64,([^"']+)/i);
-  if (!match) throw new Error("Embedded NCSF logo image is missing.");
-  cachedNcsfLogoJpeg = Buffer.from(match[1], "base64");
-  return cachedNcsfLogoJpeg;
-}
-
-app.get(["/ncsf-logo.jpg", "/favicon.ico"], (_req, res) => {
+app.get("/favicon.ico", (_req, res) => {
   res.set("Cache-Control", "public, max-age=86400");
-  res.type("jpg").send(getNcsfLogoJpeg());
+  res.type("image/svg+xml").sendFile(path.join(__dirname, "public", "boiler-room-mark.svg"));
 });
 
 app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
@@ -3288,11 +3615,7 @@ app.use((err, _req, res, _next) => {
 });
 
 initDatabase()
-  .then(seedOfficialCoastalRosters)
-  .then(assignOfficialNcsfNumbers)
-  .then(setupCentralDivisionAndSchedule)
-  .then(correctAtomic5AndImportCoastalSchedule)
-  .then(() => httpServer.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
+  .then(() => httpServer.listen(port, () => console.log(`Boiler Room Pool Lounge listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);
     process.exit(1);
