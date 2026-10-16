@@ -369,14 +369,33 @@ async function initDatabase() {
     )
     ON CONFLICT DO NOTHING;
 
+    DELETE FROM content_posts duplicate_event
+    WHERE duplicate_event.type='EVENT'
+      AND LOWER(duplicate_event.title)=LOWER('Central Zone Top 8 Playoffs')
+      AND EXISTS (
+        SELECT 1 FROM content_posts original_event
+        WHERE original_event.type='EVENT'
+          AND original_event.title='Top 8 Play-offs — Central Zone'
+      );
+
+    UPDATE content_posts
+    SET title='Central Zone Top 8 Playoffs',
+        body=E'NCSF Central Zone Top 8 Playoffs\nSaturday, 17 October 2026 at 12:00. Race to 13. Venue: King Cues.\n\nQuarter-final matches:\nNam Shooters vs RPC\nOfifiya vs YOPC 2\nTura Boys vs Pool Pirates\nPocket Kings NA vs Precision 7\n\nA walkover advances the team that pitches if its opponents do not attend.\n\nQuarter-finals: 31 October at 10:00 in the Coast (venue TBC). Semi-finals: 31 October at 15:00 in the Coast (venues per the bracket). Final: 14 November at 15:00 in Windhoek (venue TBC). Prize-giving at the Namibia Champs of Champs on 27-28 November in Windhoek (venue TBC).\n\n[Download the official NCSF notice (PDF)](/ncsf-central-zone-top-8-playoffs-2026.pdf)',
+        event_date='2026-10-17 12:00:00+02'::timestamptz,
+        published=TRUE,pinned=TRUE,updated_at=NOW()
+    WHERE type='EVENT'
+      AND title IN ('Top 8 Play-offs — Central Zone','Central Zone Top 8 Playoffs');
+
     INSERT INTO content_posts(type,title,body,event_date,published,pinned)
     SELECT 'EVENT',
            'Central Zone Top 8 Playoffs',
            E'NCSF Central Zone Top 8 Playoffs\nSaturday, 17 October 2026 at 12:00. Race to 13. Venue: King Cues.\n\nQuarter-final matches:\nNam Shooters vs RPC\nOfifiya vs YOPC 2\nTura Boys vs Pool Pirates\nPocket Kings NA vs Precision 7\n\nA walkover advances the team that pitches if its opponents do not attend.\n\nQuarter-finals: 31 October at 10:00 in the Coast (venue TBC). Semi-finals: 31 October at 15:00 in the Coast (venues per the bracket). Final: 14 November at 15:00 in Windhoek (venue TBC). Prize-giving at the Namibia Champs of Champs on 27-28 November in Windhoek (venue TBC).\n\n[Download the official NCSF notice (PDF)](/ncsf-central-zone-top-8-playoffs-2026.pdf)',
            '2026-10-17 12:00:00+02'::timestamptz,
-           TRUE,FALSE
+           TRUE,TRUE
     WHERE NOT EXISTS (
-      SELECT 1 FROM content_posts WHERE LOWER(title)=LOWER('Central Zone Top 8 Playoffs')
+      SELECT 1 FROM content_posts
+      WHERE type='EVENT'
+        AND title IN ('Top 8 Play-offs — Central Zone','Central Zone Top 8 Playoffs')
     );
   `);
 }
@@ -669,7 +688,7 @@ async function setupCentralDivisionAndSchedule() {
     ["2026-10-03T15:00:00+02:00","YOPC 2","Cue Crew",2]
   ];
   const events = [
-    ["Top 8 Play-offs — Central Zone","Top 8 play-offs for the Central Zone.","2026-10-17T11:00:00+02:00",true],
+    ["Central Zone Top 8 Playoffs","NCSF Central Zone Top 8 Playoffs. Saturday, 17 October 2026 at 12:00, race to 13 at King Cues. Quarter-final matches: Nam Shooters vs RPC; Ofifiya vs YOPC 2; Tura Boys vs Pool Pirates; Pocket Kings NA vs Precision 7. [Download the official NCSF notice (PDF)](/ncsf-central-zone-top-8-playoffs-2026.pdf)","2026-10-17T12:00:00+02:00",true],
     ["NBBL League Quarter Finals","Quarter finals from the official NBBL league calendar.","2026-10-31T10:30:00+02:00",false],
     ["NBBL League Semi Finals","Semi finals from the official NBBL league calendar.","2026-10-31T15:00:00+02:00",false],
     ["NCSF AGM","Annual General Meeting.","2026-11-14T08:00:00+02:00",true],
