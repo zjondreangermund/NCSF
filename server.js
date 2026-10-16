@@ -360,13 +360,24 @@ async function initDatabase() {
       ('Universal Bangkok Open 2026 Qualifier #5 – Pattaya','9-BALL','Bangkok Cuesports Festival / World Nineball Tour','Pattaya, Thailand','2026-09-26','2026-09-27','THB 2,000',NULL,'16+; open to all nationalities. Four qualifying spots.','OPEN','Official qualifier for the Universal Bangkok Open 2026. Registration is listed as open; confirm promptly with the organizer.','https://www.bangkok-cuesports.com/events/bangkok-open-2026-qualifier-5/register','https://www.bangkok-cuesports.com/events/bangkok-open-2026-qualifier-5'),
       ('2026 Philippines Open Pool Championship','9-BALL','World Nineball Tour','Quezon City, Philippines','2026-10-20','2026-10-24','USD 350',NULL,'Public player entry; participants must be 16 or older. Check current availability with WNT.','OPEN','Official WNT player registration page showed public entries in stock when this listing was checked.','https://worldnineballtour.com/tickets/2026-philippines-open-pool-championship-player-registration-public/','https://worldnineballtour.com/events/2026-philippines-open-pool-championship/'),
       ('Universal Open Ho Chi Minh 2026','9-BALL','World Nineball Tour','Ho Chi Minh City, Vietnam','2026-11-11','2026-11-15',NULL,'USD 63,000','Contact the WNT organizer to confirm entry requirements and availability.','COMING_SOON','Listed as a WNT ranking event; the event page directs players to contact the organizer for registration.','https://worldnineballtour.com/events/universal-open-ho-chi-minh-2026/','https://worldnineballtour.com/events/universal-open-ho-chi-minh-2026/'),
-      ('Qatar World Cup 10-Ball 2026','10-BALL','World Pool Association','Qatar','2026-12-05','2026-12-14',NULL,NULL,'Player entry and federation allocation details are not published on the WPA calendar; confirm with NCSF/WPA.','COMING_SOON','Listed on the WPA calendar. Confirm entry eligibility before making travel plans.',NULL,'https://wpapool.com/calendar/')
+      ('Qatar World Cup 10-Ball 2026','10-BALL','World Pool Association','Qatar','2026-12-05','2026-12-14',NULL,NULL,'Player entry and federation allocation details are not published on the WPA calendar; confirm with NCSF/WPA.','COMING_SOON','Listed on the WPA calendar. Confirm entry eligibility before making travel plans.',NULL,'https://wpapool.com/calendar/'),
+      ('NCSF 2026 Central Zone Top 8 Playoffs','BLACKBALL','Namibia Cue Sports Federation','King Cues','2026-10-17','2026-10-17',NULL,NULL,'Qualified Top 8 Central Zone teams','INVITATION_ONLY','Saturday, 17 October at 12:00; race to 13. Quarter-final matches: Nam Shooters vs RPC, Ofifiya vs YOPC 2, Tura Boys vs Pool Pirates, and Pocket Kings NA vs Precision 7. See the attached NCSF notice for later rounds.','', '/ncsf-central-zone-top-8-playoffs-2026.pdf')
     ) AS seed(title,discipline,organizer,location,start_date,end_date,entry_fee,prize_fund,eligibility,status,description,registration_url,official_url)
     WHERE NOT EXISTS (
       SELECT 1 FROM tournament_opportunities existing
       WHERE LOWER(existing.title)=LOWER(seed.title)
     )
     ON CONFLICT DO NOTHING;
+
+    INSERT INTO content_posts(type,title,body,event_date,published,pinned)
+    SELECT 'EVENT',
+           'Central Zone Top 8 Playoffs',
+           E'NCSF Central Zone Top 8 Playoffs\nSaturday, 17 October 2026 at 12:00. Race to 13. Venue: King Cues.\n\nQuarter-final matches:\nNam Shooters vs RPC\nOfifiya vs YOPC 2\nTura Boys vs Pool Pirates\nPocket Kings NA vs Precision 7\n\nA walkover advances the team that pitches if its opponents do not attend.\n\nQuarter-finals: 31 October at 10:00 in the Coast (venue TBC). Semi-finals: 31 October at 15:00 in the Coast (venues per the bracket). Final: 14 November at 15:00 in Windhoek (venue TBC). Prize-giving at the Namibia Champs of Champs on 27-28 November in Windhoek (venue TBC).\n\n[Download the official NCSF notice (PDF)](/ncsf-central-zone-top-8-playoffs-2026.pdf)',
+           '2026-10-17 12:00:00+02'::timestamptz,
+           TRUE,FALSE
+    WHERE NOT EXISTS (
+      SELECT 1 FROM content_posts WHERE LOWER(title)=LOWER('Central Zone Top 8 Playoffs')
+    );
   `);
 }
 
