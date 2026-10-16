@@ -685,16 +685,21 @@ function formatEventDate(value){
     const d=new Date(value);
     return d.toLocaleString([], {weekday:'short',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   }
+  function renderPostBody(body){
+    return esc(body||'')
+      .replace(/\[([^\]]+)\]\((\/[A-Za-z0-9._/-]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\n/g,'<br>');
+  }
   function renderPublicPosts(posts){
     const events=posts.filter(p=>p.type==='EVENT' && (!p.event_date || new Date(p.event_date)>=new Date(Date.now()-86400000)));
     const updates=posts.filter(p=>p.type!=='EVENT');
     const eventsBox=$('#publicEvents');
     const newsBox=$('#publicNews');
     if(eventsBox)eventsBox.innerHTML=events.length
-      ? '<div class="timeline">'+events.map(p=>`<article class="timeline-item ${p.pinned?'pinned':''}"><div class="timeline-date">${esc(formatEventDate(p.event_date))}</div><div><span class="content-type EVENT">EVENT</span><h3>${esc(p.title)}</h3>${p.body?`<p>${esc(p.body)}</p>`:''}</div></article>`).join('')+'</div>'
+      ? '<div class="timeline">'+events.map(p=>`<article class="timeline-item ${p.pinned?'pinned':''}"><div class="timeline-date">${esc(formatEventDate(p.event_date))}</div><div><span class="content-type EVENT">EVENT</span><h3>${esc(p.title)}</h3>${p.body?`<p>${renderPostBody(p.body)}</p>`:''}</div></article>`).join('')+'</div>'
       : '<div class="empty">No upcoming events published.</div>';
     if(newsBox)newsBox.innerHTML=updates.length
-      ? '<div class="news-feed">'+updates.map(p=>`<article class="news-card ${p.pinned?'pinned':''}"><div class="news-meta"><span class="content-type ${p.type}">${esc(p.type)}</span><span>${esc(new Date(p.created_at).toLocaleDateString())}</span></div><h3>${esc(p.title)}</h3>${p.body?`<p>${esc(p.body)}</p>`:''}</article>`).join('')+'</div>'
+      ? '<div class="news-feed">'+updates.map(p=>`<article class="news-card ${p.pinned?'pinned':''}"><div class="news-meta"><span class="content-type ${p.type}">${esc(p.type)}</span><span>${esc(new Date(p.created_at).toLocaleDateString())}</span></div><h3>${esc(p.title)}</h3>${p.body?`<p>${renderPostBody(p.body)}</p>`:''}</article>`).join('')+'</div>'
       : '<div class="empty">No news or announcements published.</div>';
   }
   function tournamentDateRange(o){
@@ -734,7 +739,8 @@ function formatEventDate(value){
       const deadline=o.registration_deadline?'<p class="opportunity-deadline"><strong>Registration deadline:</strong> '+esc(tournamentDateRange({start_date:o.registration_deadline}))+'</p>':'';
       const registrationLabel=o.status==="WAITLIST"?"Join waitlist":o.status==="INVITATION_ONLY"?"Entry information":o.status==="OPEN"?"Register":"Event details";
       const registration=o.registration_url&&o.status!=="CLOSED"?'<a class="btn primary small" href="'+esc(o.registration_url)+'" target="_blank" rel="noopener noreferrer">'+registrationLabel+'</a>':'';
-      const official=o.official_url?'<a class="btn secondary small" href="'+esc(o.official_url)+'" target="_blank" rel="noopener noreferrer">Official event page</a>':'';
+      const officialLabel=/\.pdf(?:$|\?)/i.test(o.official_url||"")?"Event notice (PDF)":"Official event page";
+      const official=o.official_url?'<a class="btn secondary small" href="'+esc(o.official_url)+'" target="_blank" rel="noopener noreferrer">'+officialLabel+'</a>':'';
       return '<article class="opportunity-card"><div class="opportunity-card-top"><span class="opportunity-discipline">'+esc(o.discipline.replaceAll("_"," "))+'</span><span class="opportunity-status '+esc(o.status)+'">'+esc(opportunityStatusLabel(o.status))+'</span></div><h2>'+esc(o.title)+'</h2><p class="opportunity-meta">'+esc([o.location,o.organizer].filter(Boolean).join(" · ")||"Location and organizer to be announced")+'</p><p class="opportunity-dates">'+esc(dates)+'</p>'+(o.eligibility?'<p class="opportunity-eligibility"><strong>Who can enter:</strong> '+esc(o.eligibility)+'</p>':'')+(fee||prize?'<div class="opportunity-prizes">'+fee+prize+'</div>':'')+(o.description?'<p class="opportunity-description">'+esc(o.description)+'</p>':'')+deadline+updated+'<div class="opportunity-actions">'+registration+official+'</div></article>';
     }).join("")+'</div>';
   }
