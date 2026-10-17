@@ -349,7 +349,7 @@
       </section>
       <section class="fixture-score-hero">
         <div><span class="eyebrow">HOME TEAM</span><h2>${esc(f.homeTeamName)}</h2><small>${esc(f.homeClubName)}</small></div>
-        <div class="fixture-live-score"><strong>${t.home}</strong><span>VS</span><strong>${t.away}</strong><small>${f.raceTo?t.completed+' frames • Race to '+f.raceTo:t.completed+'/25 frames}</small></div>
+        <div class="fixture-live-score"><strong>${t.home}</strong><span>VS</span><strong>${t.away}</strong><small>${f.raceTo?t.completed+' frames • Race to '+f.raceTo:t.completed+'/25 frames'}</small></div>
         <div class="away"><span class="eyebrow">AWAY TEAM</span><h2>${esc(f.awayTeamName)}</h2><small>${esc(f.awayClubName)}</small></div>
       </section>
       <div class="score-progress"><span style="width:${progress}%"></span></div>
@@ -1032,7 +1032,7 @@ function formatEventDate(value){
             ? current.awayPlayerName
             : '';
         frame.innerHTML=
-          '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+(match.raceTo?' • RACE TO '+match.raceTo:'/25')</small>'+
+          '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+(match.raceTo?' • RACE TO '+match.raceTo:'/25')+'</small>'+
           '<strong>'+esc(current.homePlayerName)+' <b>vs</b> '+esc(current.awayPlayerName)+'</strong>'+
           '<span>Breaking: '+esc(breakPlayerName||'—')+'</span>';
       }
