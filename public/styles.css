@@ -4208,3 +4208,8 @@ body.ncsf-live-fullscreen-active{
 .ncsf-live-fullscreen .live-match-overlay{bottom:34px!important}
 .season-admin-actions { display:flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:wrap; }
 @media (max-width: 700px) { .season-admin-row { align-items:flex-start; flex-direction:column; gap:10px; } .season-admin-actions { justify-content:flex-start; } }
+
+/* Season planning and review */
+.admin-edit-dialog{border:0;border-radius:14px;max-width:580px;width:calc(100% - 32px);max-height:85vh;overflow:auto;padding:24px;color:#17314e;background:#fff;box-shadow:0 20px 90px #0005}
+.admin-edit-dialog::backdrop{background:#071b35aa}.admin-edit-dialog .edit-error{color:#ac2525;margin:0}
+.schedule-preview .table-wrap{max-height:65vh;overflow:auto}.draft-table th{position:sticky;top:0;z-index:1}.draft-table input[data-date]{min-width:205px}.draft-table input[data-venue]{min-width:150px}.season-admin-actions{display:flex;gap:6px;flex-wrap:wrap}

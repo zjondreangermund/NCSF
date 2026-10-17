@@ -85,7 +85,7 @@
       </div>
     </div>
     <div class="panel" style="margin-top:18px">
-      <div class="panel-head"><div><div class="kicker">Season records</div><h2>Close season & exports</h2></div></div>
+      <div class="panel-head"><div><div class="kicker">Season records</div><h2>Manage seasons & exports</h2></div></div>
       <p class="muted">Closing freezes scores and fixture edits. Print a styled season PDF, or export fixtures, team standings and player rankings as separate spreadsheet-ready CSV files.</p>
       <div id="adminSeasons" class="card-list"><div class="empty">Loading seasons…</div></div>
     </div>
@@ -151,12 +151,15 @@
           <label class="full">Division<select name="divisionId" id="scheduleDivision" required></select></label>
           <label class="full">First match date<input name="firstDate" type="date" required></label>
           <button class="btn secondary full" type="button" id="previewSchedule">Preview Schedule</button>
-          <button class="btn primary full" type="submit">Generate Full Schedule</button>
+          <label class="full">Playoffs<select name="format" id="scheduleFormat"><option value="central-coastal">Current format: Top 8 → cross-zone quarter-finals → semis → final</option><option value="top8">Single division: Top 8 quarter-finals → semis → final</option><option value="league">League only (no playoffs)</option></select></label>
+          <label class="full" id="scheduleOpponentLabel">Quarter-final opposing division<select name="opponentDivisionId" id="scheduleOpponent"></select></label>
         </form>
-        <div id="schedulePreview" class="notice" style="display:none;margin-top:12px"></div>
-        <p class="muted">Creates a double round-robin with two rounds per match day at 10:30 and 15:00 Namibia time. Match days keep the selected weekday and skip any full week containing an official Namibian public holiday.</p>
+
+        <p class="muted">Creates a double round-robin with two rounds per match day at 10:30 and 15:00 Namibia time. Preview every pairing, edit dates and venues, then approve to save the league and playoff bracket. Later opponents are filled in after approved results. Match days keep the selected weekday and skip any full week containing an official Namibian public holiday.</p>
       </div>
     </div>
+    <div id="schedulePreview" class="panel schedule-preview" style="display:none;margin-top:18px"></div>
+    <div class="panel" style="margin-top:18px"><h2>Playoff bracket</h2><label>Division<select id="playoffDivision"></select></label><div id="adminPlayoffs"></div></div>
     <div class="panel" style="margin-top:18px"><h2>Fixtures</h2><div id="adminFixtures"></div></div>
   </section>
 

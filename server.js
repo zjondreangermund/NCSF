@@ -2,6 +2,7 @@ require("dotenv").config();
 require("express-async-errors");
 
 const path = require("path");
+const {buildSchedule,applyEdits,fingerprint} = require("./schedule");
 const fs = require("fs");
 const http = require("http");
 const crypto = require("crypto");
@@ -205,6 +206,20 @@ async function initDatabase() {
       CHECK (home_team_id <> away_team_id)
     );
 
+    CREATE TABLE IF NOT EXISTS schedule_drafts (
+      token TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
+      plan JSONB NOT NULL, roster_hash TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()+INTERVAL '2 hours'
+    );
+    CREATE TABLE IF NOT EXISTS playoff_slots (
+      id SERIAL PRIMARY KEY, division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
+      slot_key TEXT NOT NULL, stage TEXT NOT NULL, round_no INTEGER NOT NULL,
+      home_source JSONB NOT NULL, away_source JSONB NOT NULL,
+      fixture_date TIMESTAMPTZ NOT NULL, venue TEXT,
+      fixture_id INTEGER UNIQUE REFERENCES fixtures(id) ON DELETE SET NULL,
+      UNIQUE(division_id,slot_key)
+    );
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS competition_label TEXT;
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS race_to INTEGER CHECK (race_to BETWEEN 1 AND 25);
     CREATE TABLE IF NOT EXISTS division_team_standing_snapshots (
@@ -1370,7 +1385,7 @@ function fixtureRaceTo(fixture) {
 }
 
 function fixtureStageLabel(fixture) {
-  if (!isCentralTop8Playoff(fixture)) return null;
+  if (!isCentralTop8Playoff(fixture)) return fixture?.race_to ? ({2:"Quarter-final",3:"Semi-final",4:"Final"}[Number(fixture.round_no)] || "Top 8 play-off") : null;
   return ({
     1: "Top 8 play-off",
     2: "Quarter-final",
@@ -1446,7 +1461,7 @@ async function ensureFrames(fixtureId) {
 
 async function syncDerivedFixtureExtras(fixtureId) {
   const { rows } = await pool.query(`
-    SELECT fr.winner_side,fr.winner_player_id,f.competition_label
+    SELECT fr.winner_side,fr.winner_player_id,f.competition_label,f.race_to
     FROM frames fr JOIN fixtures f ON f.id=fr.fixture_id
     WHERE fr.fixture_id=$1 AND fr.winner_side IS NOT NULL
   `, [fixtureId]);
@@ -1472,7 +1487,7 @@ async function syncDerivedFixtureExtras(fixtureId) {
         .sort((a,b) => a - b)
     : [];
 
-  const knockout = isCentralTop8Playoff(rows[0]);
+  const knockout = Boolean(fixtureRaceTo(rows[0]));
   let bonusSide = null;
   if (!knockout && home >= 18) bonusSide = "HOME";
   else if (!knockout && away >= 18) bonusSide = "AWAY";
@@ -1504,6 +1519,7 @@ async function getStandings(divisionId) {
     SELECT EXISTS(
       SELECT 1 FROM fixtures
       WHERE division_id=$1 AND LOWER(COALESCE(competition_label,'')) LIKE 'central zone top 8 playoffs%'
+      UNION ALL SELECT 1 FROM playoff_slots WHERE division_id=$1
     ) has_top8_playoffs
   `,[divisionId]);
   const annotatePosition=(rows)=>rows.map((row,index)=>({
@@ -1657,7 +1673,7 @@ async function fixturePayload(fixture) {
         .map(([id]) => Number(id))
         .sort((a,b) => a - b)
     : [];
-  const knockout = isCentralTop8Playoff(fixture);
+  const knockout = Boolean(fixtureRaceTo(fixture));
   const bonusSide = knockout ? null : homeFrames >= 18 ? "HOME" : awayFrames >= 18 ? "AWAY" : null;
   const bonusPoints = bonusSide ? 1 : 0;
 
@@ -2800,6 +2816,38 @@ app.post("/api/admin/seasons", requireRoles(ROLE.NCSF), async (req, res) => {
   res.status(201).json({ season: rows[0] });
 });
 
+app.patch('/api/admin/seasons/:id',requireRoles(ROLE.NCSF),async(req,res)=>{
+  const id=Number(req.params.id),name=String(req.body.name||'').trim(),start=req.body.startDate||null,end=req.body.endDate||null;
+  if(!name||[start,end].some(d=>d&&(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!Number.isFinite(Date.parse(d))))||(start&&end&&start>end))return res.status(400).json({error:'Enter a season name and valid date range.'});
+  const client=await pool.connect();try{
+    await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(736128)');
+    const season=(await client.query('SELECT * FROM seasons WHERE id=$1 FOR UPDATE',[id])).rows[0];
+    if(!season)throw Error('Season not found.');
+    if(season.closed_at)throw Error('Reopen this season before editing it.');
+    const outside=await client.query(`SELECT 1 FROM (SELECT f.fixture_date FROM fixtures f JOIN divisions d ON d.id=f.division_id WHERE d.season_id=$1 UNION ALL SELECT p.fixture_date FROM playoff_slots p JOIN divisions d ON d.id=p.division_id WHERE d.season_id=$1) dates WHERE ($2::date IS NOT NULL AND (fixture_date AT TIME ZONE 'Africa/Windhoek')::date<$2) OR ($3::date IS NOT NULL AND (fixture_date AT TIME ZONE 'Africa/Windhoek')::date>$3) LIMIT 1`,[id,start,end]);
+    if(outside.rowCount)throw Error('Existing fixtures fall outside these season dates. Extend the dates or edit those fixtures first.');
+    if(req.body.active)await client.query('UPDATE seasons SET active=FALSE WHERE active=TRUE AND id<>$1',[id]);
+    const {rows}=await client.query('UPDATE seasons SET name=$2,start_date=$3,end_date=$4,active=$5 WHERE id=$1 RETURNING *',[id,name,start,end,Boolean(req.body.active)]);
+    await client.query('COMMIT');res.json({season:rows[0]});
+  }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}
+});
+app.delete('/api/admin/seasons/:id',requireRoles(ROLE.NCSF),async(req,res)=>{
+  const id=Number(req.params.id),client=await pool.connect();try{
+    await client.query('BEGIN');const season=(await client.query('SELECT * FROM seasons WHERE id=$1 FOR UPDATE',[id])).rows[0];
+    if(!season)throw Error('Season not found.');
+    if(req.body.confirmName!==season.name)throw Error('Type the season name to confirm deletion.');
+    await client.query('SELECT id FROM divisions WHERE season_id=$1 FOR UPDATE',[id]);
+    await client.query('SELECT f.id FROM fixtures f JOIN divisions d ON d.id=f.division_id WHERE d.season_id=$1 FOR UPDATE OF f',[id]);
+    const played=await client.query(`SELECT 1 FROM fixtures f JOIN divisions d ON d.id=f.division_id WHERE d.season_id=$1 AND (f.status NOT IN ('SCHEDULED','POSTPONED') OR EXISTS(SELECT 1 FROM frames fr WHERE fr.fixture_id=f.id AND fr.winner_side IS NOT NULL) OR EXISTS(SELECT 1 FROM fixture_lineups l WHERE l.fixture_id=f.id) OR EXISTS(SELECT 1 FROM fixture_attachments a WHERE a.fixture_id=f.id)) LIMIT 1`,[id]);
+    if(played.rowCount)throw Error('This season has match activity. Close it to preserve its records. Only unused seasons can be deleted.');
+    const snapshots=await client.query(`SELECT 1 FROM division_team_standing_snapshots p JOIN divisions d ON d.id=p.division_id WHERE d.season_id=$1 UNION ALL SELECT 1 FROM division_player_standing_snapshots p JOIN divisions d ON d.id=p.division_id WHERE d.season_id=$1 LIMIT 1`,[id]);
+    if(snapshots.rowCount)throw Error('This season has official standings. Close it to preserve those records.');
+
+    await client.query(`INSERT INTO audit_logs(user_id,action,detail) VALUES($1,'SEASON_DELETED',$2)`,[req.user.id,JSON.stringify({seasonId:id,name:season.name})]);
+    await client.query('DELETE FROM seasons WHERE id=$1',[id]);await client.query('COMMIT');res.json({ok:true});
+  }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}
+});
+
 app.post("/api/admin/seasons/:id/close", requireRoles(ROLE.NCSF), async (req,res) => {
   const id=Number(req.params.id);
   const result=await pool.query("SELECT * FROM seasons WHERE id=$1",[id]);
@@ -2811,6 +2859,8 @@ app.post("/api/admin/seasons/:id/close", requireRoles(ROLE.NCSF), async (req,res
     FROM fixtures f JOIN divisions d ON d.id=f.division_id WHERE d.season_id=$1
   `,[id]);
   const counts=pending.rows[0];
+  const waiting=await pool.query('SELECT COUNT(*)::int count FROM playoff_slots p JOIN divisions d ON d.id=p.division_id WHERE d.season_id=$1 AND p.fixture_id IS NULL',[id]);
+  counts.unplayed+=waiting.rows[0].count;
   if((counts.pending||counts.unplayed)&&!req.body.force){
     return res.status(409).json({error:`There are ${counts.pending} matches awaiting completion or review and ${counts.unplayed} unplayed fixtures. Close anyway to freeze this season?`,counts});
   }
@@ -2845,6 +2895,8 @@ app.get("/api/admin/seasons/:id/export.csv", requireRoles(ROLE.NCSF), async (req
     WHERE d.season_id=$1 GROUP BY d.id,f.id,ht.name,at.name
     ORDER BY d.sort_order,d.name,f.fixture_date NULLS LAST,f.round_no,f.id
   `,[id]);
+  const waiting=(await pool.query(`SELECT p.*,d.name division FROM playoff_slots p JOIN divisions d ON d.id=p.division_id WHERE d.season_id=$1 AND p.fixture_id IS NULL ORDER BY p.fixture_date,p.id`,[id])).rows;
+  rows.push(...waiting.map(p=>({division:p.division,competition:p.stage+' · '+p.slot_key,round_no:p.round_no,fixture_date:p.fixture_date,venue:p.venue,home_team:p.home_source.label,away_team:p.away_source.label,home_frames:'',away_frames:'',race_to:13,status:'AWAITING_QUALIFIERS'})));
   const csvCell=value=>`"${String(value??"").replaceAll('"','""')}"`;
   const columns=["Season","Division","Competition","Round","Date","Venue","Home Team","Away Team","Home Frames","Away Frames","Race To","Status"];
   const lines=[columns,...rows.map(r=>[season.name,r.division,r.competition,r.round_no,r.fixture_date?new Date(r.fixture_date).toISOString():"",r.venue,r.home_team,r.away_team,r.home_frames,r.away_frames,r.race_to,r.status])];
@@ -2920,6 +2972,8 @@ app.get("/api/admin/seasons/:id/print.pdf", requireRoles(ROLE.NCSF), async (req,
       LEFT JOIN frames fr ON fr.fixture_id=f.id WHERE f.division_id=$1
       GROUP BY f.id,ht.name,at.name ORDER BY f.fixture_date NULLS LAST,f.round_no,f.id`,[division.id])).rows;
     table("Fixtures and results",["DATE","ROUND","HOME","SCORE","AWAY","STATUS","COMPETITION"],fx.map(f=>[f.fixture_date?new Date(f.fixture_date).toLocaleDateString("en-NA",{timeZone:"Africa/Windhoek"}):"TBA",f.round_no,f.home_name,`${f.home_frames} – ${f.away_frames}`,f.away_name,f.status,(f.competition_label||"League").slice(0,28)]),[70,40,170,60,170,75,150]);
+    const planned=(await pool.query('SELECT * FROM playoff_slots WHERE division_id=$1 AND fixture_id IS NULL ORDER BY round_no,id',[division.id])).rows;
+    if(planned.length)table("Planned playoffs · race to 13",["STAGE","HOME / QUALIFIER","AWAY / QUALIFIER","NAMIBIA DATE / TIME","VENUE"],planned.map(p=>[p.stage+' '+p.slot_key,p.home_source.label,p.away_source.label,new Date(p.fixture_date).toLocaleString('en-GB',{timeZone:'Africa/Windhoek',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}),p.venue||'TBA']),[120,190,190,150,98]);
   }
   const pages=doc.bufferedPageRange();
   for(let page=pages.start;page<pages.start+pages.count;page++){
@@ -3075,6 +3129,9 @@ app.patch("/api/admin/fixtures/:id", requireRoles(ROLE.NCSF), async (req, res) =
   if (!Number.isInteger(roundNo) || roundNo < 1) return res.status(400).json({ error: "Round number must be 1 or higher." });
   if (streamActive && !streamUrl) return res.status(400).json({ error: "A stream URL is required before going live." });
 
+  const slot=(await pool.query('SELECT * FROM playoff_slots WHERE fixture_id=$1',[fixtureId])).rows[0];
+  if(slot&&roundNo!==slot.round_no)return res.status(400).json({error:'The playoff round is fixed by the bracket. Edit its date or venue.'});
+  try{await validateFixtureDate(pool,fixture.division_id,fixtureDate,slot,fixtureId)}catch(e){return res.status(400).json({error:e.message})}
   const { rows } = await pool.query(`
     UPDATE fixtures
     SET round_no=$2, fixture_date=$3, venue=$4,
@@ -3082,6 +3139,7 @@ app.patch("/api/admin/fixtures/:id", requireRoles(ROLE.NCSF), async (req, res) =
     WHERE id=$1
     RETURNING *
   `, [fixtureId, roundNo, fixtureDate, venue, streamUrl, streamTitle, streamActive]);
+  if(slot)await pool.query('UPDATE playoff_slots SET fixture_date=$2,venue=$3 WHERE id=$1',[slot.id,fixtureDate,venue]);
   await audit(req.user.id, fixtureId, "FIXTURE_UPDATED", { roundNo, fixtureDate, venue, streamUrl, streamTitle, streamActive });
   res.json({ fixture: rows[0] });
 });
@@ -3115,6 +3173,8 @@ app.delete("/api/admin/fixtures/:id", requireRoles(ROLE.NCSF), async (req, res) 
   const fixture = await fixtureById(fixtureId);
   if (!fixture) return res.status(404).json({ error: "Fixture not found." });
   if(rejectClosedSeason(fixture,res))return;
+  const linked=await pool.query('SELECT id FROM playoff_slots WHERE fixture_id=$1',[fixtureId]);
+  if(linked.rowCount)return res.status(409).json({error:'This match is linked to the playoff bracket. Edit or postpone it instead.'});
   if (!["SCHEDULED","POSTPONED"].includes(fixture.status)) return res.status(409).json({ error: "Only unplayed scheduled or postponed fixtures can be deleted." });
   const { rows } = await pool.query("SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND winner_side IS NOT NULL", [fixtureId]);
   if (rows[0].count > 0) return res.status(409).json({ error: "A fixture with scored frames cannot be deleted." });
@@ -3149,106 +3209,125 @@ app.patch("/api/admin/users/:id", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req
   res.json({ user: safeUser(updated.rows[0]) });
 });
 
-function easterSundayUtc(year){
-  const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3);
-  const h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
-  const month=Math.floor((h+l-7*m+114)/31),day=((h+l-7*m+114)%31)+1;
-  return new Date(Date.UTC(year,month-1,day));
-}
-function namibiaPublicHolidays(year){
-  const dates=new Set();
-  const add=(month,day)=>dates.add(`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`);
-  [[1,1],[3,21],[5,1],[5,4],[5,25],[5,28],[8,26],[12,10],[12,25],[12,26]].forEach(([m,d])=>add(m,d));
-  const easter=easterSundayUtc(year);
-  for(const offset of [-2,1,39]){const day=new Date(easter);day.setUTCDate(day.getUTCDate()+offset);add(day.getUTCMonth()+1,day.getUTCDate())}
-  for(const value of [...dates]){
-    const day=new Date(`${value}T00:00:00Z`);
-    if(day.getUTCDay()===0){day.setUTCDate(day.getUTCDate()+1);dates.add(day.toISOString().slice(0,10))}
+async function validateFixtureDate(db,divisionId,value,slot=null,fixtureId=null){
+  if(!value){if(slot)throw Error('Playoff fixtures need a date and time.');return}
+  const date=new Date(value);if(!Number.isFinite(date.getTime()))throw Error('Enter a valid fixture date.');
+  const local=new Date(date.getTime()+7200000).toISOString().slice(0,10);
+  const season=(await db.query('SELECT s.start_date,s.end_date FROM divisions d JOIN seasons s ON s.id=d.season_id WHERE d.id=$1',[divisionId])).rows[0];
+  if((season?.start_date&&local<dateOnly(season.start_date))||(season?.end_date&&local>dateOnly(season.end_date)))throw Error('The fixture must fall within the season dates.');
+  if(fixtureId){
+    const clash=await db.query(`SELECT 1 FROM fixtures f JOIN fixtures current ON current.id=$1 WHERE f.id<>current.id AND (f.home_team_id IN (current.home_team_id,current.away_team_id) OR f.away_team_id IN (current.home_team_id,current.away_team_id)) AND ABS(EXTRACT(EPOCH FROM (f.fixture_date-$2::timestamptz)))<16200 LIMIT 1`,[fixtureId,value]);
+    if(clash.rowCount)throw Error('Allow at least 4½ hours between games for the same team.');
+    const day=await db.query(`SELECT team_id FROM fixtures current CROSS JOIN LATERAL (VALUES(current.home_team_id),(current.away_team_id)) AS sides(team_id) JOIN fixtures f ON f.id<>current.id AND sides.team_id IN(f.home_team_id,f.away_team_id) WHERE current.id=$1 AND (f.fixture_date AT TIME ZONE 'Africa/Windhoek')::date=($2::timestamptz AT TIME ZONE 'Africa/Windhoek')::date GROUP BY sides.team_id HAVING COUNT(*)>=2`,[fixtureId,value]);
+    if(day.rowCount)throw Error('A team cannot play more than two games on the same day.');
   }
-  return dates;
-}
-function isoWeekMonday(date){const day=new Date(date);const weekday=(day.getUTCDay()+6)%7;day.setUTCDate(day.getUTCDate()-weekday);day.setUTCHours(0,0,0,0);return day}
-function isNamibianHolidayWeek(date){
-  const monday=isoWeekMonday(date),year=monday.getUTCFullYear();
-  const dates=new Set([...namibiaPublicHolidays(year),...namibiaPublicHolidays(year+1)]);
-  for(let i=0;i<7;i++){const d=new Date(monday);d.setUTCDate(d.getUTCDate()+i);if(dates.has(d.toISOString().slice(0,10)))return true}
-  return false;
-}
-
-app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF), async (req, res) => {
-  const divisionId = Number(req.params.id);
-  const seasonState=await pool.query("SELECT s.end_date,s.closed_at FROM divisions d JOIN seasons s ON s.id=d.season_id WHERE d.id=$1",[divisionId]);
-  if(!seasonState.rowCount)return res.status(404).json({error:"Division not found."});
-  if(seasonState.rows[0].closed_at)return res.status(409).json({error:"Reopen this season before generating fixtures."});
-  const { rows: existing } = await pool.query("SELECT COUNT(*)::int count FROM fixtures WHERE division_id=$1", [divisionId]);
-  if (existing[0].count > 0 && !req.body.force && !req.body.preview) {
-    return res.status(409).json({ error: "This division already has fixtures. Send force=true only if you intentionally want to add another schedule." });
+  if(!slot&&fixtureId){
+    const fixture=(await db.query('SELECT competition_label FROM fixtures WHERE id=$1',[fixtureId])).rows[0];
+    if(!fixture?.competition_label){const slots=await db.query(`SELECT fixture_date FROM playoff_slots WHERE home_source @> $1::jsonb OR away_source @> $1::jsonb`,[JSON.stringify({divisionId})]);if(slots.rows.some(s=>date>=new Date(s.fixture_date)))throw Error('League fixtures must finish before the qualifying playoff stage.');}
   }
-  const { rows: teams } = await pool.query("SELECT id FROM teams WHERE division_id=$1 AND active=TRUE ORDER BY id", [divisionId]);
-  if (teams.length < 2) return res.status(400).json({ error: "At least two teams are required." });
-
-  let ids = teams.map(t => t.id);
-  if (ids.length % 2) ids.push(null);
-  const n = ids.length;
-  const rounds = n - 1;
-  const dateInput=String(req.body.firstDate||new Date().toISOString().slice(0,10));
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(dateInput))return res.status(400).json({error:"Choose a valid first match date."});
-  const firstDate = new Date(`${dateInput}T12:00:00Z`);
-  const scheduledDates=[];
-  let cursor=new Date(firstDate),skippedWeeks=0;
-  for(let i=0;i<rounds;i++){
-    while(isNamibianHolidayWeek(cursor)){cursor.setUTCDate(cursor.getUTCDate()+7);skippedWeeks++}
-    scheduledDates.push(new Date(cursor));cursor.setUTCDate(cursor.getUTCDate()+7);
-  }
-  let exceedsSeasonEndDate=false;
-  if(seasonState.rows[0].end_date){
-    exceedsSeasonEndDate=scheduledDates.some(d=>d>new Date(`${String(seasonState.rows[0].end_date).slice(0,10)}T23:59:59Z`));
-    if(exceedsSeasonEndDate&&!req.body.preview)return res.status(400).json({error:`The full schedule needs ${rounds} match days and would run past this season's end date. Choose an earlier start date or extend the season end date.`});
-  }
-  if(req.body.preview){
-    return res.json({preview:true,teamCount:teams.length,fixtureCount:teams.length*(teams.length-1),roundCount:rounds*2,roundsPerMatchDay:2,matchDays:scheduledDates.length,timeSlotsLocal:["10:30","15:00"],skippedHolidayWeeks:skippedWeeks,firstScheduledDate:scheduledDates[0].toISOString().slice(0,10),lastScheduledDate:scheduledDates.at(-1).toISOString().slice(0,10),matchDates:scheduledDates.map(d=>d.toISOString().slice(0,10)),exceedsSeasonEndDate});
-  }
-  const matchDateForRound=index=>{
-    const date=new Date(scheduledDates[Math.floor(index/2)]);
-    date.setUTCHours(index%2===0?8:13,index%2===0?30:0,0,0); // Namibia time: 10:30 and 15:00 (UTC+02:00)
-    return date.toISOString();
-  };
-  const created = [];
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    let rotating = [...ids];
-    for (let r = 0; r < rounds; r++) {
-      for (let i = 0; i < n / 2; i++) {
-        const a = rotating[i];
-        const b = rotating[n - 1 - i];
-        if (!a || !b) continue;
-        const home = r % 2 === 0 ? a : b;
-        const away = r % 2 === 0 ? b : a;
-        const d1 = matchDateForRound(r);
-        const q1 = await client.query(`
-          INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
-          VALUES($1,$2,$3,$4,$5) RETURNING id
-        `, [divisionId, r + 1, d1, home, away]);
-        created.push(q1.rows[0].id);
-
-        const d2 = matchDateForRound(r + rounds);
-        const q2 = await client.query(`
-          INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
-          VALUES($1,$2,$3,$4,$5) RETURNING id
-        `, [divisionId, r + 1 + rounds, d2, away, home]);
-        created.push(q2.rows[0].id);
-      }
-      rotating = [rotating[0], rotating[n - 1], ...rotating.slice(1, n - 1)];
+  if(slot){
+    const all=(await db.query('SELECT * FROM playoff_slots WHERE division_id=$1',[divisionId])).rows;
+    for(const row of all){
+      if([slot.home_source,slot.away_source].some(s=>s.winner===row.slot_key)&&date-new Date(row.fixture_date)<4.5*3600000)throw Error('This round must start at least 4½ hours after its feeder matches.');
+      if([row.home_source,row.away_source].some(s=>s.winner===slot.slot_key)&&new Date(row.fixture_date)-date<4.5*3600000)throw Error('This match must finish before the next round starts; allow 4½ hours between starts.');
     }
-    await client.query("COMMIT");
-    res.status(201).json({ created: created.length, fixtureIds: created, skippedHolidayWeeks:skippedWeeks, firstScheduledDate:scheduledDates[0].toISOString().slice(0,10),lastScheduledDate:scheduledDates.at(-1).toISOString().slice(0,10) });
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
+    for(const source of [slot.home_source,slot.away_source].filter(s=>s.rank)){
+      const last=(await db.query('SELECT MAX(fixture_date) last FROM fixtures WHERE division_id=$1 AND competition_label IS NULL',[source.divisionId])).rows[0]?.last;
+      if(last&&date<=new Date(last))throw Error('Qualification matches must take place after their league fixtures.');
+    }
   }
+}
+function dateOnly(value){return value ? (typeof value.toISOString==='function'?value.toISOString():String(value)).slice(0,10):null}
+async function scheduleRoster(db,divisionId){return (await db.query("SELECT id,name FROM teams WHERE division_id=$1 AND active=TRUE ORDER BY id",[divisionId])).rows}
+app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF), async (req,res)=>{
+  const id=Number(req.params.id),client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const division=(await client.query(`SELECT d.*,s.start_date,s.end_date,s.closed_at FROM divisions d JOIN seasons s ON s.id=d.season_id WHERE d.id=$1 FOR UPDATE OF d,s`,[id])).rows[0];
+    if(!division)throw Error('Division not found.');
+    if(division.closed_at)throw Error('Reopen this season before generating fixtures.');
+    const teams=await scheduleRoster(client,id);
+    const existing=await client.query('SELECT id FROM fixtures WHERE division_id=$1 LIMIT 1',[id]);
+    const existingSlots=await client.query('SELECT id FROM playoff_slots WHERE division_id=$1 LIMIT 1',[id]);
+    if(existing.rowCount||existingSlots.rowCount)throw Error('This division already has a schedule. Edit its existing fixtures, or choose a new season/division.');
+    if(req.body.preview){
+      let opponent=null;
+      if(req.body.format==='central-coastal'){
+        opponent=(await client.query('SELECT id,name FROM divisions WHERE id=$1 AND season_id=$2 AND id<>$3',[Number(req.body.opponentDivisionId),division.season_id,id])).rows[0];
+        if(!opponent||(await scheduleRoster(client,opponent.id)).length<4)throw Error('The opposing division must belong to this season and have at least four active teams.');
+      }
+      const plan=buildSchedule(teams,division,String(req.body.firstDate||''),req.body.format||'top8',opponent);
+      if(opponent)plan.opponentRoster=await scheduleRoster(client,opponent.id);
+      const token=crypto.randomBytes(24).toString('hex');
+      await client.query('DELETE FROM schedule_drafts WHERE expires_at<NOW()');
+      await client.query('INSERT INTO schedule_drafts(token,user_id,division_id,plan,roster_hash) VALUES($1,$2,$3,$4,$5)',[token,req.user.id,id,JSON.stringify(plan),fingerprint(teams)]);
+      await client.query('COMMIT');
+      return res.json({preview:true,token,plan,startDate:dateOnly(division.start_date),endDate:dateOnly(division.end_date)});
+    }
+    if(req.body.approve!==true||!req.body.token)throw Error('Preview the fixtures first, then approve the schedule.');
+    const draft=(await client.query('SELECT * FROM schedule_drafts WHERE token=$1 AND user_id=$2 AND division_id=$3 AND expires_at>NOW() FOR UPDATE',[req.body.token,req.user.id,id])).rows[0];
+    if(!draft)throw Error('This preview expired or was already approved. Preview again.');
+    if(draft.roster_hash!==fingerprint(teams))throw Error('The team list changed. Preview again before approval.');
+    if(draft.plan.opponentRoster&&fingerprint(draft.plan.opponentRoster)!==fingerprint(await scheduleRoster(client,draft.plan.opponentDivisionId)))throw Error('The opposing team list changed. Preview again.');
+    const plan=applyEdits(draft.plan,req.body.edits,dateOnly(division.start_date),dateOnly(division.end_date));
+    if(plan.opponentDivisionId){const last=(await client.query('SELECT MAX(fixture_date) last FROM fixtures WHERE division_id=$1 AND competition_label IS NULL',[plan.opponentDivisionId])).rows[0]?.last;if(last&&plan.playoffs.filter(f=>f.stage==='Quarter-final').some(f=>new Date(f.fixtureDate)<=new Date(last)))throw Error('The opposing league ends after the quarter-finals. Edit the quarter-final dates before approval.');}
+    for(const f of plan.fixtures)await client.query(`INSERT INTO fixtures(division_id,round_no,fixture_date,venue,home_team_id,away_team_id) VALUES($1,$2,$3,$4,$5,$6)`,[id,f.roundNo,f.fixtureDate,f.venue||null,f.homeTeamId,f.awayTeamId]);
+    for(const f of plan.playoffs)await client.query(`INSERT INTO playoff_slots(division_id,slot_key,stage,round_no,home_source,away_source,fixture_date,venue) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,f.key,f.stage,f.roundNo,JSON.stringify(f.home),JSON.stringify(f.away),f.fixtureDate,f.venue||null]);
+    await client.query('DELETE FROM schedule_drafts WHERE division_id=$1',[id]);
+    await client.query(`INSERT INTO audit_logs(user_id,action,detail) VALUES($1,'SCHEDULE_APPROVED',$2)`,[req.user.id,JSON.stringify({divisionId:id,fixtures:plan.fixtures.length,playoffs:plan.playoffs.length})]);
+    await client.query('COMMIT');res.status(201).json({created:plan.fixtures.length,playoffs:plan.playoffs.length});
+  }catch(error){await client.query('ROLLBACK');res.status(400).json({error:error.message})}finally{client.release()}
+});
+
+async function advancePlayoffs(divisionId){
+  const client=await pool.connect();let created=0;
+  try{
+    await client.query('BEGIN');
+    const division=(await client.query(`SELECT d.*,s.closed_at FROM divisions d JOIN seasons s ON s.id=d.season_id WHERE d.id=$1 FOR UPDATE OF d,s`,[divisionId])).rows[0];
+    if(!division||division.closed_at)throw Error('The season is closed or missing.');
+    const slots=(await client.query('SELECT * FROM playoff_slots WHERE division_id=$1 ORDER BY round_no,id FOR UPDATE',[divisionId])).rows;
+    const resolve=async source=>{
+      if(source.rank){
+        const status=(await client.query(`SELECT COUNT(*)::int total,COUNT(*) FILTER(WHERE status<>'APPROVED')::int pending FROM fixtures WHERE division_id=$1 AND competition_label IS NULL`,[source.divisionId])).rows[0];
+        if(!status.total||status.pending)return null;
+        const table=await getStandings(source.divisionId);
+        return table[source.rank-1]?.team_id||null;
+      }
+      const prev=slots.find(s=>s.slot_key===source.winner);
+      if(!prev?.fixture_id)return null;
+      const result=(await client.query(`SELECT f.home_team_id,f.away_team_id,f.status,COUNT(*) FILTER(WHERE fr.winner_side='HOME')::int home,COUNT(*) FILTER(WHERE fr.winner_side='AWAY')::int away FROM fixtures f LEFT JOIN frames fr ON fr.fixture_id=f.id WHERE f.id=$1 GROUP BY f.id`,[prev.fixture_id])).rows[0];
+      if(result?.status!=='APPROVED'||Math.max(result.home,result.away)<13||result.home===result.away)return null;
+      return result.home>result.away?result.home_team_id:result.away_team_id;
+    };
+    for(const slot of slots){
+      if(slot.fixture_id)continue;
+      const home=await resolve(slot.home_source),away=await resolve(slot.away_source);if(!home||!away)continue;
+      const f=await client.query(`INSERT INTO fixtures(division_id,round_no,fixture_date,venue,home_team_id,away_team_id,competition_label,race_to,notes) VALUES($1,$2,$3,$4,$5,$6,$7,13,$8) RETURNING id`,[divisionId,slot.round_no,slot.fixture_date,slot.venue,home,away,division.name+' Season Playoffs',slot.stage+' · '+slot.slot_key]);
+      slot.fixture_id=f.rows[0].id;
+      await client.query('UPDATE playoff_slots SET fixture_id=$2 WHERE id=$1',[slot.id,slot.fixture_id]);created++;
+    }
+    await client.query('COMMIT');return created;
+  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
+}
+app.get('/api/divisions/:id/playoffs',async(req,res)=>{
+  const {rows}=await pool.query(`SELECT ps.*,ht.name home_team_name,at.name away_team_name,f.status FROM playoff_slots ps LEFT JOIN fixtures f ON f.id=ps.fixture_id LEFT JOIN teams ht ON ht.id=f.home_team_id LEFT JOIN teams at ON at.id=f.away_team_id WHERE ps.division_id=$1 ORDER BY ps.round_no,ps.id`,[Number(req.params.id)]);
+  res.json({slots:rows});
+});
+app.post('/api/admin/divisions/:id/advance-playoffs',requireRoles(ROLE.NCSF),async(req,res)=>{
+  res.json({created:await advancePlayoffs(Number(req.params.id))});
+});
+app.patch('/api/admin/playoff-slots/:id',requireRoles(ROLE.NCSF),async(req,res)=>{
+  const client=await pool.connect();try{
+    await client.query('BEGIN');
+    const slot=(await client.query(`SELECT ps.*,s.closed_at FROM playoff_slots ps JOIN divisions d ON d.id=ps.division_id JOIN seasons s ON s.id=d.season_id WHERE ps.id=$1 FOR UPDATE OF ps,s`,[Number(req.params.id)])).rows[0];
+    if(!slot||slot.closed_at)throw Error('Reopen the season before editing its playoff fixtures.');
+    if(!req.body.fixtureDate||!Number.isFinite(Date.parse(req.body.fixtureDate)))throw Error('Choose a valid date and time.');
+    const venue=String(req.body.venue||'').trim().slice(0,200);
+    await validateFixtureDate(client,slot.division_id,req.body.fixtureDate,slot,slot.fixture_id);
+    await client.query('UPDATE playoff_slots SET fixture_date=$2,venue=$3 WHERE id=$1',[slot.id,req.body.fixtureDate,venue]);
+    if(slot.fixture_id)await client.query('UPDATE fixtures SET fixture_date=$2,venue=$3 WHERE id=$1',[slot.fixture_id,req.body.fixtureDate,venue]);
+    await client.query('COMMIT');res.json({ok:true});
+  }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}
 });
 
 app.put("/api/fixtures/:id/lineup", requireAuth, async (req, res) => {
@@ -3616,6 +3695,9 @@ app.post("/api/fixtures/:id/approve", requireRoles(ROLE.NCSF), async (req, res) 
     [fixture.id, req.user.id]
   );
   await audit(req.user.id, fixture.id, "MATCH_APPROVED", { totals: payload.totals });
+  const plans=await pool.query(`SELECT DISTINCT ps.division_id FROM playoff_slots ps JOIN divisions d ON d.id=ps.division_id WHERE d.season_id=(SELECT season_id FROM divisions WHERE id=$1)`,[fixture.division_id]);
+  for(const plan of plans.rows)try{await advancePlayoffs(plan.division_id)}catch(error){console.error('Playoff advancement pending:',error.message)}
+
   res.json(await fixturePayload(await fixtureById(fixture.id)));
 });
 

@@ -34,6 +34,8 @@ jobs:
         with:
           node-version: 20
       - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: node --check schedule.js
       - run: node --check server.js
       - run: node --check public/app.js
       - name: Start app

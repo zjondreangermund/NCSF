@@ -44,14 +44,22 @@
   function teamStandingsTable(standings){
     const hasTop8=standings.some(row=>row.top8Qualifier);
     const qualifierNote=hasTop8
-      ? '<p class="playoff-qualifier-note"><span aria-hidden="true"></span> Light hatch marks the Central Zone Top 8 play-off qualifiers. Winners advance as Central Teams 1–4 for the quarter-finals.</p>'
+      ? '<p class="playoff-qualifier-note"><span aria-hidden="true"></span> Light hatch marks the Central Zone Top 8 play-off qualifiers. Qualifiers enter the season playoff bracket.</p>'
       : '';
     return qualifierNote+'<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Frames For</th><th>Frames Against</th><th>+/-</th><th>Bonus</th><th>Points</th></tr></thead><tbody>'+standings.map((r,i)=>`<tr class="${r.top8Qualifier?'top8-qualifier':''}"><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong>${r.top8Qualifier?'<br><small class="qualifier-badge">TOP 8 · PLAY-OFF</small>':''}<br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td>${r.losses??'—'}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td><td>${r.bonus_points??'—'}</td><td><strong>${r.total_points??'—'}</strong></td></tr>`).join('')+'</tbody></table></div>';
   }
   function fmtDate(v){
     if(!v)return 'Date TBA';
     const d=new Date(v);
-    return d.toLocaleString([], {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return d.toLocaleString('en-GB', {timeZone:'Africa/Windhoek',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }
+  const namibiaInput=value=>value?new Date(new Date(value).getTime()+7200000).toISOString().slice(0,16):'';
+  function editDialog(title,fields,onSave){
+    const dialog=document.createElement('dialog');dialog.className='admin-edit-dialog';
+    dialog.innerHTML=`<form class="form-grid"><h2 class="full">${esc(title)}</h2>${fields.map(f=>`<label class="${f.full?'full':''}">${esc(f.label)}<input name="${esc(f.name)}" type="${f.type||'text'}" ${f.type==='checkbox'?(f.value?'checked':''):`value="${esc(f.value||'')}"`} ${f.required?'required':''}></label>`).join('')}<p class="full edit-error" role="alert"></p><div class="full"><button class="btn primary" type="submit">Save changes</button> <button class="btn" type="button" data-cancel>Cancel</button></div></form>`;
+    document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();
+    dialog.querySelector('form').onsubmit=async e=>{e.preventDefault();const btn=dialog.querySelector('[type="submit"]');btn.disabled=true;try{const data=formObject(e.currentTarget);for(const f of fields)if(f.type==='checkbox')data[f.name]=e.currentTarget.elements[f.name].checked;await onSave(data);dialog.close()}catch(err){dialog.querySelector('.edit-error').textContent=err.message}finally{btn.disabled=false}};
+    dialog.showModal();
   }
   function toast(message,error=false){
     const el=$('#toast'); if(!el)return;
@@ -628,6 +636,8 @@
         const tournamentFixtures=allFixtures.filter(f=>Boolean(f.competition_label));
         const tournamentBox=$('#publicTournamentFixtures');
         if(tournamentBox)tournamentBox.innerHTML=tournamentFixtures.length?fixtureCards(tournamentFixtures,true):'<div class="empty">No tournament fixtures are scheduled for this division.</div>';
+        if(tournamentBox){const bracket=await api('/api/divisions/'+id+'/playoffs');const waiting=bracket.slots.filter(s=>!s.fixture_id);if(waiting.length){if(!tournamentFixtures.length)tournamentBox.innerHTML='<p>Upcoming playoff bracket · race to 13</p>';tournamentBox.innerHTML+=playoffTable(waiting,false);}}
+
         const sortedFixtures=fixtures.sort((x,y)=>{
           const liveDiff=Number(Boolean(y.stream_active))-Number(Boolean(x.stream_active));
           if(liveDiff)return liveDiff;
@@ -2181,7 +2191,12 @@ function formatEventDate(value){
     $('#divisionSeason').innerHTML=options(m.seasons,'id',s=>s.name,null,'Select season');
     setDivisionOptions($('#teamDivision'),m.divisions,m.seasons,'Select division',false);
     setDivisionOptions($('#fixtureDivision'),m.divisions,m.seasons,'Select division',true);
-    setDivisionOptions($('#scheduleDivision'),m.divisions,m.seasons,'Select division',true);
+    $('#scheduleDivision').innerHTML=options(m.divisions,'id',d=>d.season_name+' — '+d.name,null,'Select season / division');
+    $('#scheduleDivision').value=String(defaultCentralDivisionId(m.divisions,m.seasons)||'');
+    $('#scheduleOpponent').innerHTML=options(m.divisions,'id',d=>d.season_name+' — '+d.name,null,'Choose opposing division');
+    $('#playoffDivision').innerHTML=options(m.divisions,'id',d=>d.season_name+' — '+d.name,null,'Choose season / division');
+    $('#playoffDivision').value=$('#scheduleDivision').value;
+    loadAdminPlayoffs();
     ['teamClub','adminUserClub','adminPlayerClub'].forEach(id=>$('#'+id).innerHTML=options(m.clubs,'id',c=>c.name,null,'Select club'));
     $('#adminUserTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Select team');
     $('#adminPlayerTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Unassigned');
@@ -2215,6 +2230,17 @@ function formatEventDate(value){
     }catch(err){toast(err.message,true)}
   }
 
+  function playoffTable(slots,admin){
+    return '<div class="table-wrap"><table><thead><tr><th>Stage</th><th>Fixture</th><th>Namibia time / venue</th><th>Status</th>'+(admin?'<th>Actions</th>':'')+'</tr></thead><tbody>'+slots.map(s=>`<tr><td>${esc(s.stage)}<br>${esc(s.slot_key)} · Race to 13</td><td>${esc(s.home_team_name||s.home_source.label)}<br>vs ${esc(s.away_team_name||s.away_source.label)}</td><td>${esc(fmtDate(s.fixture_date))}<br>${esc(s.venue||'Venue TBA')}</td><td>${s.fixture_id?statusPill(s.status):'Awaiting qualifiers'}</td>${admin?`<td><button class="btn small playoff-edit" data-id="${s.id}">Edit</button> ${s.fixture_id?`<a class="btn small" href="/scoresheet?id=${s.fixture_id}">Open</a>`:''}</td>`:''}</tr>`).join('')+'</tbody></table></div>';
+  }
+  async function loadAdminPlayoffs(){
+    const id=$('#playoffDivision')?.value,box=$('#adminPlayoffs');if(!box)return;
+    if(!id){box.innerHTML='<p>Select a division.</p>';return}
+    try{const d=await api('/api/divisions/'+id+'/playoffs');box.innerHTML=d.slots.length?'<p>Qualifiers and winners advance after results are approved.</p><button class="btn small" id="advancePlayoffs">Refresh qualifiers / advance winners</button>'+playoffTable(d.slots,true):'<p>No generated playoff bracket for this division.</p>';
+      $('#advancePlayoffs')?.addEventListener('click',async e=>{e.currentTarget.disabled=true;try{const r=await api('/api/admin/divisions/'+id+'/advance-playoffs',{method:'POST',body:{}});await loadAdminPlayoffs();const fixtures=await api('/api/fixtures');renderAdminFixtures(fixtures.fixtures);toast(r.created?r.created+' playoff fixtures created':'Waiting for all required league / playoff results to be approved')}catch(err){toast(err.message,true);e.currentTarget.disabled=false}});
+      $$('.playoff-edit',box).forEach(btn=>btn.onclick=()=>{const slot=d.slots.find(s=>s.id===Number(btn.dataset.id));editDialog('Edit '+slot.stage+' — '+slot.slot_key,[{name:'fixtureDate',label:'Namibia date and time',type:'datetime-local',value:namibiaInput(slot.fixture_date),required:true,full:true},{name:'venue',label:'Venue',value:slot.venue,full:true}],async data=>{data.fixtureDate+=':00+02:00';await api('/api/admin/playoff-slots/'+slot.id,{method:'PATCH',body:data});await loadAdminPlayoffs();const fixtures=await api('/api/fixtures');renderAdminFixtures(fixtures.fixtures);toast('Playoff fixture updated')})});
+    }catch(err){box.textContent=err.message}
+  }
   function renderAdminFixtures(fixtures){
     const box=$('#adminFixtures'); if(!box)return;
     if(!fixtures.length){box.innerHTML='<div class="empty">No fixtures yet.</div>';return}
@@ -2237,14 +2263,11 @@ function formatEventDate(value){
 
     $$('.fixture-edit').forEach(btn=>btn.addEventListener('click',async()=>{
       const f=fixtures.find(x=>x.id===Number(btn.dataset.id)); if(!f)return;
-      const roundNo=prompt('Round number',String(f.round_no)); if(roundNo===null)return;
-      const currentDate=f.fixture_date?new Date(f.fixture_date).toISOString().slice(0,16):'';
-      const fixtureDate=prompt('Match date/time (YYYY-MM-DDTHH:MM). Leave blank for TBA.',currentDate); if(fixtureDate===null)return;
-      const venue=prompt('Venue',f.venue||''); if(venue===null)return;
-      try{
-        await api('/api/admin/fixtures/'+f.id,{method:'PATCH',body:{roundNo:Number(roundNo),fixtureDate:fixtureDate||null,venue}});
-        await reloadAdmin(); toast('Fixture updated');
-      }catch(err){toast(err.message,true)}
+      editDialog('Edit fixture — Namibia time',[
+        {name:'roundNo',label:'Round',type:'number',value:f.round_no,required:true},
+        {name:'fixtureDate',label:'Date and time',type:'datetime-local',value:namibiaInput(f.fixture_date)},
+        {name:'venue',label:'Venue',value:f.venue,full:true}
+      ],async data=>{if(data.fixtureDate)data.fixtureDate+=':00+02:00';await api('/api/admin/fixtures/'+f.id,{method:'PATCH',body:data});await reloadAdmin();toast('Fixture updated')});
     }));
     $$('.fixture-postpone').forEach(btn=>btn.addEventListener('click',async()=>{
       if(!confirm('Postpone this fixture?'))return;
@@ -2318,7 +2341,15 @@ async function loadAdminPosts(){
     const m=state.meta;
     const seasonsBox=$('#adminSeasons');
     if(seasonsBox){
-      seasonsBox.innerHTML=m.seasons?.length?m.seasons.map(s=>`<div class="card-row season-admin-row"><span><strong>${esc(s.name)}</strong><small>${s.closed_at?'Closed '+esc(fmtDate(s.closed_at)):(s.active?'Active season':'Open season')}${s.start_date?' • '+esc(fmtDate(s.start_date)):''}${s.end_date?' – '+esc(fmtDate(s.end_date)):''}</small></span><span class="season-admin-actions"><a class="btn small" href="/api/admin/seasons/${s.id}/print.pdf" target="_blank">Print PDF</a> <a class="btn small" href="/api/admin/seasons/${s.id}/export.csv">Fixtures CSV</a> <a class="btn small" href="/api/admin/seasons/${s.id}/export-standings.csv">Teams CSV</a> <a class="btn small" href="/api/admin/seasons/${s.id}/export-players.csv">Players CSV</a> ${s.closed_at?`<button class="btn small season-reopen" data-id="${s.id}">Reopen</button>`:`<button class="btn small danger season-close" data-id="${s.id}">Close season</button>`}</span></div>`).join(''):'<div class="empty">No seasons yet.</div>';
+      seasonsBox.innerHTML=m.seasons?.length?m.seasons.map(s=>`<div class="card-row season-admin-row"><span><strong>${esc(s.name)}</strong><small>${s.closed_at?'Closed '+esc(fmtDate(s.closed_at)):(s.active?'Active season':'Open season')}${s.start_date?' • '+esc(fmtDate(s.start_date)):''}${s.end_date?' – '+esc(fmtDate(s.end_date)):''}</small></span><span class="season-admin-actions"><button class="btn small season-edit" data-id="${s.id}">Edit</button> <button class="btn small danger season-delete" data-id="${s.id}">Delete</button> <a class="btn small" href="/api/admin/seasons/${s.id}/print.pdf" target="_blank">Print PDF</a> <a class="btn small" href="/api/admin/seasons/${s.id}/export.csv">Fixtures CSV</a> <a class="btn small" href="/api/admin/seasons/${s.id}/export-standings.csv">Teams CSV</a> <a class="btn small" href="/api/admin/seasons/${s.id}/export-players.csv">Players CSV</a> ${s.closed_at?`<button class="btn small season-reopen" data-id="${s.id}">Reopen</button>`:`<button class="btn small danger season-close" data-id="${s.id}">Close season</button>`}</span></div>`).join(''):'<div class="empty">No seasons yet.</div>';
+      $$('.season-edit').forEach(btn=>btn.addEventListener('click',()=>{
+        const season=m.seasons.find(s=>s.id===Number(btn.dataset.id));
+        editDialog('Edit '+season.name,[{name:'name',label:'Season name',value:season.name,required:true,full:true},{name:'startDate',label:'Start date',type:'date',value:season.start_date?.slice(0,10)},{name:'endDate',label:'End date',type:'date',value:season.end_date?.slice(0,10)},{name:'active',label:'Active season',type:'checkbox',value:season.active}],async data=>{await api('/api/admin/seasons/'+season.id,{method:'PATCH',body:data});await reloadAdmin();toast('Season updated')});
+      }));
+      $$('.season-delete').forEach(btn=>btn.addEventListener('click',()=>{
+        const season=m.seasons.find(s=>s.id===Number(btn.dataset.id));
+        editDialog('Delete unused season',[{name:'confirmName',label:'Type “'+season.name+'” to delete this season, its divisions and unplayed fixtures. Teams, players and logins are kept. Seasons with match activity cannot be deleted.',required:true,full:true}],async data=>{await api('/api/admin/seasons/'+season.id,{method:'DELETE',body:data});await reloadAdmin();toast('Season deleted')});
+      }));
       $$('.season-close').forEach(btn=>btn.addEventListener('click',async()=>{
         const season=m.seasons.find(item=>item.id===Number(btn.dataset.id));if(!season)return;
         if(!confirm(`Close ${season.name}? This freezes fixture, score and result edits. You can reopen it later.`))return;
@@ -2404,7 +2435,8 @@ async function loadAdminPosts(){
       if(submit?.disabled)return;
       if(submit)submit.disabled=true;
       try{
-        await api(url,{method:'POST',body:formObject(form)});
+        const data=formObject(form);if(id==='fixtureForm'&&data.fixtureDate)data.fixtureDate+=':00+02:00';
+        await api(url,{method:'POST',body:data});
         form.reset();
         await reloadAdmin();
         toast(msg);
@@ -2414,22 +2446,37 @@ async function loadAdminPosts(){
         if(submit)submit.disabled=false;
       }
     }));
+    let draft=null,previewBusy=false;
+    const invalidate=()=>{draft=null;$('#schedulePreview').style.display='none'};
+    const syncFormat=()=>{$('#scheduleOpponentLabel').style.display=$('#scheduleFormat').value==='central-coastal'?'':'none'};
+    $('#scheduleForm').addEventListener('change',()=>{invalidate();syncFormat()});syncFormat();
+    $('#playoffDivision').addEventListener('change',loadAdminPlayoffs);
     $('#scheduleForm')?.addEventListener('submit',async e=>{
-      e.preventDefault();const o=formObject(e.currentTarget);
+      e.preventDefault();if(!draft)return toast('Preview the fixtures first.',true);
+      const btn=$('#approveSchedule');if(btn.disabled)return;btn.disabled=true;
       try{
-        const d=await api('/api/admin/divisions/'+o.divisionId+'/generate-home-away',{method:'POST',body:{firstDate:o.firstDate}});
-        await reloadAdmin();toast(`${d.created} fixtures created${d.skippedHolidayWeeks?` • skipped ${d.skippedHolidayWeeks} Namibia holiday week${d.skippedHolidayWeeks===1?'':'s'}`:''} • ${d.firstScheduledDate} to ${d.lastScheduledDate} • 10:30 & 15:00`);
-      }catch(err){toast(err.message,true)}
+        const edits=$$('.draft-fixture',$('#schedulePreview')).map(row=>({key:row.dataset.key,fixtureDate:row.querySelector('[data-date]').value+':00+02:00',venue:row.querySelector('[data-venue]').value}));
+        const d=await api('/api/admin/divisions/'+draft.plan.divisionId+'/generate-home-away',{method:'POST',body:{approve:true,token:draft.token,edits}});
+        const divisionId=draft.plan.divisionId;invalidate();await reloadAdmin();$('#playoffDivision').value=String(divisionId);await loadAdminPlayoffs();toast(`Schedule approved: ${d.created} league fixtures and ${d.playoffs} playoff matches`);
+      }catch(err){toast(err.message,true)}finally{btn.disabled=false}
     });
     $('#previewSchedule')?.addEventListener('click',async()=>{
       const form=$('#scheduleForm'),o=formObject(form),box=$('#schedulePreview');
-      if(!o.divisionId||!o.firstDate){toast('Choose a division and first match date to preview.',true);return}
+      if(!form.reportValidity()||previewBusy)return;
+      previewBusy=true;$('#previewSchedule').disabled=true;draft=null;
       try{
-        const d=await api('/api/admin/divisions/'+o.divisionId+'/generate-home-away',{method:'POST',body:{firstDate:o.firstDate,preview:true}});
-        box.style.display='block';box.classList.toggle('warn',d.exceedsSeasonEndDate);
-        box.innerHTML=`Preview only — no fixtures saved. ${d.fixtureCount} fixtures for ${d.teamCount} teams across ${d.matchDays} match days (${d.roundCount} rounds; two rounds per day). Times: ${d.timeSlotsLocal.map(esc).join(' & ')} Namibia time. Skipped ${d.skippedHolidayWeeks} holiday week${d.skippedHolidayWeeks===1?'':'s'}.<br>Match dates: ${d.matchDates.map(esc).join(' • ')}${d.exceedsSeasonEndDate?'<br><strong>These dates run past the selected season end date.</strong>':''}`;
-      }catch(err){toast(err.message,true)}
+        const d=await api('/api/admin/divisions/'+o.divisionId+'/generate-home-away',{method:'POST',body:{...o,preview:true}});
+        // Ignore a response if the options changed while it was loading.
+        if(JSON.stringify(o)!==JSON.stringify(formObject(form)))return;
+        draft=d;const p=d.plan,teamName=id=>p.teams.find(t=>t.id===id)?.name||String(id);
+        const rows=[...p.fixtures.map(f=>({...f,stage:'League · Round '+f.roundNo,homeLabel:teamName(f.homeTeamId),awayLabel:teamName(f.awayTeamId)})),...p.playoffs.map(f=>({...f,homeLabel:f.home.label,awayLabel:f.away.label}))];
+        const days=new Set(p.fixtures.map(f=>f.fixtureDate.slice(0,10))).size;
+        box.style.display='block';
+        box.innerHTML=`<h2>Review ${esc(p.divisionName)} fixtures</h2><p><strong>Draft — no fixtures published.</strong> ${p.fixtures.length} league fixtures across ${days} match days, plus ${p.playoffs.length} playoff matches. League starts: 10:30 & 15:00 Namibia time. Skipped ${p.skippedHolidayWeeks} holiday weeks. Edit any date, time or venue below.</p><p>Playoff positions are decided by the final league table. All knockout matches are race to 13. Approving saves this schedule to the selected season; it does not change which season is active.</p><div class="table-wrap"><table class="draft-table"><thead><tr><th>Stage</th><th>Home / qualifier</th><th>Away / qualifier</th><th>Namibia date & time</th><th>Venue</th></tr></thead><tbody>${rows.map(f=>`<tr class="draft-fixture" data-key="${esc(f.key)}"><td>${esc(f.stage)}<br><small>${esc(f.key)}</small></td><td>${esc(f.homeLabel)}</td><td>${esc(f.awayLabel)}</td><td><input data-date type="datetime-local" required value="${namibiaInput(f.fixtureDate)}" aria-label="${esc(f.key)} date and time"></td><td><input data-venue maxlength="200" value="${esc(f.venue)}" placeholder="Venue TBA" aria-label="${esc(f.key)} venue"></td></tr>`).join('')}</tbody></table></div><p><button id="approveSchedule" class="btn primary" type="submit" form="scheduleForm">Approve schedule & save to season</button> <button id="cancelSchedule" class="btn" type="button">Discard preview</button></p>`;
+        $('#cancelSchedule').onclick=invalidate;box.scrollIntoView({behavior:'smooth',block:'start'});
+      }catch(err){box.style.display='none';toast(err.message,true)}finally{previewBusy=false;$('#previewSchedule').disabled=false}
     });
+
   }
 
   await loadUser();
