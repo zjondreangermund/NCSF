@@ -870,7 +870,7 @@ async function seedOfficialPlayerTeamAssignments() {
         const requestedTeam = teamKey(official.team_name);
         const team = teams.find(row => teamKey(row.name)===requestedTeam);
         if (!team) throw new Error("Team not found for official player " + official.player_name + " (" + official.team_name + ").");
-        const parts=String(official.player_name||"").trim().split(/\\s+/);
+        const parts=String(official.player_name||"").trim().split(/\s+/);
         const firstName=parts.shift()||"Unknown";
         const lastName=parts.join(" ");
         const fullKey=normalize(firstName+" "+lastName);
