@@ -1,0 +1,1932 @@
+{
+  "asOf": "2026-06-09",
+  "divisions": [
+    {
+      "division": "central",
+      "players": [
+        {
+          "position": 1,
+          "player_name": "Steven Sakaria",
+          "frames_played": 60,
+          "frames_won": 51,
+          "win_percentage": 85,
+          "matches_played_percentage": 40,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 2,
+          "player_name": "Jurgen Uirab",
+          "frames_played": 61,
+          "frames_won": 51,
+          "win_percentage": 83.6,
+          "matches_played_percentage": 43.3,
+          "team_name": "Nam Shooters"
+        },
+        {
+          "position": 3,
+          "player_name": "Kageya Hapilo",
+          "frames_played": 60,
+          "frames_won": 44,
+          "win_percentage": 73.3,
+          "matches_played_percentage": 40,
+          "team_name": "Ofifiya"
+        },
+        {
+          "position": 4,
+          "player_name": "Petrus Valuka",
+          "frames_played": 60,
+          "frames_won": 43,
+          "win_percentage": 71.7,
+          "matches_played_percentage": 40,
+          "team_name": "Ofifiya"
+        },
+        {
+          "position": 5,
+          "player_name": "Jose Saunderson",
+          "frames_played": 65,
+          "frames_won": 42,
+          "win_percentage": 64.6,
+          "matches_played_percentage": 43.3,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 6,
+          "player_name": "Keith Jacobs",
+          "frames_played": 48,
+          "frames_won": 38,
+          "win_percentage": 79.2,
+          "matches_played_percentage": 33.3,
+          "team_name": "Nam Shooters"
+        },
+        {
+          "position": 7,
+          "player_name": "Magnus Ekandjo",
+          "frames_played": 47,
+          "frames_won": 37,
+          "win_percentage": 78.7,
+          "matches_played_percentage": 33.3,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 8,
+          "player_name": "Jamal Andrew",
+          "frames_played": 48,
+          "frames_won": 36,
+          "win_percentage": 75,
+          "matches_played_percentage": 36.7,
+          "team_name": "Nam Shooters"
+        },
+        {
+          "position": 9,
+          "player_name": "Carlton Nel",
+          "frames_played": 53,
+          "frames_won": 36,
+          "win_percentage": 67.9,
+          "matches_played_percentage": 36.7,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 10,
+          "player_name": "Vanya Swanepoel",
+          "frames_played": 70,
+          "frames_won": 36,
+          "win_percentage": 51.4,
+          "matches_played_percentage": 46.7,
+          "team_name": "Queen Cues"
+        },
+        {
+          "position": 11,
+          "player_name": "Martha Kotze",
+          "frames_played": 73,
+          "frames_won": 36,
+          "win_percentage": 49.3,
+          "matches_played_percentage": 50,
+          "team_name": "Queen Cues"
+        },
+        {
+          "position": 12,
+          "player_name": "Festus Stefananus",
+          "frames_played": 45,
+          "frames_won": 35,
+          "win_percentage": 77.8,
+          "matches_played_percentage": 30,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 13,
+          "player_name": "Wessel Struwig",
+          "frames_played": 50,
+          "frames_won": 35,
+          "win_percentage": 70,
+          "matches_played_percentage": 33.3,
+          "team_name": "Pool Pirates"
+        },
+        {
+          "position": 14,
+          "player_name": "Stunner Namhindo",
+          "frames_played": 45,
+          "frames_won": 34,
+          "win_percentage": 75.6,
+          "matches_played_percentage": 36.7,
+          "team_name": "Nam Shooters"
+        },
+        {
+          "position": 15,
+          "player_name": "Christopher Lourens",
+          "frames_played": 65,
+          "frames_won": 34,
+          "win_percentage": 52.3,
+          "matches_played_percentage": 46.7,
+          "team_name": "Pool Pirates"
+        },
+        {
+          "position": 16,
+          "player_name": "Kelly-Ann Williams",
+          "frames_played": 65,
+          "frames_won": 33,
+          "win_percentage": 50.8,
+          "matches_played_percentage": 43.3,
+          "team_name": "Queen Cues"
+        },
+        {
+          "position": 17,
+          "player_name": "Yi Wang",
+          "frames_played": 44,
+          "frames_won": 31,
+          "win_percentage": 70.5,
+          "matches_played_percentage": 33.3,
+          "team_name": "Nam Shooters"
+        },
+        {
+          "position": 18,
+          "player_name": "Pieter Dreyer",
+          "frames_played": 59,
+          "frames_won": 31,
+          "win_percentage": 52.5,
+          "matches_played_percentage": 43.3,
+          "team_name": "Pool Pirates"
+        },
+        {
+          "position": 19,
+          "player_name": "Erastus Mwandingi",
+          "frames_played": 35,
+          "frames_won": 30,
+          "win_percentage": 85.7,
+          "matches_played_percentage": 23.3,
+          "team_name": "Nam Shooters"
+        },
+        {
+          "position": 20,
+          "player_name": "Shaun Boshoff",
+          "frames_played": 47,
+          "frames_won": 30,
+          "win_percentage": 63.8,
+          "matches_played_percentage": 33.3,
+          "team_name": "Pool Pirates"
+        },
+        {
+          "position": 21,
+          "player_name": "Liberty Sunde",
+          "frames_played": 68,
+          "frames_won": 30,
+          "win_percentage": 44.1,
+          "matches_played_percentage": 46.7,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 22,
+          "player_name": "Simson Patrica",
+          "frames_played": 44,
+          "frames_won": 28,
+          "win_percentage": 63.6,
+          "matches_played_percentage": 33.3,
+          "team_name": "Ofifiya"
+        },
+        {
+          "position": 23,
+          "player_name": "Gregg Angermund",
+          "frames_played": 50,
+          "frames_won": 28,
+          "win_percentage": 56,
+          "matches_played_percentage": 36.7,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 24,
+          "player_name": "Jordan Loxton",
+          "frames_played": 53,
+          "frames_won": 28,
+          "win_percentage": 52.8,
+          "matches_played_percentage": 36.7,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 25,
+          "player_name": "Silas George",
+          "frames_played": 55,
+          "frames_won": 28,
+          "win_percentage": 50.9,
+          "matches_played_percentage": 36.7,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 26,
+          "player_name": "Jason Ndameshime",
+          "frames_played": 44,
+          "frames_won": 27,
+          "win_percentage": 61.4,
+          "matches_played_percentage": 36.7,
+          "team_name": "Ofifiya"
+        },
+        {
+          "position": 27,
+          "player_name": "Ronsley Moller",
+          "frames_played": 58,
+          "frames_won": 27,
+          "win_percentage": 46.6,
+          "matches_played_percentage": 40,
+          "team_name": "007-Central"
+        },
+        {
+          "position": 28,
+          "player_name": "Celeste Espach",
+          "frames_played": 61,
+          "frames_won": 26,
+          "win_percentage": 42.6,
+          "matches_played_percentage": 46.7,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 29,
+          "player_name": "Francois du Plessis",
+          "frames_played": 62,
+          "frames_won": 26,
+          "win_percentage": 41.9,
+          "matches_played_percentage": 46.7,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 30,
+          "player_name": "Onesmus Mwadinovanhu",
+          "frames_played": 30,
+          "frames_won": 25,
+          "win_percentage": 83.3,
+          "matches_played_percentage": 16.7,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 31,
+          "player_name": "Elih Husselmann",
+          "frames_played": 37,
+          "frames_won": 25,
+          "win_percentage": 67.6,
+          "matches_played_percentage": 30,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 32,
+          "player_name": "Amorous Esau",
+          "frames_played": 50,
+          "frames_won": 25,
+          "win_percentage": 50,
+          "matches_played_percentage": 33.3,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 33,
+          "player_name": "Marvine Strauss",
+          "frames_played": 50,
+          "frames_won": 25,
+          "win_percentage": 50,
+          "matches_played_percentage": 33.3,
+          "team_name": "007-Central"
+        },
+        {
+          "position": 34,
+          "player_name": "Theunis Fölscher",
+          "frames_played": 53,
+          "frames_won": 25,
+          "win_percentage": 47.2,
+          "matches_played_percentage": 40,
+          "team_name": "Pool Pirates"
+        },
+        {
+          "position": 35,
+          "player_name": "Johannes Ndemuweda",
+          "frames_played": 30,
+          "frames_won": 24,
+          "win_percentage": 80,
+          "matches_played_percentage": 20,
+          "team_name": "Ofifiya"
+        },
+        {
+          "position": 36,
+          "player_name": "Luzanne Mouton",
+          "frames_played": 44,
+          "frames_won": 24,
+          "win_percentage": 54.5,
+          "matches_played_percentage": 36.7,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 37,
+          "player_name": "Johnty Jamil van Wyk",
+          "frames_played": 50,
+          "frames_won": 24,
+          "win_percentage": 48,
+          "matches_played_percentage": 33.3,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 38,
+          "player_name": "Jaden Izaaks",
+          "frames_played": 60,
+          "frames_won": 24,
+          "win_percentage": 40,
+          "matches_played_percentage": 40,
+          "team_name": "007-Central"
+        },
+        {
+          "position": 39,
+          "player_name": "Charmoné Kotze",
+          "frames_played": 75,
+          "frames_won": 24,
+          "win_percentage": 32,
+          "matches_played_percentage": 50,
+          "team_name": "Queen Cues"
+        },
+        {
+          "position": 40,
+          "player_name": "Roweldan Scholtz",
+          "frames_played": 42,
+          "frames_won": 23,
+          "win_percentage": 54.8,
+          "matches_played_percentage": 33.3,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 41,
+          "player_name": "Alexandre Gustavo",
+          "frames_played": 45,
+          "frames_won": 23,
+          "win_percentage": 51.1,
+          "matches_played_percentage": 33.3,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 42,
+          "player_name": "Laurenzo Louw",
+          "frames_played": 31,
+          "frames_won": 22,
+          "win_percentage": 71,
+          "matches_played_percentage": 23.3,
+          "team_name": "RPC"
+        },
+        {
+          "position": 43,
+          "player_name": "Jermain Andrew",
+          "frames_played": 34,
+          "frames_won": 22,
+          "win_percentage": 64.7,
+          "matches_played_percentage": 23.3,
+          "team_name": "Nam Shooters"
+        },
+        {
+          "position": 44,
+          "player_name": "Benjamin Maasdorp",
+          "frames_played": 35,
+          "frames_won": 22,
+          "win_percentage": 62.9,
+          "matches_played_percentage": 23.3,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 45,
+          "player_name": "Shishiveni Simon",
+          "frames_played": 35,
+          "frames_won": 22,
+          "win_percentage": 62.9,
+          "matches_played_percentage": 23.3,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 46,
+          "player_name": "Michel McNab",
+          "frames_played": 44,
+          "frames_won": 22,
+          "win_percentage": 50,
+          "matches_played_percentage": 33.3,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 47,
+          "player_name": "Cecil Goliath",
+          "frames_played": 48,
+          "frames_won": 22,
+          "win_percentage": 45.8,
+          "matches_played_percentage": 36.7,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 48,
+          "player_name": "Romano Beukes",
+          "frames_played": 48,
+          "frames_won": 22,
+          "win_percentage": 45.8,
+          "matches_played_percentage": 40,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 49,
+          "player_name": "Marco Izaaks",
+          "frames_played": 52,
+          "frames_won": 22,
+          "win_percentage": 42.3,
+          "matches_played_percentage": 36.7,
+          "team_name": "007-Central"
+        },
+        {
+          "position": 50,
+          "player_name": "Haimbodi Moses",
+          "frames_played": 43,
+          "frames_won": 21,
+          "win_percentage": 48.8,
+          "matches_played_percentage": 36.7,
+          "team_name": "Ofifiya"
+        },
+        {
+          "position": 51,
+          "player_name": "Alfredo de Klerk",
+          "frames_played": 31,
+          "frames_won": 20,
+          "win_percentage": 64.5,
+          "matches_played_percentage": 26.7,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 52,
+          "player_name": "Ignatius van Wyk",
+          "frames_played": 36,
+          "frames_won": 20,
+          "win_percentage": 55.6,
+          "matches_played_percentage": 26.7,
+          "team_name": "RPC"
+        },
+        {
+          "position": 53,
+          "player_name": "Marihano Bayer",
+          "frames_played": 43,
+          "frames_won": 20,
+          "win_percentage": 46.5,
+          "matches_played_percentage": 30,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 54,
+          "player_name": "Ricardo van Wyk",
+          "frames_played": 33,
+          "frames_won": 19,
+          "win_percentage": 57.6,
+          "matches_played_percentage": 30,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 55,
+          "player_name": "Nathaniel Henkert",
+          "frames_played": 42,
+          "frames_won": 19,
+          "win_percentage": 45.2,
+          "matches_played_percentage": 46.7,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 56,
+          "player_name": "Carlos Cloete",
+          "frames_played": 50,
+          "frames_won": 19,
+          "win_percentage": 38,
+          "matches_played_percentage": 36.7,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 57,
+          "player_name": "Clifford Fisch",
+          "frames_played": 27,
+          "frames_won": 18,
+          "win_percentage": 66.7,
+          "matches_played_percentage": 23.3,
+          "team_name": "RPC"
+        },
+        {
+          "position": 58,
+          "player_name": "Theunis Dreyer",
+          "frames_played": 28,
+          "frames_won": 18,
+          "win_percentage": 64.3,
+          "matches_played_percentage": 26.7,
+          "team_name": "Pool Pirates"
+        },
+        {
+          "position": 59,
+          "player_name": "Moses Valombola",
+          "frames_played": 35,
+          "frames_won": 18,
+          "win_percentage": 51.4,
+          "matches_played_percentage": 23.3,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 60,
+          "player_name": "Amor Loxton",
+          "frames_played": 42,
+          "frames_won": 18,
+          "win_percentage": 42.9,
+          "matches_played_percentage": 33.3,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 61,
+          "player_name": "Monja Goethje",
+          "frames_played": 56,
+          "frames_won": 18,
+          "win_percentage": 32.1,
+          "matches_played_percentage": 43.3,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 62,
+          "player_name": "Faizel Paulse",
+          "frames_played": 37,
+          "frames_won": 17,
+          "win_percentage": 45.9,
+          "matches_played_percentage": 26.7,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 63,
+          "player_name": "Ethan van Wyk",
+          "frames_played": 47,
+          "frames_won": 17,
+          "win_percentage": 36.2,
+          "matches_played_percentage": 33.3,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 64,
+          "player_name": "Anel Brink",
+          "frames_played": 52,
+          "frames_won": 17,
+          "win_percentage": 32.7,
+          "matches_played_percentage": 40,
+          "team_name": "Queen Cues"
+        },
+        {
+          "position": 65,
+          "player_name": "Altta Fölscher",
+          "frames_played": 61,
+          "frames_won": 17,
+          "win_percentage": 27.9,
+          "matches_played_percentage": 43.3,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 66,
+          "player_name": "Dyllan Loxton",
+          "frames_played": 30,
+          "frames_won": 16,
+          "win_percentage": 53.3,
+          "matches_played_percentage": 23.3,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 67,
+          "player_name": "Vernon Kloppers",
+          "frames_played": 30,
+          "frames_won": 16,
+          "win_percentage": 53.3,
+          "matches_played_percentage": 20,
+          "team_name": "007-Central"
+        },
+        {
+          "position": 68,
+          "player_name": "Shailey Jenneker",
+          "frames_played": 38,
+          "frames_won": 16,
+          "win_percentage": 42.1,
+          "matches_played_percentage": 26.7,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 69,
+          "player_name": "Geraldo Liebenberg",
+          "frames_played": 39,
+          "frames_won": 16,
+          "win_percentage": 41,
+          "matches_played_percentage": 40,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 70,
+          "player_name": "Ivan Groenewaldt",
+          "frames_played": 40,
+          "frames_won": 16,
+          "win_percentage": 40,
+          "matches_played_percentage": 36.7,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 71,
+          "player_name": "Reino Nasilowski",
+          "frames_played": 23,
+          "frames_won": 15,
+          "win_percentage": 65.2,
+          "matches_played_percentage": 16.7,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 72,
+          "player_name": "Jadon du Plessis",
+          "frames_played": 27,
+          "frames_won": 15,
+          "win_percentage": 55.6,
+          "matches_played_percentage": 20,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 73,
+          "player_name": "Armando Louw",
+          "frames_played": 28,
+          "frames_won": 15,
+          "win_percentage": 53.6,
+          "matches_played_percentage": 26.7,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 74,
+          "player_name": "Zaiden Thys",
+          "frames_played": 42,
+          "frames_won": 15,
+          "win_percentage": 35.7,
+          "matches_played_percentage": 36.7,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 75,
+          "player_name": "Cindy Engelbrecht",
+          "frames_played": 59,
+          "frames_won": 15,
+          "win_percentage": 25.4,
+          "matches_played_percentage": 43.3,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 76,
+          "player_name": "Kumbiraishe Dongo",
+          "frames_played": 20,
+          "frames_won": 14,
+          "win_percentage": 70,
+          "matches_played_percentage": 13.3,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 77,
+          "player_name": "Leandra Bock",
+          "frames_played": 40,
+          "frames_won": 14,
+          "win_percentage": 35,
+          "matches_played_percentage": 30,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 78,
+          "player_name": "Coenraad Maritz",
+          "frames_played": 50,
+          "frames_won": 14,
+          "win_percentage": 28,
+          "matches_played_percentage": 33.3,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 79,
+          "player_name": "Curtis Izaaks",
+          "frames_played": 28,
+          "frames_won": 13,
+          "win_percentage": 46.4,
+          "matches_played_percentage": 20,
+          "team_name": "007-Central"
+        },
+        {
+          "position": 80,
+          "player_name": "Giovanni van Wyk",
+          "frames_played": 30,
+          "frames_won": 13,
+          "win_percentage": 43.3,
+          "matches_played_percentage": 26.7,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 81,
+          "player_name": "Andries de Jager",
+          "frames_played": 38,
+          "frames_won": 13,
+          "win_percentage": 34.2,
+          "matches_played_percentage": 33.3,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 82,
+          "player_name": "Deyante Olivier",
+          "frames_played": 21,
+          "frames_won": 12,
+          "win_percentage": 57.1,
+          "matches_played_percentage": 16.7,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 83,
+          "player_name": "Lloyd Chingozi",
+          "frames_played": 21,
+          "frames_won": 12,
+          "win_percentage": 57.1,
+          "matches_played_percentage": 16.7,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 84,
+          "player_name": "Genre Schmidt",
+          "frames_played": 24,
+          "frames_won": 12,
+          "win_percentage": 50,
+          "matches_played_percentage": 20,
+          "team_name": "RPC"
+        },
+        {
+          "position": 85,
+          "player_name": "Carlington Mugari",
+          "frames_played": 25,
+          "frames_won": 12,
+          "win_percentage": 48,
+          "matches_played_percentage": 16.7,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 86,
+          "player_name": "Paul Preller",
+          "frames_played": 27,
+          "frames_won": 12,
+          "win_percentage": 44.4,
+          "matches_played_percentage": 26.7,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 87,
+          "player_name": "India van Wyk",
+          "frames_played": 39,
+          "frames_won": 12,
+          "win_percentage": 30.8,
+          "matches_played_percentage": 30,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 88,
+          "player_name": "Gerson Shehamange",
+          "frames_played": 19,
+          "frames_won": 11,
+          "win_percentage": 57.9,
+          "matches_played_percentage": 23.3,
+          "team_name": "Ofifiya"
+        },
+        {
+          "position": 89,
+          "player_name": "Hugo de Koe (Snr)",
+          "frames_played": 21,
+          "frames_won": 11,
+          "win_percentage": 52.4,
+          "matches_played_percentage": 16.7,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 90,
+          "player_name": "Jayden van Rensberg",
+          "frames_played": 22,
+          "frames_won": 11,
+          "win_percentage": 50,
+          "matches_played_percentage": 16.7,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 91,
+          "player_name": "Theo Thalwitzer",
+          "frames_played": 26,
+          "frames_won": 11,
+          "win_percentage": 42.3,
+          "matches_played_percentage": 23.3,
+          "team_name": "Pool Pirates"
+        },
+        {
+          "position": 92,
+          "player_name": "Weston Bester",
+          "frames_played": 26,
+          "frames_won": 11,
+          "win_percentage": 42.3,
+          "matches_played_percentage": 20,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 93,
+          "player_name": "John Cambell",
+          "frames_played": 17,
+          "frames_won": 10,
+          "win_percentage": 58.8,
+          "matches_played_percentage": 16.7,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 94,
+          "player_name": "Quinton Swartz",
+          "frames_played": 24,
+          "frames_won": 10,
+          "win_percentage": 41.7,
+          "matches_played_percentage": 20,
+          "team_name": "RPC"
+        },
+        {
+          "position": 95,
+          "player_name": "Robert Brink",
+          "frames_played": 25,
+          "frames_won": 10,
+          "win_percentage": 40,
+          "matches_played_percentage": 16.7,
+          "team_name": "Queen Cues"
+        },
+        {
+          "position": 96,
+          "player_name": "John Olivier",
+          "frames_played": 12,
+          "frames_won": 9,
+          "win_percentage": 75,
+          "matches_played_percentage": 13.3,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 97,
+          "player_name": "Jeanine Kloppers",
+          "frames_played": 15,
+          "frames_won": 9,
+          "win_percentage": 60,
+          "matches_played_percentage": 13.3,
+          "team_name": "Queen Cues"
+        },
+        {
+          "position": 98,
+          "player_name": "Victor Saboi",
+          "frames_played": 17,
+          "frames_won": 9,
+          "win_percentage": 52.9,
+          "matches_played_percentage": 13.3,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 99,
+          "player_name": "Charles Brandt",
+          "frames_played": 21,
+          "frames_won": 9,
+          "win_percentage": 42.9,
+          "matches_played_percentage": 16.7,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 100,
+          "player_name": "Morne Beukes",
+          "frames_played": 21,
+          "frames_won": 9,
+          "win_percentage": 42.9,
+          "matches_played_percentage": 16.7,
+          "team_name": "RPC"
+        },
+        {
+          "position": 101,
+          "player_name": "Bradley Adams",
+          "frames_played": 26,
+          "frames_won": 9,
+          "win_percentage": 34.6,
+          "matches_played_percentage": 23.3,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 102,
+          "player_name": "Tangeni Andreas",
+          "frames_played": 10,
+          "frames_won": 8,
+          "win_percentage": 80,
+          "matches_played_percentage": 6.7,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 103,
+          "player_name": "Anesu Sheki",
+          "frames_played": 12,
+          "frames_won": 8,
+          "win_percentage": 66.7,
+          "matches_played_percentage": 10,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 104,
+          "player_name": "Eldorado Hammerslagt",
+          "frames_played": 17,
+          "frames_won": 8,
+          "win_percentage": 47.1,
+          "matches_played_percentage": 13.3,
+          "team_name": "RPC"
+        },
+        {
+          "position": 105,
+          "player_name": "Tawanda Mhosva",
+          "frames_played": 18,
+          "frames_won": 8,
+          "win_percentage": 44.4,
+          "matches_played_percentage": 16.7,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 106,
+          "player_name": "Gelvanus Kariseb",
+          "frames_played": 24,
+          "frames_won": 8,
+          "win_percentage": 33.3,
+          "matches_played_percentage": 20,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 107,
+          "player_name": "Gabriel Uuyage",
+          "frames_played": 10,
+          "frames_won": 7,
+          "win_percentage": 70,
+          "matches_played_percentage": 6.7,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 108,
+          "player_name": "Gerson Mushete",
+          "frames_played": 10,
+          "frames_won": 7,
+          "win_percentage": 70,
+          "matches_played_percentage": 6.7,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 109,
+          "player_name": "Uasekuena",
+          "frames_played": 12,
+          "frames_won": 7,
+          "win_percentage": 58.3,
+          "matches_played_percentage": 10,
+          "team_name": "007-Central"
+        },
+        {
+          "position": 110,
+          "player_name": "Bruno Hegner",
+          "frames_played": 17,
+          "frames_won": 7,
+          "win_percentage": 41.2,
+          "matches_played_percentage": 16.7,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 111,
+          "player_name": "Beverley-Rae Henckert",
+          "frames_played": 18,
+          "frames_won": 7,
+          "win_percentage": 38.9,
+          "matches_played_percentage": 23.3,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 112,
+          "player_name": "Lejean Louw",
+          "frames_played": 19,
+          "frames_won": 7,
+          "win_percentage": 36.8,
+          "matches_played_percentage": 16.7,
+          "team_name": "RPC"
+        },
+        {
+          "position": 113,
+          "player_name": "David Groenewaldt",
+          "frames_played": 21,
+          "frames_won": 7,
+          "win_percentage": 33.3,
+          "matches_played_percentage": 23.3,
+          "team_name": "RPC"
+        },
+        {
+          "position": 114,
+          "player_name": "Benjamin van Niekerk",
+          "frames_played": 22,
+          "frames_won": 7,
+          "win_percentage": 31.8,
+          "matches_played_percentage": 20,
+          "team_name": "Pool Pirates"
+        },
+        {
+          "position": 115,
+          "player_name": "Serge du Plessis",
+          "frames_played": 25,
+          "frames_won": 7,
+          "win_percentage": 28,
+          "matches_played_percentage": 23.3,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 116,
+          "player_name": "Denivo Olivier",
+          "frames_played": 12,
+          "frames_won": 6,
+          "win_percentage": 50,
+          "matches_played_percentage": 13.3,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 117,
+          "player_name": "Phillip Nangula",
+          "frames_played": 19,
+          "frames_won": 6,
+          "win_percentage": 31.6,
+          "matches_played_percentage": 16.7,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 118,
+          "player_name": "Cameron Brandt",
+          "frames_played": 25,
+          "frames_won": 6,
+          "win_percentage": 24,
+          "matches_played_percentage": 20,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 119,
+          "player_name": "Presley",
+          "frames_played": 25,
+          "frames_won": 6,
+          "win_percentage": 24,
+          "matches_played_percentage": 16.7,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 120,
+          "player_name": "Johannes van Zyl",
+          "frames_played": 28,
+          "frames_won": 6,
+          "win_percentage": 21.4,
+          "matches_played_percentage": 30,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 121,
+          "player_name": "Anthony van Wyk",
+          "frames_played": 5,
+          "frames_won": 5,
+          "win_percentage": 100,
+          "matches_played_percentage": 3.3,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 122,
+          "player_name": "Wendel Meyer",
+          "frames_played": 5,
+          "frames_won": 5,
+          "win_percentage": 100,
+          "matches_played_percentage": 3.3,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 123,
+          "player_name": "Maurice Gariseb",
+          "frames_played": 18,
+          "frames_won": 5,
+          "win_percentage": 27.8,
+          "matches_played_percentage": 13.3,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 124,
+          "player_name": "Joe-Marie Bull",
+          "frames_played": 26,
+          "frames_won": 5,
+          "win_percentage": 19.2,
+          "matches_played_percentage": 26.7,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 125,
+          "player_name": "Annelie Dreyer",
+          "frames_played": 32,
+          "frames_won": 5,
+          "win_percentage": 15.6,
+          "matches_played_percentage": 33.3,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 126,
+          "player_name": "Simon Shivela",
+          "frames_played": 5,
+          "frames_won": 4,
+          "win_percentage": 80,
+          "matches_played_percentage": 3.3,
+          "team_name": "Tura Boys"
+        },
+        {
+          "position": 127,
+          "player_name": "Eliasel Lungamein",
+          "frames_played": 10,
+          "frames_won": 4,
+          "win_percentage": 40,
+          "matches_played_percentage": 10,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 128,
+          "player_name": "Kaylro Strauss",
+          "frames_played": 16,
+          "frames_won": 4,
+          "win_percentage": 25,
+          "matches_played_percentage": 20,
+          "team_name": "RPC"
+        },
+        {
+          "position": 129,
+          "player_name": "Striker Mashina",
+          "frames_played": 5,
+          "frames_won": 3,
+          "win_percentage": 60,
+          "matches_played_percentage": 3.3,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 130,
+          "player_name": "Kail Berry",
+          "frames_played": 8,
+          "frames_won": 3,
+          "win_percentage": 37.5,
+          "matches_played_percentage": 6.7,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 131,
+          "player_name": "Cureso Cano Bull",
+          "frames_played": 15,
+          "frames_won": 3,
+          "win_percentage": 20,
+          "matches_played_percentage": 10,
+          "team_name": "YOPC 1"
+        },
+        {
+          "position": 132,
+          "player_name": "Lee-Ann Liebenberg",
+          "frames_played": 22,
+          "frames_won": 3,
+          "win_percentage": 13.6,
+          "matches_played_percentage": 16.7,
+          "team_name": "Rack Royalty"
+        },
+        {
+          "position": 133,
+          "player_name": "Amy Micaela Dollenberg",
+          "frames_played": 25,
+          "frames_won": 3,
+          "win_percentage": 12,
+          "matches_played_percentage": 33.3,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 134,
+          "player_name": "Mark Swanepoel",
+          "frames_played": 2,
+          "frames_won": 2,
+          "win_percentage": 100,
+          "matches_played_percentage": 3.3,
+          "team_name": "Pocket Kings NA"
+        },
+        {
+          "position": 135,
+          "player_name": "Wynand Izaks",
+          "frames_played": 2,
+          "frames_won": 2,
+          "win_percentage": 100,
+          "matches_played_percentage": 3.3,
+          "team_name": "Precision 7"
+        },
+        {
+          "position": 136,
+          "player_name": "Shipanga Nelson",
+          "frames_played": 5,
+          "frames_won": 2,
+          "win_percentage": 40,
+          "matches_played_percentage": 3.3,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 137,
+          "player_name": "Giovanni Delie",
+          "frames_played": 6,
+          "frames_won": 2,
+          "win_percentage": 33.3,
+          "matches_played_percentage": 6.7,
+          "team_name": "RPC"
+        },
+        {
+          "position": 138,
+          "player_name": "Justin Coetzee",
+          "frames_played": 6,
+          "frames_won": 2,
+          "win_percentage": 33.3,
+          "matches_played_percentage": 10,
+          "team_name": "RPC"
+        },
+        {
+          "position": 139,
+          "player_name": "Trizell Louw",
+          "frames_played": 2,
+          "frames_won": 1,
+          "win_percentage": 50,
+          "matches_played_percentage": 3.3,
+          "team_name": "RPC"
+        },
+        {
+          "position": 140,
+          "player_name": "Andries van Zyl",
+          "frames_played": 5,
+          "frames_won": 1,
+          "win_percentage": 20,
+          "matches_played_percentage": 6.7,
+          "team_name": "Cue Crew"
+        },
+        {
+          "position": 141,
+          "player_name": "Birte Brockerholt",
+          "frames_played": 5,
+          "frames_won": 1,
+          "win_percentage": 20,
+          "matches_played_percentage": 6.7,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 142,
+          "player_name": "Tichafara Gabi",
+          "frames_played": 7,
+          "frames_won": 1,
+          "win_percentage": 14.3,
+          "matches_played_percentage": 10,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 143,
+          "player_name": "Keanon Ellitson",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "YOPC 2"
+        },
+        {
+          "position": 144,
+          "player_name": "Levi Konghola",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "RPC"
+        },
+        {
+          "position": 145,
+          "player_name": "Roberts Kandimuine",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 146,
+          "player_name": "Stanley Shikwambi",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "Joga Bonita"
+        },
+        {
+          "position": 147,
+          "player_name": "Thierry Beia",
+          "frames_played": 2,
+          "frames_won": 0,
+          "win_percentage": 0,
+          "matches_played_percentage": 3.3,
+          "team_name": "Cattle Country"
+        },
+        {
+          "position": 148,
+          "player_name": "Nicky van Niekerk",
+          "frames_played": 4,
+          "frames_won": 0,
+          "win_percentage": 0,
+          "matches_played_percentage": 6.7,
+          "team_name": "Blackball Bandits"
+        },
+        {
+          "position": 149,
+          "player_name": "Simiso Ndlovu",
+          "frames_played": 7,
+          "frames_won": 0,
+          "win_percentage": 0,
+          "matches_played_percentage": 6.7,
+          "team_name": "Cattle Country"
+        }
+      ]
+    },
+    {
+      "division": "coastal",
+      "players": [
+        {
+          "position": 1,
+          "player_name": "Bertram Kloppers",
+          "frames_played": 40,
+          "frames_won": 30,
+          "win_percentage": 75,
+          "matches_played_percentage": 26.7,
+          "team_name": "007 - Coastal"
+        },
+        {
+          "position": 2,
+          "player_name": "Wilhelm Katana",
+          "frames_played": 41,
+          "frames_won": 30,
+          "win_percentage": 73.2,
+          "matches_played_percentage": 30,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 3,
+          "player_name": "Nikanor Shiteni",
+          "frames_played": 45,
+          "frames_won": 30,
+          "win_percentage": 66.7,
+          "matches_played_percentage": 30,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 4,
+          "player_name": "Jason Shimbango",
+          "frames_played": 45,
+          "frames_won": 30,
+          "win_percentage": 66.7,
+          "matches_played_percentage": 30,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 5,
+          "player_name": "Kennedy Enkali",
+          "frames_played": 40,
+          "frames_won": 29,
+          "win_percentage": 72.5,
+          "matches_played_percentage": 23.3,
+          "team_name": "Celtic"
+        },
+        {
+          "position": 6,
+          "player_name": "Warren Smith",
+          "frames_played": 35,
+          "frames_won": 27,
+          "win_percentage": 77.1,
+          "matches_played_percentage": 23.3,
+          "team_name": "Atomic 5"
+        },
+        {
+          "position": 7,
+          "player_name": "Andreas Hauwanga",
+          "frames_played": 35,
+          "frames_won": 26,
+          "win_percentage": 74.3,
+          "matches_played_percentage": 20,
+          "team_name": "Celtic"
+        },
+        {
+          "position": 8,
+          "player_name": "Leon Kolz",
+          "frames_played": 30,
+          "frames_won": 25,
+          "win_percentage": 83.3,
+          "matches_played_percentage": 16.7,
+          "team_name": "Celtic"
+        },
+        {
+          "position": 9,
+          "player_name": "Fillipus Wakambalala",
+          "frames_played": 39,
+          "frames_won": 25,
+          "win_percentage": 64.1,
+          "matches_played_percentage": 26.7,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 10,
+          "player_name": "David van Neel",
+          "frames_played": 50,
+          "frames_won": 25,
+          "win_percentage": 50,
+          "matches_played_percentage": 33.3,
+          "team_name": "Sparta"
+        },
+        {
+          "position": 11,
+          "player_name": "Thimoteus Heelu",
+          "frames_played": 34,
+          "frames_won": 23,
+          "win_percentage": 67.6,
+          "matches_played_percentage": 26.7,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 12,
+          "player_name": "Cyril Möller",
+          "frames_played": 40,
+          "frames_won": 23,
+          "win_percentage": 57.5,
+          "matches_played_percentage": 23.3,
+          "team_name": "Celtic"
+        },
+        {
+          "position": 13,
+          "player_name": "Lee-Heino van Rooi",
+          "frames_played": 35,
+          "frames_won": 21,
+          "win_percentage": 60,
+          "matches_played_percentage": 23.3,
+          "team_name": "Atomic 5"
+        },
+        {
+          "position": 14,
+          "player_name": "D’Lano van Wyk",
+          "frames_played": 37,
+          "frames_won": 21,
+          "win_percentage": 56.8,
+          "matches_played_percentage": 26.7,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 15,
+          "player_name": "Aldo Loxton",
+          "frames_played": 40,
+          "frames_won": 21,
+          "win_percentage": 52.5,
+          "matches_played_percentage": 26.7,
+          "team_name": "West Coast"
+        },
+        {
+          "position": 16,
+          "player_name": "Tyrone Vogel",
+          "frames_played": 50,
+          "frames_won": 21,
+          "win_percentage": 42,
+          "matches_played_percentage": 33.3,
+          "team_name": "Sparta"
+        },
+        {
+          "position": 17,
+          "player_name": "Tangeni Johannes",
+          "frames_played": 29,
+          "frames_won": 20,
+          "win_percentage": 69,
+          "matches_played_percentage": 26.7,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 18,
+          "player_name": "Rudolf Koopman",
+          "frames_played": 35,
+          "frames_won": 20,
+          "win_percentage": 57.1,
+          "matches_played_percentage": 23.3,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 19,
+          "player_name": "Vivian Koopman",
+          "frames_played": 40,
+          "frames_won": 20,
+          "win_percentage": 50,
+          "matches_played_percentage": 26.7,
+          "team_name": "West Coast"
+        },
+        {
+          "position": 20,
+          "player_name": "John Claasen",
+          "frames_played": 50,
+          "frames_won": 20,
+          "win_percentage": 40,
+          "matches_played_percentage": 33.3,
+          "team_name": "Sparta"
+        },
+        {
+          "position": 21,
+          "player_name": "Waquar Satar",
+          "frames_played": 35,
+          "frames_won": 19,
+          "win_percentage": 54.3,
+          "matches_played_percentage": 23.3,
+          "team_name": "Atomic 5"
+        },
+        {
+          "position": 22,
+          "player_name": "Robert Erasmus",
+          "frames_played": 30,
+          "frames_won": 18,
+          "win_percentage": 60,
+          "matches_played_percentage": 20,
+          "team_name": "Atomic 5"
+        },
+        {
+          "position": 23,
+          "player_name": "Franklin Visagie",
+          "frames_played": 25,
+          "frames_won": 16,
+          "win_percentage": 64,
+          "matches_played_percentage": 20,
+          "team_name": "West Coast"
+        },
+        {
+          "position": 24,
+          "player_name": "Brian Anderson",
+          "frames_played": 35,
+          "frames_won": 16,
+          "win_percentage": 45.7,
+          "matches_played_percentage": 23.3,
+          "team_name": "Atomic 5"
+        },
+        {
+          "position": 25,
+          "player_name": "Shaun Maasdorp",
+          "frames_played": 32,
+          "frames_won": 15,
+          "win_percentage": 46.9,
+          "matches_played_percentage": 23.3,
+          "team_name": "007 - Coastal"
+        },
+        {
+          "position": 26,
+          "player_name": "Cyril Möller (Jnr)",
+          "frames_played": 32,
+          "frames_won": 14,
+          "win_percentage": 43.8,
+          "matches_played_percentage": 20,
+          "team_name": "Celtic"
+        },
+        {
+          "position": 27,
+          "player_name": "Reinhold Ipinge",
+          "frames_played": 15,
+          "frames_won": 13,
+          "win_percentage": 86.7,
+          "matches_played_percentage": 10,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 28,
+          "player_name": "Augustineus Endjala",
+          "frames_played": 20,
+          "frames_won": 13,
+          "win_percentage": 65,
+          "matches_played_percentage": 13.3,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 29,
+          "player_name": "Reginald van Wyk",
+          "frames_played": 22,
+          "frames_won": 13,
+          "win_percentage": 59.1,
+          "matches_played_percentage": 16.7,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 30,
+          "player_name": "Jaden",
+          "frames_played": 26,
+          "frames_won": 12,
+          "win_percentage": 46.2,
+          "matches_played_percentage": 20,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 31,
+          "player_name": "Elrizza Koopman",
+          "frames_played": 40,
+          "frames_won": 12,
+          "win_percentage": 30,
+          "matches_played_percentage": 26.7,
+          "team_name": "West Coast"
+        },
+        {
+          "position": 32,
+          "player_name": "Bernardus T. Grobler",
+          "frames_played": 25,
+          "frames_won": 11,
+          "win_percentage": 44,
+          "matches_played_percentage": 16.7,
+          "team_name": "Sparta"
+        },
+        {
+          "position": 33,
+          "player_name": "Aschlin Losper",
+          "frames_played": 28,
+          "frames_won": 10,
+          "win_percentage": 35.7,
+          "matches_played_percentage": 20,
+          "team_name": "007 - Coastal"
+        },
+        {
+          "position": 34,
+          "player_name": "Justin Burns",
+          "frames_played": 27,
+          "frames_won": 9,
+          "win_percentage": 33.3,
+          "matches_played_percentage": 20,
+          "team_name": "007 - Coastal"
+        },
+        {
+          "position": 35,
+          "player_name": "Omar McNab",
+          "frames_played": 30,
+          "frames_won": 9,
+          "win_percentage": 30,
+          "matches_played_percentage": 20,
+          "team_name": "007 - Coastal"
+        },
+        {
+          "position": 36,
+          "player_name": "Joey Rickets",
+          "frames_played": 15,
+          "frames_won": 8,
+          "win_percentage": 53.3,
+          "matches_played_percentage": 10,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 37,
+          "player_name": "Romario Schwartz",
+          "frames_played": 45,
+          "frames_won": 8,
+          "win_percentage": 17.8,
+          "matches_played_percentage": 30,
+          "team_name": "Sparta"
+        },
+        {
+          "position": 38,
+          "player_name": "Connery Pienaar",
+          "frames_played": 18,
+          "frames_won": 7,
+          "win_percentage": 38.9,
+          "matches_played_percentage": 20,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 39,
+          "player_name": "Leon Beukes",
+          "frames_played": 20,
+          "frames_won": 7,
+          "win_percentage": 35,
+          "matches_played_percentage": 20,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 40,
+          "player_name": "Ethan van Rooi",
+          "frames_played": 28,
+          "frames_won": 7,
+          "win_percentage": 25,
+          "matches_played_percentage": 20,
+          "team_name": "007 - Coastal"
+        },
+        {
+          "position": 41,
+          "player_name": "Wade",
+          "frames_played": 15,
+          "frames_won": 6,
+          "win_percentage": 40,
+          "matches_played_percentage": 10,
+          "team_name": "Sparta"
+        },
+        {
+          "position": 42,
+          "player_name": "Juandro van Rooi",
+          "frames_played": 25,
+          "frames_won": 6,
+          "win_percentage": 24,
+          "matches_played_percentage": 16.7,
+          "team_name": "West Coast"
+        },
+        {
+          "position": 43,
+          "player_name": "Johannes Haludilu",
+          "frames_played": 10,
+          "frames_won": 5,
+          "win_percentage": 50,
+          "matches_played_percentage": 6.7,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 44,
+          "player_name": "Johny",
+          "frames_played": 10,
+          "frames_won": 5,
+          "win_percentage": 50,
+          "matches_played_percentage": 6.7,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 45,
+          "player_name": "Likeus Nauyoma",
+          "frames_played": 5,
+          "frames_won": 4,
+          "win_percentage": 80,
+          "matches_played_percentage": 3.3,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 46,
+          "player_name": "Ashwan Loxton",
+          "frames_played": 25,
+          "frames_won": 4,
+          "win_percentage": 16,
+          "matches_played_percentage": 20,
+          "team_name": "West Coast"
+        },
+        {
+          "position": 47,
+          "player_name": "Jacques",
+          "frames_played": 5,
+          "frames_won": 3,
+          "win_percentage": 60,
+          "matches_played_percentage": 3.3,
+          "team_name": "007 - Coastal"
+        },
+        {
+          "position": 48,
+          "player_name": "Thisbe Murorua",
+          "frames_played": 14,
+          "frames_won": 3,
+          "win_percentage": 21.4,
+          "matches_played_percentage": 13.3,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 49,
+          "player_name": "Daniel",
+          "frames_played": 5,
+          "frames_won": 2,
+          "win_percentage": 40,
+          "matches_played_percentage": 3.3,
+          "team_name": "Sparta"
+        },
+        {
+          "position": 50,
+          "player_name": "Pombili Kahenge",
+          "frames_played": 5,
+          "frames_won": 2,
+          "win_percentage": 40,
+          "matches_played_percentage": 3.3,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 51,
+          "player_name": "Matheus Amoolongo",
+          "frames_played": 5,
+          "frames_won": 2,
+          "win_percentage": 40,
+          "matches_played_percentage": 3.3,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 52,
+          "player_name": "Jeremy",
+          "frames_played": 8,
+          "frames_won": 2,
+          "win_percentage": 25,
+          "matches_played_percentage": 10,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 53,
+          "player_name": "Zibiso Limbo",
+          "frames_played": 10,
+          "frames_won": 2,
+          "win_percentage": 20,
+          "matches_played_percentage": 6.7,
+          "team_name": "Sparta"
+        },
+        {
+          "position": 54,
+          "player_name": "Anton Strauss",
+          "frames_played": 13,
+          "frames_won": 2,
+          "win_percentage": 15.4,
+          "matches_played_percentage": 6.7,
+          "team_name": "Celtic"
+        },
+        {
+          "position": 55,
+          "player_name": "Yvette",
+          "frames_played": 1,
+          "frames_won": 1,
+          "win_percentage": 100,
+          "matches_played_percentage": 3.3,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 56,
+          "player_name": "Afrika Kuhatumwa",
+          "frames_played": 5,
+          "frames_won": 1,
+          "win_percentage": 20,
+          "matches_played_percentage": 3.3,
+          "team_name": "Celtic"
+        },
+        {
+          "position": 57,
+          "player_name": "Clavin Mbawa",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "Coastal Waves"
+        },
+        {
+          "position": 58,
+          "player_name": "Christeline de Klerk",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "West Coast"
+        },
+        {
+          "position": 59,
+          "player_name": "Harmony Musweu",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 60,
+          "player_name": "Stefanus Angula",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 61,
+          "player_name": "Gideon Nankudhu",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 62,
+          "player_name": "Collin Bougardt",
+          "frames_played": 0,
+          "frames_won": 0,
+          "win_percentage": null,
+          "matches_played_percentage": 0,
+          "team_name": "Celtic"
+        },
+        {
+          "position": 63,
+          "player_name": "Matheus Onesmus",
+          "frames_played": 1,
+          "frames_won": 0,
+          "win_percentage": 0,
+          "matches_played_percentage": 3.3,
+          "team_name": "Coastal Suns"
+        },
+        {
+          "position": 64,
+          "player_name": "Ruzaan Möller",
+          "frames_played": 5,
+          "frames_won": 0,
+          "win_percentage": 0,
+          "matches_played_percentage": 3.3,
+          "team_name": "Celtic"
+        }
+      ]
+    }
+  ]
+}

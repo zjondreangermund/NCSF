@@ -9,6 +9,7 @@ const express = require("express");
 const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
 const { Pool } = require("pg");
+const officialPlayerLogs = require("./data/official-player-logs-2026-06-09.json");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const helmet = require("helmet");
@@ -209,6 +210,14 @@ async function initDatabase() {
       bonus_points INTEGER NOT NULL, total_points INTEGER NOT NULL,
       source TEXT NOT NULL DEFAULT 'OFFICIAL', updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY(division_id,team_id)
+    );
+    CREATE TABLE IF NOT EXISTS division_player_standing_snapshots (
+      division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL, player_name TEXT NOT NULL, team_name TEXT NOT NULL,
+      frames_played INTEGER NOT NULL, frames_won INTEGER NOT NULL,
+      win_percentage NUMERIC(5,1), matches_played_percentage NUMERIC(5,1) NOT NULL,
+      source TEXT NOT NULL, source_date DATE NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(division_id,position)
     );
     CREATE TABLE IF NOT EXISTS fixture_lineups (
       fixture_id INTEGER NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
@@ -789,6 +798,51 @@ async function setupCentralDivisionAndSchedule() {
 }
 
 
+async function seedOfficialPlayerLogSnapshots() {
+  const migrationKey="official-player-logs-2026-06-09-v1";
+  const already=await pool.query("SELECT 1 FROM app_migrations WHERE key=$1",[migrationKey]);
+  if(already.rowCount)return;
+  const client=await pool.connect();
+  try{
+    await client.query("BEGIN");
+    for(const divisionLog of officialPlayerLogs.divisions){
+      const wantedName=divisionLog.division;
+      const division=await client.query(`
+        SELECT id FROM divisions
+        WHERE LOWER(name)=LOWER($1) OR LOWER(name)=LOWER($1)||' zone'
+        ORDER BY CASE WHEN LOWER(name)=LOWER($1) THEN 0 ELSE 1 END,active DESC,id
+        LIMIT 1
+      `,[wantedName]);
+      if(!division.rowCount)throw new Error("Division not found for official player log: "+wantedName);
+      const divisionId=division.rows[0].id;
+      await client.query("DELETE FROM division_player_standing_snapshots WHERE division_id=$1",[divisionId]);
+      for(const player of divisionLog.players){
+        await client.query(`
+          INSERT INTO division_player_standing_snapshots
+            (division_id,position,player_name,team_name,frames_played,frames_won,
+             win_percentage,matches_played_percentage,source,source_date)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `,[
+          divisionId,player.position,player.player_name,player.team_name,
+          player.frames_played,player.frames_won,player.win_percentage,
+          player.matches_played_percentage,
+          "OFFICIAL_"+wantedName.toUpperCase()+"_PLAYER_LOG_2026-06-09",
+          officialPlayerLogs.asOf
+        ]);
+      }
+    }
+    await client.query("INSERT INTO app_migrations(key) VALUES($1)",[migrationKey]);
+    await client.query("COMMIT");
+    console.log("Imported official Central and Coastal player log snapshots dated 2026-06-09.");
+  }catch(error){
+    await client.query("ROLLBACK");
+    throw error;
+  }finally{
+    client.release();
+  }
+}
+
+
 async function seedCentralTop8AndOfficialStandings() {
   const key="central-top8-fixtures-official-log-2026-10-17-v1";
   const seen=await pool.query("SELECT 1 FROM app_migrations WHERE key=$1",[key]);
@@ -1247,6 +1301,20 @@ async function getStandings(divisionId) {
 }
 
 async function getIndividualRankings(divisionId) {
+  const official = await pool.query(`
+    SELECT NULL::integer player_id, player_name, NULL::text ncsf_number,
+           team_name, team_name club_name,
+           frames_played, frames_won,
+           (frames_played-frames_won)::int frames_lost,
+           win_percentage::float8 win_percentage,
+           matches_played_percentage::float8 matches_played_percentage,
+           source, source_date::text source_date
+    FROM division_player_standing_snapshots
+    WHERE division_id=$1
+    ORDER BY position
+  `, [divisionId]);
+  if (official.rowCount) return official.rows;
+
   const { rows } = await pool.query(`
     SELECT p.id player_id,
            p.first_name || ' ' || p.last_name player_name,
@@ -1271,7 +1339,6 @@ async function getIndividualRankings(divisionId) {
   `, [divisionId]);
   return rows;
 }
-
 async function fixturePayload(fixture) {
   const [{ rows: lineups }, { rows: reserves }, { rows: frames }, { rows: subs }, { rows: attachments }, { rows: breakRuns }] = await Promise.all([
     pool.query(`
@@ -3422,6 +3489,7 @@ initDatabase()
   .then(setupCentralDivisionAndSchedule)
   .then(correctAtomic5AndImportCoastalSchedule)
   .then(seedCentralTop8AndOfficialStandings)
+  .then(seedOfficialPlayerLogSnapshots)
   .then(() => httpServer.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);

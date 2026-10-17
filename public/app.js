@@ -21,6 +21,12 @@
     return data;
   }
   function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+  function officialLogNote(rankings){
+    const sourceDate=rankings?.[0]?.source_date;
+    if(!sourceDate)return '';
+    const date=new Date(String(sourceDate).slice(0,10)+'T12:00:00');
+    return '<p class="muted official-log-note">Official NCSF player log • as at '+esc(date.toLocaleDateString('en-NA',{day:'numeric',month:'long',year:'numeric'}))+'</p>';
+  }
   function fmtDate(v){
     if(!v)return 'Date TBA';
     const d=new Date(v);
@@ -130,7 +136,7 @@
         api('/api/fixtures?divisionId='+id)
       ]);
       $('#standingsTable').innerHTML=st.standings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Frames For</th><th>Frames Against</th><th>+/-</th><th>Bonus</th><th>Points</th></tr></thead><tbody>${st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td>${r.losses??'—'}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td><td>${r.bonus_points??'—'}</td><td><strong>${r.total_points??'—'}</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Rankings appear after approved score sheets.</div>';
-      $('#playerRankings').innerHTML=pr.rankings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Played</th><th>Won</th><th>Win %</th></tr></thead><tbody>${pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong>${r.ncsf_number?`<br><small class="muted">${esc(r.ncsf_number)}</small>`:''}</td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.win_percentage}%</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Individual rankings appear after approved score sheets.</div>';
+      $('#playerRankings').innerHTML=pr.rankings.length?officialLogNote(pr.rankings)+`<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Frames</th><th>Won</th><th>Lost</th><th>Win %</th><th>Matches %</th></tr></thead><tbody>${pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong>${r.ncsf_number?`<br><small class="muted">${esc(r.ncsf_number)}</small>`:''}</td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${r.win_percentage==null?'—':r.win_percentage+'%'}</td><td>${r.matches_played_percentage==null?'—':r.matches_played_percentage+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Individual rankings appear after approved score sheets.</div>';
       $('#fixtureList').innerHTML=fixtureCards(fx.fixtures,true);
     }catch(err){toast(err.message,true)}
   }
@@ -679,7 +685,7 @@
           ? '<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Frames For</th><th>Frames Against</th><th>+/-</th><th>Bonus</th><th>Points</th></tr></thead><tbody>'+st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td>${r.losses??'—'}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td><td>${r.bonus_points??'—'}</td><td><strong>${r.total_points??'—'}</strong></td></tr>`).join('')+'</tbody></table></div>'
           : '<div class="empty">No approved results yet.</div>';
         $('#fullPlayerRankings').innerHTML=pr.rankings.length
-          ? '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Frames</th><th>Won</th><th>Lost</th><th>Win %</th></tr></thead><tbody>'+pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong><br><small class="muted">${esc(r.ncsf_number||'—')}</small></td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${r.win_percentage}%</td></tr>`).join('')+'</tbody></table></div>'
+          ? officialLogNote(pr.rankings)+'<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Frames</th><th>Won</th><th>Lost</th><th>Win %</th><th>Matches %</th></tr></thead><tbody>'+pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong><br><small class="muted">${esc(r.ncsf_number||'—')}</small></td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${r.win_percentage==null?'—':r.win_percentage+'%'}</td><td>${r.matches_played_percentage==null?'—':r.matches_played_percentage+'%'}</td></tr>`).join('')+'</tbody></table></div>'
           : '<div class="empty">No approved player results yet.</div>';
       }catch(err){toast(err.message,true)}
     };
