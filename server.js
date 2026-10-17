@@ -2924,7 +2924,7 @@ app.get("/api/admin/seasons/:id/print.pdf", requireRoles(ROLE.NCSF), async (req,
   const pages=doc.bufferedPageRange();
   for(let page=pages.start;page<pages.start+pages.count;page++){
     doc.switchToPage(page);
-    doc.font("Helvetica").fontSize(7).fillColor(muted).text(`Exported ${new Date().toLocaleDateString("en-NA",{timeZone:"Africa/Windhoek"})} • ${season.closed_at?"Season closed":"Season open"} • Official NCSF League Manager record`,30,doc.page.height-34,{width:pageW,align:"center"});
+    doc.font("Helvetica").fontSize(7).fillColor(muted).text(`Exported ${new Date().toLocaleDateString("en-NA",{timeZone:"Africa/Windhoek"})} • ${season.closed_at?"Season closed":"Season open"} • Official NCSF League Manager record`,30,doc.page.height-45,{width:pageW,align:"center",lineBreak:false});
   }
   doc.end();
 });
