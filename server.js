@@ -2064,7 +2064,54 @@ app.get("/api/public/players", async (req, res) => {
     GROUP BY p.id,t.id,t.name,c.name,d.id,d.name
     ORDER BY p.last_name,p.first_name
   `, args);
-  res.json({ players: rows });
+  let visibleRows=rows;
+  if(req.query.divisionId){
+    const divisionId=Number(req.query.divisionId);
+    const {rows:officialRows}=await pool.query(`
+      SELECT s.position,s.player_name,s.team_name,s.frames_played,s.frames_won,
+             s.win_percentage::float8 win_percentage,
+             s.matches_played_percentage::float8 matches_played_percentage,
+             s.source_date::text source_date,d.id division_id,d.name division_name
+      FROM division_player_standing_snapshots s
+      JOIN divisions d ON d.id=s.division_id
+      WHERE s.division_id=$1
+      ORDER BY s.position
+    `,[divisionId]);
+    if(officialRows.length){
+      const normalize=value=>String(value||"").normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
+      const rosterByKey=new Map();
+      for(const player of rows){
+        const key=normalize(player.first_name+" "+player.last_name)+"|"+normalize(player.team_name);
+        if(!rosterByKey.has(key))rosterByKey.set(key,player);
+      }
+      const used=new Set();
+      const officialPlayers=officialRows.map(log=>{
+        const key=normalize(log.player_name)+"|"+normalize(log.team_name);
+        const roster=rosterByKey.get(key)||null;
+        if(roster)used.add(roster.id);
+        return {
+          id:roster?.id??null,
+          ncsf_number:roster?.ncsf_number??null,
+          first_name:log.player_name,
+          last_name:"",
+          team_id:roster?.team_id??null,
+          team_name:log.team_name,
+          club_name:roster?.club_name||log.team_name,
+          division_id:log.division_id,
+          division_name:log.division_name,
+          frames_played:log.frames_played,
+          frames_won:log.frames_won,
+          win_percentage:log.win_percentage,
+          matches_played_percentage:log.matches_played_percentage,
+          source_date:log.source_date
+        };
+      });
+      const additionalPlayers=rows.filter(player=>!used.has(player.id));
+      visibleRows=[...officialPlayers,...additionalPlayers]
+        .sort((a,b)=>(a.first_name+" "+a.last_name).localeCompare(b.first_name+" "+b.last_name));
+    }
+  }
+  res.json({ players: visibleRows });
 });
 
 app.get("/api/divisions/:id/standings", async (req, res) => {

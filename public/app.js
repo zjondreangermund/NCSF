@@ -650,7 +650,7 @@
       const q=String($('#playerSearch')?.value||'').trim().toLowerCase();
       const rows=!q?players:players.filter(p=>(p.first_name+' '+p.last_name+' '+(p.ncsf_number||'')+' '+p.club_name+' '+p.team_name).toLowerCase().includes(q));
       $('#publicPlayers').innerHTML=rows.length
-        ? '<div class="table-wrap"><table><thead><tr><th>Player</th><th>NCSF Number</th><th>Club</th><th>Team</th><th>Frames</th><th>Won</th><th>Win %</th></tr></thead><tbody>'+rows.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td>${esc(p.club_name)}</td><td>${esc(p.team_name)}</td><td>${p.frames_played}</td><td><strong>${p.frames_won}</strong></td><td>${p.win_percentage}%</td></tr>`).join('')+'</tbody></table></div>'
+        ? officialLogNote(rows)+'<div class="table-wrap"><table><thead><tr><th>Player</th><th>NCSF Number</th><th>Club</th><th>Team</th><th>Frames</th><th>Won</th><th>Win %</th><th>Matches %</th></tr></thead><tbody>'+rows.map(p=>`<tr><td><strong>${esc(p.first_name+' '+p.last_name)}</strong></td><td>${esc(p.ncsf_number||'—')}</td><td>${esc(p.club_name)}</td><td>${esc(p.team_name)}</td><td>${p.frames_played}</td><td><strong>${p.frames_won}</strong></td><td>${p.win_percentage==null?'—':p.win_percentage+'%'}</td><td>${p.matches_played_percentage==null?'—':p.matches_played_percentage+'%'}</td></tr>`).join('')+'</tbody></table></div>'
         : '<div class="empty">No players found.</div>';
     };
     const load=async()=>{
