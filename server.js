@@ -2078,7 +2078,7 @@ app.get("/api/public/players", async (req, res) => {
       ORDER BY s.position
     `,[divisionId]);
     if(officialRows.length){
-      const normalize=value=>String(value||"").normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
+      const normalize=value=>String(value||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
       const rosterByKey=new Map();
       for(const player of rows){
         const key=normalize(player.first_name+" "+player.last_name)+"|"+normalize(player.team_name);
