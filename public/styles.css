@@ -218,6 +218,28 @@ body::before{content:"";position:fixed;inset:0 0 auto 0;height:3px;background:li
 .table-wrap{border-color:#e1e6ed;box-shadow:inset 0 1px 0 #fff}
 th{background:#f2f6fa;color:#42526a}
 tbody tr:hover{background:#f9fbfd}
+.table-wrap tbody tr.top8-qualifier{
+  background-color:rgba(214,173,82,.10);
+  background-image:repeating-linear-gradient(135deg,rgba(214,173,82,.13) 0 3px,transparent 3px 10px);
+}
+.table-wrap tbody tr.top8-qualifier:hover{
+  background-color:rgba(214,173,82,.16);
+  background-image:repeating-linear-gradient(135deg,rgba(214,173,82,.18) 0 3px,transparent 3px 10px);
+}
+.qualifier-badge{
+  display:inline-block;margin:3px 0 2px;padding:2px 6px;border-radius:999px;
+  color:#785711;background:rgba(214,173,82,.19);font-size:9px;font-weight:900;
+  letter-spacing:.045em;white-space:nowrap;
+}
+.playoff-qualifier-note{
+  display:flex;align-items:center;gap:9px;margin:0 0 10px;padding:9px 11px;
+  color:#596778;background:rgba(214,173,82,.08);border:1px solid rgba(214,173,82,.20);
+  border-radius:10px;font-size:12px;line-height:1.45;
+}
+.playoff-qualifier-note span{
+  flex:0 0 24px;height:18px;border:1px solid rgba(153,116,35,.28);border-radius:4px;
+  background:repeating-linear-gradient(135deg,rgba(214,173,82,.22) 0 3px,rgba(255,255,255,.5) 3px 8px);
+}
 .pill{border:1px solid rgba(14,47,82,.1)}
 .section-title h1{color:var(--navy);letter-spacing:-.035em}
 .match-card{padding:17px 4px}

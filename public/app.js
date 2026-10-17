@@ -37,6 +37,17 @@
     const suffix=String(row.source||'').startsWith('PROVISIONAL_COASTAL')?' • final rankings pending':'';
     return '<p class="muted official-log-note">'+label+esc(date.toLocaleDateString('en-NA',{day:'numeric',month:'long',year:'numeric'}))+suffix+'</p>';
   }
+  function competitionStageLabel(competitionLabel,roundNo){
+    if(!/central zone top 8 playoffs/i.test(String(competitionLabel||'')))return '';
+    return ({1:'Top 8 play-off · Team 1–4 seeding',2:'Quarter-final',3:'Semi-final',4:'Final'})[Number(roundNo)]||('Play-off round '+Number(roundNo||1));
+  }
+  function teamStandingsTable(standings){
+    const hasTop8=standings.some(row=>row.top8Qualifier);
+    const qualifierNote=hasTop8
+      ? '<p class="playoff-qualifier-note"><span aria-hidden="true"></span> Light hatch marks the Central Zone Top 8 play-off qualifiers. Winners advance as Central Teams 1–4 for the quarter-finals.</p>'
+      : '';
+    return qualifierNote+'<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Frames For</th><th>Frames Against</th><th>+/-</th><th>Bonus</th><th>Points</th></tr></thead><tbody>'+standings.map((r,i)=>`<tr class="${r.top8Qualifier?'top8-qualifier':''}"><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong>${r.top8Qualifier?'<br><small class="qualifier-badge">TOP 8 · PLAY-OFF</small>':''}<br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td>${r.losses??'—'}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td><td>${r.bonus_points??'—'}</td><td><strong>${r.total_points??'—'}</strong></td></tr>`).join('')+'</tbody></table></div>';
+  }
   function fmtDate(v){
     if(!v)return 'Date TBA';
     const d=new Date(v);
@@ -113,7 +124,7 @@
       <div class="match-card">
         <div><div class="team-name">${esc(f.home_team_name)}</div><div class="match-meta">${esc(fmtDate(f.fixture_date))}</div></div>
         <div class="match-score">${Number(f.home_frames||0)} &ndash; ${Number(f.away_frames||0)}</div>
-        <div class="away"><div class="team-name">${esc(f.away_team_name)}</div><div class="match-meta">${f.competition_label?esc(f.competition_label)+(f.race_to?' • Race to '+esc(f.race_to):''):'Round '+esc(f.round_no)} • ${statusPill(f.status)}</div></div>
+        <div class="away"><div class="team-name">${esc(f.away_team_name)}</div><div class="match-meta">${f.competition_label?esc(competitionStageLabel(f.competition_label,f.round_no)||f.competition_label)+(f.race_to?' • Race to '+esc(f.race_to):''):'Round '+esc(f.round_no)} • ${statusPill(f.status)}</div></div>
         <div class="open-cell">
           ${f.stream_active&&f.stream_url?`<a class="btn small live-btn" href="/live?id=${f.id}"><span class="live-dot"></span>LIVE</a>`:''}
           ${allowOpen && (f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet?id=${f.id}">Open scoresheet</a>`:''}
@@ -145,7 +156,7 @@
         api('/api/divisions/'+id+'/individual-rankings'),
         api('/api/fixtures?divisionId='+id)
       ]);
-      $('#standingsTable').innerHTML=st.standings.length?officialTeamLogNote(st.standings)+`<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Frames For</th><th>Frames Against</th><th>+/-</th><th>Bonus</th><th>Points</th></tr></thead><tbody>${st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td>${r.losses??'—'}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td><td>${r.bonus_points??'—'}</td><td><strong>${r.total_points??'—'}</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Rankings appear after approved score sheets.</div>';
+      $('#standingsTable').innerHTML=st.standings.length?officialTeamLogNote(st.standings)+teamStandingsTable(st.standings):'<div class="empty">Rankings appear after approved score sheets.</div>';
       $('#playerRankings').innerHTML=pr.rankings.length?officialLogNote(pr.rankings)+`<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Frames</th><th>Won</th><th>Lost</th><th>Win %</th><th>Matches %</th></tr></thead><tbody>${pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong>${r.ncsf_number?`<br><small class="muted">${esc(r.ncsf_number)}</small>`:''}</td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${r.win_percentage==null?'—':r.win_percentage+'%'}</td><td>${r.matches_played_percentage==null?'—':r.matches_played_percentage+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Individual rankings appear after approved score sheets.</div>';
       $('#fixtureList').innerHTML=fixtureCards(fx.fixtures,true);
     }catch(err){toast(err.message,true)}
@@ -319,7 +330,9 @@
     $('#sheetStatus').textContent=f.status.replaceAll('_',' ');
     const target=f.raceTo?Number(f.raceTo):25;
     const matchComplete=f.raceTo?Math.max(t.home,t.away)>=target:t.completed===25;
-    const progress=Math.round((t.completed/25)*100);
+    const progress=f.raceTo
+      ? Math.round(Math.min(Math.max(t.home,t.away)/Number(f.raceTo),1)*100)
+      : Math.round((t.completed/25)*100);
     const players=allMatchPlayers();
     const currentHome=lineupFor('HOME').filter(Boolean);
     const currentAway=lineupFor('AWAY').filter(Boolean);
@@ -356,11 +369,11 @@
     const autoPlayerNames=autoPlayerIds.map(playerNameById).filter(Boolean);
     const breakRunIds=new Set((Array.isArray(f.breakRunPlayerIds)?f.breakRunPlayerIds:[f.breakRunPlayerId]).filter(Boolean).map(Number));
     const awardsEditable=Boolean(state.user)&&f.status!=='APPROVED';
-    const bonusText=f.bonusTeamName?(f.bonusTeamName+' • +1 bonus point'):'No bonus yet • requires 18+ frames';
+    const bonusText=f.isKnockout?'No bonus points • knockout match':f.bonusTeamName?(f.bonusTeamName+' • +1 bonus point'):'No bonus yet • requires 18+ frames';
     $('#scoreSheetRoot').innerHTML=`
       <section class="official-sheet-head">
         <img class="js-score-logo" src="/ncsf-logo.jpg" alt="NCSF">
-        <div><span class="eyebrow">NAMIBIA CUE SPORTS FEDERATION</span><h1>Blackball League Scoresheet</h1><p>${f.competitionLabel?esc(f.competitionLabel)+' • Race to '+esc(f.raceTo||13):esc(f.seasonName)+' • '+esc(f.divisionName)+' • Round '+esc(f.roundNo)}</p></div>
+        <div><span class="eyebrow">NAMIBIA CUE SPORTS FEDERATION</span><h1>Blackball League Scoresheet</h1><p>${f.competitionLabel?esc(competitionStageLabel(f.competitionLabel,f.roundNo)||f.competitionLabel)+' • Race to '+esc(f.raceTo||13):esc(f.seasonName)+' • '+esc(f.divisionName)+' • Round '+esc(f.roundNo)}</p></div>
         <div class="sheet-meta"><span>STARTING TIME<strong>${esc(timeText)}</strong></span><span>DATE<strong>${esc(dateText)}</strong></span><span>VENUE<strong>${esc(f.venue||'TBA')}</strong></span></div>
       </section>
       <section class="fixture-score-hero">
@@ -442,7 +455,7 @@
           <div>
             <h1>NAMIBIA CUE SPORTS FEDERATION</h1>
             <h2>Blackball League Scoresheet</h2>
-            <p>${f.competitionLabel?esc(f.competitionLabel)+' • Race to '+esc(f.raceTo||13):esc(f.seasonName)+' • '+esc(f.divisionName)+' • Round '+esc(f.roundNo)}</p>
+            <p>${f.competitionLabel?esc(competitionStageLabel(f.competitionLabel,f.roundNo)||f.competitionLabel)+' • Race to '+esc(f.raceTo||13):esc(f.seasonName)+' • '+esc(f.divisionName)+' • Round '+esc(f.roundNo)}</p>
           </div>
           <div class="print-meta">
             <span><b>Date</b>${esc(dateText)}</span>
@@ -466,7 +479,7 @@
           <div><span>Player of Match</span><strong>${esc(printablePlayerName(f.playerOfMatchId))}</strong></div>
           <div><span>Break & Run</span><strong>${esc(printablePlayerName(f.breakRunPlayerId))}</strong></div>
           <div><span>Rack & Run</span><strong>${esc(printablePlayerName(f.rackRunPlayerId))}</strong></div>
-          <div><span>Bonus Point</span><strong>${esc(f.bonusPoints||0)}</strong></div>
+          <div><span>${f.isKnockout?'Bonus Points':'Bonus Point'}</span><strong>${f.isKnockout?'None':esc(f.bonusPoints||0)}</strong></div>
           <div><span>Status</span><strong>${esc(f.status.replaceAll('_',' '))}</strong></div>
         </div>
 
@@ -692,7 +705,7 @@
           api('/api/divisions/'+id+'/individual-rankings')
         ]);
         $('#fullTeamRankings').innerHTML=st.standings.length
-          ? officialTeamLogNote(st.standings)+'<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Frames For</th><th>Frames Against</th><th>+/-</th><th>Bonus</th><th>Points</th></tr></thead><tbody>'+st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td>${r.losses??'—'}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td><td>${r.bonus_points??'—'}</td><td><strong>${r.total_points??'—'}</strong></td></tr>`).join('')+'</tbody></table></div>'
+          ? officialTeamLogNote(st.standings)+teamStandingsTable(st.standings)
           : '<div class="empty">No approved results yet.</div>';
         $('#fullPlayerRankings').innerHTML=pr.rankings.length
           ? officialLogNote(pr.rankings)+'<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Frames</th><th>Won</th><th>Lost</th><th>Win %</th><th>Matches %</th></tr></thead><tbody>'+pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong><br><small class="muted">${esc(r.ncsf_number||'—')}</small></td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${r.win_percentage==null?'—':r.win_percentage+'%'}</td><td>${r.matches_played_percentage==null?'—':r.matches_played_percentage+'%'}</td></tr>`).join('')+'</tbody></table></div>'
@@ -1035,7 +1048,7 @@ function formatEventDate(value){
         : Number(match.awayScore)>Number(match.homeScore)
           ? (match.awayTeamName+' WIN')
           : 'DRAW';
-      frame.innerHTML='<small>FINAL • '+(match.raceTo?'RACE TO '+match.raceTo:'25/25 FRAMES')+'</small><strong>'+esc(result)+'</strong><span>Official scoresheet result</span>';
+      frame.innerHTML='<small>FINAL'+(match.competitionStage?' • '+esc(match.competitionStage.toUpperCase()):'')+' • '+(match.raceTo?'RACE TO '+match.raceTo:'25/25 FRAMES')+'</small><strong>'+esc(result)+'</strong><span>Official scoresheet result</span>';
       nextBox.classList.add('hidden');
       overlay.classList.add('is-final');
     }else{
@@ -1048,7 +1061,7 @@ function formatEventDate(value){
             ? current.awayPlayerName
             : '';
         frame.innerHTML=
-          '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+(match.raceTo?' • RACE TO '+match.raceTo:'/25')+'</small>'+
+          '<small>'+(match.competitionStage?esc(match.competitionStage.toUpperCase())+' • ':'ROUND '+esc(current.roundNo)+' • ')+'FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+(match.raceTo?' • RACE TO '+match.raceTo:'/25')+'</small>'+
           '<strong>'+esc(current.homePlayerName)+' <b>vs</b> '+esc(current.awayPlayerName)+'</strong>'+
           '<span>Breaking: '+esc(breakPlayerName||'—')+'</span>';
       }

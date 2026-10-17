@@ -1098,6 +1098,19 @@ async function seedCentralTop8AndOfficialStandings() {
   }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
 }
 
+async function enforceCentralTop8KnockoutRules() {
+  const key = "central-top8-race-to-13-no-bonus-2026-10-17-v1";
+  const seen = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [key]);
+  if (seen.rowCount) return;
+  await pool.query(`
+    UPDATE fixtures
+       SET race_to=13,bonus_points=0,bonus_side=NULL
+     WHERE LOWER(COALESCE(competition_label,'')) LIKE 'central zone top 8 playoffs%'
+  `);
+  await pool.query("INSERT INTO app_migrations(key) VALUES($1)", [key]);
+  console.log("Applied Central Top 8 knockout rules: race to 13, no team bonus points.");
+}
+
 async function correctAtomic5AndImportCoastalSchedule() {
   const migrationKey = "coastal-atomic5-remaining-fixtures-2026-09-22-v1";
   const already = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [migrationKey]);
@@ -1337,6 +1350,32 @@ function sideForUser(user, fixture) {
   return null;
 }
 
+function isCentralTop8Playoff(fixture) {
+  return /central zone top 8 playoffs/i.test(String(fixture?.competition_label || ""));
+}
+
+function fixtureRaceTo(fixture) {
+  if (isCentralTop8Playoff(fixture)) return 13;
+  return fixture?.race_to == null ? null : Number(fixture.race_to);
+}
+
+function fixtureStageLabel(fixture) {
+  if (!isCentralTop8Playoff(fixture)) return null;
+  return ({
+    1: "Top 8 play-off",
+    2: "Quarter-final",
+    3: "Semi-final",
+    4: "Final"
+  })[Number(fixture.round_no)] || `Play-off round ${Number(fixture.round_no) || 1}`;
+}
+
+function fixtureScoreIsComplete(fixture, payload) {
+  const raceTo = fixtureRaceTo(fixture);
+  return raceTo
+    ? Math.max(Number(payload.totals.home || 0), Number(payload.totals.away || 0)) >= raceTo
+    : payload.frames.length === 25 && payload.totals.completed === 25;
+}
+
 async function teamBelongsToClub(teamId, clubId) {
   const { rowCount } = await pool.query("SELECT 1 FROM teams WHERE id=$1 AND club_id=$2", [teamId, clubId]);
   return rowCount > 0;
@@ -1397,9 +1436,9 @@ async function ensureFrames(fixtureId) {
 
 async function syncDerivedFixtureExtras(fixtureId) {
   const { rows } = await pool.query(`
-    SELECT winner_side,winner_player_id
-    FROM frames
-    WHERE fixture_id=$1 AND winner_side IS NOT NULL
+    SELECT fr.winner_side,fr.winner_player_id,f.competition_label
+    FROM frames fr JOIN fixtures f ON f.id=fr.fixture_id
+    WHERE fr.fixture_id=$1 AND fr.winner_side IS NOT NULL
   `, [fixtureId]);
 
   let home = 0;
@@ -1423,9 +1462,10 @@ async function syncDerivedFixtureExtras(fixtureId) {
         .sort((a,b) => a - b)
     : [];
 
+  const knockout = isCentralTop8Playoff(rows[0]);
   let bonusSide = null;
-  if (home >= 18) bonusSide = "HOME";
-  else if (away >= 18) bonusSide = "AWAY";
+  if (!knockout && home >= 18) bonusSide = "HOME";
+  else if (!knockout && away >= 18) bonusSide = "AWAY";
 
   await pool.query(`
     UPDATE fixtures
@@ -1450,7 +1490,17 @@ async function getStandings(divisionId) {
     FROM division_team_standing_snapshots s JOIN teams t ON t.id=s.team_id JOIN clubs c ON c.id=t.club_id
     WHERE s.division_id=$1 AND t.active=TRUE ORDER BY s.position,s.team_id
   `,[divisionId]);
-  if(official.rowCount)return official.rows;
+  const playoffDivision=await pool.query(`
+    SELECT EXISTS(
+      SELECT 1 FROM fixtures
+      WHERE division_id=$1 AND LOWER(COALESCE(competition_label,'')) LIKE 'central zone top 8 playoffs%'
+    ) has_top8_playoffs
+  `,[divisionId]);
+  const annotatePosition=(rows)=>rows.map((row,index)=>({
+    ...row,
+    top8Qualifier:Boolean(playoffDivision.rows[0]?.has_top8_playoffs && Number(row.position||index+1)<=8)
+  }));
+  if(official.rowCount)return annotatePosition(official.rows);
   const { rows } = await pool.query(`
     WITH match_scores AS (
       SELECT f.id, f.home_team_id, f.away_team_id,
@@ -1486,7 +1536,7 @@ async function getStandings(divisionId) {
     GROUP BY t.id,c.name
     ORDER BY frames_won DESC, frame_difference DESC, wins DESC, team_name ASC
   `, [divisionId]);
-  return rows;
+  return annotatePosition(rows);
 }
 
 async function getIndividualRankings(divisionId) {
@@ -1597,7 +1647,8 @@ async function fixturePayload(fixture) {
         .map(([id]) => Number(id))
         .sort((a,b) => a - b)
     : [];
-  const bonusSide = homeFrames >= 18 ? "HOME" : awayFrames >= 18 ? "AWAY" : null;
+  const knockout = isCentralTop8Playoff(fixture);
+  const bonusSide = knockout ? null : homeFrames >= 18 ? "HOME" : awayFrames >= 18 ? "AWAY" : null;
   const bonusPoints = bonusSide ? 1 : 0;
 
   // Keep legacy single-value fixture columns synchronized for compatibility.
@@ -1622,7 +1673,9 @@ async function fixturePayload(fixture) {
       fixtureDate: fixture.fixture_date,
       venue: fixture.venue,
       competitionLabel: fixture.competition_label || null,
-      raceTo: fixture.race_to == null ? null : Number(fixture.race_to),
+      raceTo: fixtureRaceTo(fixture),
+      isKnockout: knockout,
+      competitionStage: fixtureStageLabel(fixture),
       homeTeamId: fixture.home_team_id,
       awayTeamId: fixture.away_team_id,
       homeTeamName: fixture.home_team_name,
@@ -1960,7 +2013,8 @@ function streamOnePageScoresheetPdf(res, payload) {
   drawPdfTextFit(doc, "Blackball League Scoresheet", 56, 30, usable - 90, {
     size: 9.1, minSize: 7.5, bold: true, align: "center", color: line, height: 12
   });
-  drawPdfTextFit(doc, `${f.seasonName || ""} - ${f.divisionName || ""} - Round ${f.roundNo || ""}`, 56, 43, usable - 90, {
+  const pdfStage = f.competitionStage || f.competitionLabel || `${f.seasonName || ""} - ${f.divisionName || ""} - Round ${f.roundNo || ""}`;
+  drawPdfTextFit(doc, `${pdfStage}${f.raceTo ? ` - Race to ${f.raceTo}` : ""}`, 56, 43, usable - 90, {
     size: 5.2, minSize: 4.3, align: "center", color: "#444444", height: 8
   });
   drawPdfTextFit(doc, `STARTING TIME: ${timeText}   |   DATE: ${dateText}   |   VENUE: ${f.venue || "TBA"}`, left, 54, usable, {
@@ -2021,7 +2075,7 @@ function streamOnePageScoresheetPdf(res, payload) {
     .map(id => names.get(Number(id)))
     .filter(Boolean)
     .join(", ") || "-";
-  const bonusText = f.bonusTeamName ? `${f.bonusTeamName} (+1)` : "-";
+  const bonusText = f.isKnockout ? "No bonus (knockout)" : f.bonusTeamName ? `${f.bonusTeamName} (+1)` : "-";
 
   drawDetailLine(left, detailY, "Player/s of Tournament", playerOfMatchText, detailW);
   drawDetailLine(left, detailY + 18, "Break & Run", breakRunText, detailW);
@@ -3171,9 +3225,10 @@ app.put("/api/fixtures/:id/frames/:frameId", requireAuth, async (req, res) => {
   const { rows: frameRows } = await pool.query("SELECT * FROM frames WHERE id=$1 AND fixture_id=$2", [Number(req.params.frameId), fixture.id]);
   const frame = frameRows[0];
   if (!frame) return res.status(404).json({ error: "Frame not found." });
-  if(winnerSide&&!frame.winner_side&&fixture.race_to){
+  const raceTo = fixtureRaceTo(fixture);
+  if(winnerSide&&!frame.winner_side&&raceTo){
     const {rows:scores}=await pool.query(`SELECT COUNT(*) FILTER(WHERE winner_side='HOME')::int home,COUNT(*) FILTER(WHERE winner_side='AWAY')::int away FROM frames WHERE fixture_id=$1`,[fixture.id]);
-    if(Math.max(Number(scores[0].home),Number(scores[0].away))>=Number(fixture.race_to))return res.status(409).json({error:"This race-to match is complete. Clear a scored frame to correct it before continuing."});
+    if(Math.max(Number(scores[0].home),Number(scores[0].away))>=raceTo)return res.status(409).json({error:"This race-to match is complete. Clear a scored frame to correct it before continuing."});
   }
   const winnerPlayerId = winnerSide === "HOME" ? frame.home_player_id : winnerSide === "AWAY" ? frame.away_player_id : null;
 
@@ -3292,8 +3347,9 @@ app.post("/api/fixtures/:id/submit", requireAuth, async (req, res) => {
 
   await syncDerivedFixtureExtras(fixture.id);
   const payload = await fixturePayload(await fixtureById(fixture.id));
-  const complete=fixture.race_to?Math.max(payload.totals.home,payload.totals.away)>=Number(fixture.race_to):payload.frames.length===25&&payload.totals.completed===25;
-  if(!complete)return res.status(409).json({error:fixture.race_to?`A team must reach ${fixture.race_to} frames before submission.`:"All 25 frames must be completed before submission."});
+  const raceTo=fixtureRaceTo(fixture);
+  const complete=fixtureScoreIsComplete(fixture,payload);
+  if(!complete)return res.status(409).json({error:raceTo?`A team must reach ${raceTo} frames before submission.`:"All 25 frames must be completed before submission."});
   if (payload.lineups.length !== 10) return res.status(409).json({ error: "Both five-player lineups are required." });
 
   const homeConfirmedBy = submittingSide === "HOME" ? user.id : null;
@@ -3349,8 +3405,9 @@ app.post("/api/fixtures/:id/approve", requireRoles(ROLE.NCSF), async (req, res) 
   if (fixture.status !== "CONFIRMED") return res.status(409).json({ error: "The opposing team must confirm the submitted result before NCSF approval." });
 
   const payload = await fixturePayload(fixture);
-  const complete=fixture.race_to?Math.max(payload.totals.home,payload.totals.away)>=Number(fixture.race_to):payload.totals.completed===25;
-  if(!complete)return res.status(409).json({error:fixture.race_to?`A team must reach ${fixture.race_to} frames before approval.`:"All 25 frames must be scored."});
+  const raceTo=fixtureRaceTo(fixture);
+  const complete=fixtureScoreIsComplete(fixture,payload);
+  if(!complete)return res.status(409).json({error:raceTo?`A team must reach ${raceTo} frames before approval.`:"All 25 frames must be scored."});
 
   await pool.query(
     "UPDATE fixtures SET status='APPROVED',approved_by=$2,approved_at=NOW() WHERE id=$1",
@@ -3452,7 +3509,7 @@ async function buildLiveMatchState(fixtureId) {
   if (!fixture) return null;
   const payload = await fixturePayload(fixture);
   const frames = payload.frames || [];
-  const raceTo=fixture.race_to==null?null:Number(fixture.race_to);
+  const raceTo=fixtureRaceTo(fixture);
   const matchComplete=raceTo?Math.max(payload.totals.home,payload.totals.away)>=raceTo:payload.totals.completed>=25;
   const currentIndex=matchComplete?-1:frames.findIndex(fr=>!fr.winner_side);
   const current = currentIndex >= 0 ? frames[currentIndex] : null;
@@ -3493,6 +3550,7 @@ async function buildLiveMatchState(fixtureId) {
   return {
     fixtureId: fixture.id,
     competitionLabel: fixture.competition_label || null,
+    competitionStage: fixtureStageLabel(fixture),
     raceTo,
     fixtureTotalFrames:25,
     final:matchComplete,
@@ -3729,6 +3787,7 @@ initDatabase()
   .then(setupCentralDivisionAndSchedule)
   .then(correctAtomic5AndImportCoastalSchedule)
   .then(seedCentralTop8AndOfficialStandings)
+  .then(enforceCentralTop8KnockoutRules)
   .then(seedOfficialCoastalTeamStandings)
   .then(seedOfficialPlayerLogSnapshots)
   .then(seedOfficialPlayerTeamAssignments)
