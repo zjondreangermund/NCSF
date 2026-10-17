@@ -3196,18 +3196,23 @@ app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF),
   const firstDate = new Date(`${dateInput}T12:00:00Z`);
   const scheduledDates=[];
   let cursor=new Date(firstDate),skippedWeeks=0;
-  for(let i=0;i<rounds*2;i++){
+  for(let i=0;i<rounds;i++){
     while(isNamibianHolidayWeek(cursor)){cursor.setUTCDate(cursor.getUTCDate()+7);skippedWeeks++}
     scheduledDates.push(new Date(cursor));cursor.setUTCDate(cursor.getUTCDate()+7);
   }
   let exceedsSeasonEndDate=false;
   if(seasonState.rows[0].end_date){
     exceedsSeasonEndDate=scheduledDates.some(d=>d>new Date(`${String(seasonState.rows[0].end_date).slice(0,10)}T23:59:59Z`));
-    if(exceedsSeasonEndDate&&!req.body.preview)return res.status(400).json({error:`The full schedule needs ${rounds*2} match weeks and would run past this season's end date. Choose an earlier start date or extend the season end date.`});
+    if(exceedsSeasonEndDate&&!req.body.preview)return res.status(400).json({error:`The full schedule needs ${rounds} match days and would run past this season's end date. Choose an earlier start date or extend the season end date.`});
   }
   if(req.body.preview){
-    return res.json({preview:true,teamCount:teams.length,fixtureCount:teams.length*(teams.length-1),matchWeeks:scheduledDates.length,skippedHolidayWeeks:skippedWeeks,firstScheduledDate:scheduledDates[0].toISOString().slice(0,10),lastScheduledDate:scheduledDates.at(-1).toISOString().slice(0,10),roundDates:scheduledDates.map(d=>d.toISOString().slice(0,10)),exceedsSeasonEndDate});
+    return res.json({preview:true,teamCount:teams.length,fixtureCount:teams.length*(teams.length-1),roundCount:rounds*2,roundsPerMatchDay:2,matchDays:scheduledDates.length,timeSlotsLocal:["10:30","15:00"],skippedHolidayWeeks:skippedWeeks,firstScheduledDate:scheduledDates[0].toISOString().slice(0,10),lastScheduledDate:scheduledDates.at(-1).toISOString().slice(0,10),matchDates:scheduledDates.map(d=>d.toISOString().slice(0,10)),exceedsSeasonEndDate});
   }
+  const matchDateForRound=index=>{
+    const date=new Date(scheduledDates[Math.floor(index/2)]);
+    date.setUTCHours(index%2===0?8:13,index%2===0?30:0,0,0); // Namibia time: 10:30 and 15:00 (UTC+02:00)
+    return date.toISOString();
+  };
   const created = [];
   const client = await pool.connect();
   try {
@@ -3220,18 +3225,18 @@ app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF),
         if (!a || !b) continue;
         const home = r % 2 === 0 ? a : b;
         const away = r % 2 === 0 ? b : a;
-        const d1 = scheduledDates[r];
+        const d1 = matchDateForRound(r);
         const q1 = await client.query(`
           INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
           VALUES($1,$2,$3,$4,$5) RETURNING id
-        `, [divisionId, r + 1, d1.toISOString(), home, away]);
+        `, [divisionId, r + 1, d1, home, away]);
         created.push(q1.rows[0].id);
 
-        const d2 = scheduledDates[r + rounds];
+        const d2 = matchDateForRound(r + rounds);
         const q2 = await client.query(`
           INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
           VALUES($1,$2,$3,$4,$5) RETURNING id
-        `, [divisionId, r + 1 + rounds, d2.toISOString(), away, home]);
+        `, [divisionId, r + 1 + rounds, d2, away, home]);
         created.push(q2.rows[0].id);
       }
       rotating = [rotating[0], rotating[n - 1], ...rotating.slice(1, n - 1)];

@@ -2418,7 +2418,7 @@ async function loadAdminPosts(){
       e.preventDefault();const o=formObject(e.currentTarget);
       try{
         const d=await api('/api/admin/divisions/'+o.divisionId+'/generate-home-away',{method:'POST',body:{firstDate:o.firstDate}});
-        await reloadAdmin();toast(`${d.created} fixtures created${d.skippedHolidayWeeks?` • skipped ${d.skippedHolidayWeeks} Namibia holiday week${d.skippedHolidayWeeks===1?'':'s'}`:''} • ${d.firstScheduledDate} to ${d.lastScheduledDate}`);
+        await reloadAdmin();toast(`${d.created} fixtures created${d.skippedHolidayWeeks?` • skipped ${d.skippedHolidayWeeks} Namibia holiday week${d.skippedHolidayWeeks===1?'':'s'}`:''} • ${d.firstScheduledDate} to ${d.lastScheduledDate} • 10:30 & 15:00`);
       }catch(err){toast(err.message,true)}
     });
     $('#previewSchedule')?.addEventListener('click',async()=>{
@@ -2427,7 +2427,7 @@ async function loadAdminPosts(){
       try{
         const d=await api('/api/admin/divisions/'+o.divisionId+'/generate-home-away',{method:'POST',body:{firstDate:o.firstDate,preview:true}});
         box.style.display='block';box.classList.toggle('warn',d.exceedsSeasonEndDate);
-        box.innerHTML=`Preview only — no fixtures saved. ${d.fixtureCount} fixtures across ${d.matchWeeks} match weeks for ${d.teamCount} teams. Skipped ${d.skippedHolidayWeeks} holiday week${d.skippedHolidayWeeks===1?'':'s'}.<br>Round dates: ${d.roundDates.map(esc).join(' • ')}${d.exceedsSeasonEndDate?'<br><strong>These dates run past the selected season end date.</strong>':''}`;
+        box.innerHTML=`Preview only — no fixtures saved. ${d.fixtureCount} fixtures for ${d.teamCount} teams across ${d.matchDays} match days (${d.roundCount} rounds; two rounds per day). Times: ${d.timeSlotsLocal.map(esc).join(' & ')} Namibia time. Skipped ${d.skippedHolidayWeeks} holiday week${d.skippedHolidayWeeks===1?'':'s'}.<br>Match dates: ${d.matchDates.map(esc).join(' • ')}${d.exceedsSeasonEndDate?'<br><strong>These dates run past the selected season end date.</strong>':''}`;
       }catch(err){toast(err.message,true)}
     });
   }
