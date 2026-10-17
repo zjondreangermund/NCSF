@@ -97,7 +97,7 @@
       <div class="match-card">
         <div><div class="team-name">${esc(f.home_team_name)}</div><div class="match-meta">${esc(fmtDate(f.fixture_date))}</div></div>
         <div class="match-score">${Number(f.home_frames||0)} &ndash; ${Number(f.away_frames||0)}</div>
-        <div class="away"><div class="team-name">${esc(f.away_team_name)}</div><div class="match-meta">Round ${esc(f.round_no)} • ${statusPill(f.status)}</div></div>
+        <div class="away"><div class="team-name">${esc(f.away_team_name)}</div><div class="match-meta">${f.competition_label?esc(f.competition_label)+(f.race_to?' • Race to '+esc(f.race_to):''):'Round '+esc(f.round_no)} • ${statusPill(f.status)}</div></div>
         <div class="open-cell">
           ${f.stream_active&&f.stream_url?`<a class="btn small live-btn" href="/live?id=${f.id}"><span class="live-dot"></span>LIVE</a>`:''}
           ${allowOpen && (f.status==='APPROVED' || Boolean(state.user))?`<a class="btn small secondary" href="/scoresheet?id=${f.id}">Open scoresheet</a>`:''}
@@ -129,7 +129,7 @@
         api('/api/divisions/'+id+'/individual-rankings'),
         api('/api/fixtures?divisionId='+id)
       ]);
-      $('#standingsTable').innerHTML=st.standings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>Frames Won</th><th>Frames Lost</th><th>+/-</th></tr></thead><tbody>${st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Rankings appear after approved score sheets.</div>';
+      $('#standingsTable').innerHTML=st.standings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Frames For</th><th>Frames Against</th><th>+/-</th><th>Bonus</th><th>Points</th></tr></thead><tbody>${st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td>${r.losses??'—'}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td><td>${r.bonus_points??'—'}</td><td><strong>${r.total_points??'—'}</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Rankings appear after approved score sheets.</div>';
       $('#playerRankings').innerHTML=pr.rankings.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Played</th><th>Won</th><th>Win %</th></tr></thead><tbody>${pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong>${r.ncsf_number?`<br><small class="muted">${esc(r.ncsf_number)}</small>`:''}</td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.win_percentage}%</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Individual rankings appear after approved score sheets.</div>';
       $('#fixtureList').innerHTML=fixtureCards(fx.fixtures,true);
     }catch(err){toast(err.message,true)}
@@ -196,6 +196,7 @@
     const pHome=state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='HOME').length;
     const pAway=state.fixture.frames.filter(f=>f.round_no<=round&&f.winner_side==='AWAY').length;
     const editable=Boolean(state.user)&&!['SUBMITTED','CONFIRMED','APPROVED'].includes(state.fixture.fixture.status);
+    const raceDone=state.fixture.fixture.raceTo&&Math.max(state.fixture.totals.home,state.fixture.totals.away)>=Number(state.fixture.fixture.raceTo);
     const letters=['A','B','C','D','E'];
     return `<section class="score-round">
       <div class="score-round-title"><span></span><strong>ROUND ${round}</strong><span>${home} — ${away}</span></div>
@@ -207,9 +208,9 @@
         return `<div class="score-grid break-row ${homeBreaker?'break-home':'break-away'}">
           <div class="score-slot-no">${fr.home_slot}</div>
           <div class="score-player ${homeBreaker?'break-player':''}" ${homeBreaker?'title="Player to break"':''}>${esc(fr.home_player_name)}</div>
-          <button class="score-cell frame-win ${fr.winner_side==='HOME'?'selected':''}" data-frame="${fr.id}" data-winner="HOME" ${editable?'':'disabled'}>${fr.winner_side==='HOME'?'1':'0'}</button>
+          <button class="score-cell frame-win ${fr.winner_side==='HOME'?'selected':''}" data-frame="${fr.id}" data-winner="HOME" ${editable&&(!raceDone||fr.winner_side)?'':'disabled'}>${fr.winner_side==='HOME'?'1':'0'}</button>
           <div class="score-vs"><span>vs</span></div>
-          <button class="score-cell frame-win ${fr.winner_side==='AWAY'?'selected':''}" data-frame="${fr.id}" data-winner="AWAY" ${editable?'':'disabled'}>${fr.winner_side==='AWAY'?'1':'0'}</button>
+          <button class="score-cell frame-win ${fr.winner_side==='AWAY'?'selected':''}" data-frame="${fr.id}" data-winner="AWAY" ${editable&&(!raceDone||fr.winner_side)?'':'disabled'}>${fr.winner_side==='AWAY'?'1':'0'}</button>
           <div class="score-player away ${!homeBreaker?'break-player':''}" ${!homeBreaker?'title="Player to break"':''}>${esc(fr.away_player_name)}</div>
           <div class="score-slot-no">${letters[(fr.away_slot||1)-1]}</div>
         </div>`;
@@ -300,6 +301,8 @@
     const data=state.fixture,f=data.fixture,t=data.totals;
     $('#sheetStatus').className='pill '+f.status;
     $('#sheetStatus').textContent=f.status.replaceAll('_',' ');
+    const target=f.raceTo?Number(f.raceTo):25;
+    const matchComplete=f.raceTo?Math.max(t.home,t.away)>=target:t.completed===25;
     const progress=Math.round((t.completed/25)*100);
     const players=allMatchPlayers();
     const currentHome=lineupFor('HOME').filter(Boolean);
@@ -325,8 +328,7 @@
     const date=f.fixtureDate?new Date(f.fixtureDate):null;
     const dateText=date?date.toLocaleDateString([], {year:'numeric',month:'2-digit',day:'2-digit'}):'TBA';
     const timeText=date?date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'TBA';
-    const matchResult=t.completed<25?'IN PROGRESS':t.home>t.away?f.homeTeamName+' WON':t.away>t.home?f.awayTeamName+' WON':'DRAW';
-    const matchComplete=t.completed===25;
+    const matchResult=!matchComplete?'IN PROGRESS':t.home>t.away?f.homeTeamName+' WON':t.away>t.home?f.awayTeamName+' WON':'DRAW';
     const homeCaptain=homeRoster.find(p=>p.player_id===f.homeCaptainId);
     const awayCaptain=awayRoster.find(p=>p.player_id===f.awayCaptainId);
     const hWin=matchComplete&&t.home>t.away?1:0, aWin=matchComplete&&t.away>t.home?1:0, draw=matchComplete&&t.home===t.away?1:0;
@@ -342,12 +344,12 @@
     $('#scoreSheetRoot').innerHTML=`
       <section class="official-sheet-head">
         <img class="js-score-logo" src="/ncsf-logo.jpg" alt="NCSF">
-        <div><span class="eyebrow">NAMIBIA CUE SPORTS FEDERATION</span><h1>Blackball League Scoresheet</h1><p>${esc(f.seasonName)} • ${esc(f.divisionName)} • Round ${esc(f.roundNo)}</p></div>
+        <div><span class="eyebrow">NAMIBIA CUE SPORTS FEDERATION</span><h1>Blackball League Scoresheet</h1><p>${f.competitionLabel?esc(f.competitionLabel)+' • Race to '+esc(f.raceTo||13):esc(f.seasonName)+' • '+esc(f.divisionName)+' • Round '+esc(f.roundNo)}</p></div>
         <div class="sheet-meta"><span>STARTING TIME<strong>${esc(timeText)}</strong></span><span>DATE<strong>${esc(dateText)}</strong></span><span>VENUE<strong>${esc(f.venue||'TBA')}</strong></span></div>
       </section>
       <section class="fixture-score-hero">
         <div><span class="eyebrow">HOME TEAM</span><h2>${esc(f.homeTeamName)}</h2><small>${esc(f.homeClubName)}</small></div>
-        <div class="fixture-live-score"><strong>${t.home}</strong><span>VS</span><strong>${t.away}</strong><small>${t.completed}/25 frames</small></div>
+        <div class="fixture-live-score"><strong>${t.home}</strong><span>VS</span><strong>${t.away}</strong><small>${f.raceTo?t.completed+' frames • Race to '+f.raceTo:t.completed+'/25 frames}</small></div>
         <div class="away"><span class="eyebrow">AWAY TEAM</span><h2>${esc(f.awayTeamName)}</h2><small>${esc(f.awayClubName)}</small></div>
       </section>
       <div class="score-progress"><span style="width:${progress}%"></span></div>
@@ -424,7 +426,7 @@
           <div>
             <h1>NAMIBIA CUE SPORTS FEDERATION</h1>
             <h2>Blackball League Scoresheet</h2>
-            <p>${esc(f.seasonName)} • ${esc(f.divisionName)} • Round ${esc(f.roundNo)}</p>
+            <p>${f.competitionLabel?esc(f.competitionLabel)+' • Race to '+esc(f.raceTo||13):esc(f.seasonName)+' • '+esc(f.divisionName)+' • Round '+esc(f.roundNo)}</p>
           </div>
           <div class="print-meta">
             <span><b>Date</b>${esc(dateText)}</span>
@@ -582,14 +584,19 @@
       const status=$('#fixtureStatusFilter')?.value||'IN_PROGRESS,SCHEDULED,POSTPONED';
       try{
         const d=await api('/api/fixtures?divisionId='+id+'&status='+encodeURIComponent(status));
-        const fixtures=(d.fixtures||[]).sort((x,y)=>{
+        const allFixtures=(d.fixtures||[]);
+        const fixtures=allFixtures.filter(f=>!f.competition_label);
+        const tournamentFixtures=allFixtures.filter(f=>Boolean(f.competition_label));
+        const tournamentBox=$('#publicTournamentFixtures');
+        if(tournamentBox)tournamentBox.innerHTML=tournamentFixtures.length?fixtureCards(tournamentFixtures,true):'<div class="empty">No tournament fixtures are scheduled for this division.</div>';
+        const sortedFixtures=fixtures.sort((x,y)=>{
           const liveDiff=Number(Boolean(y.stream_active))-Number(Boolean(x.stream_active));
           if(liveDiff)return liveDiff;
           const statusDiff=Number(y.status==='IN_PROGRESS')-Number(x.status==='IN_PROGRESS');
           if(statusDiff)return statusDiff;
           return new Date(x.fixture_date||0)-new Date(y.fixture_date||0);
         });
-        $('#publicFixtures').innerHTML=fixtureCards(fixtures,true);
+        $('#publicFixtures').innerHTML=fixtureCards(sortedFixtures,true);
       }catch(err){toast(err.message,true)}
     };
     select.addEventListener('change',load);
@@ -605,7 +612,7 @@
       if(!id){$('#publicResults').innerHTML='<div class="empty">No division configured yet.</div>';return}
       try{
         const d=await api('/api/fixtures?divisionId='+id+'&status=APPROVED');
-        $('#publicResults').innerHTML=fixtureCards(d.fixtures,true);
+        $('#publicResults').innerHTML=fixtureCards(d.fixtures.filter(f=>!f.competition_label),true);
       }catch(err){toast(err.message,true)}
     };
     select.addEventListener('change',load);
@@ -669,7 +676,7 @@
           api('/api/divisions/'+id+'/individual-rankings')
         ]);
         $('#fullTeamRankings').innerHTML=st.standings.length
-          ? '<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>Frames Won</th><th>Lost</th><th>+/-</th></tr></thead><tbody>'+st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td></tr>`).join('')+'</tbody></table></div>'
+          ? '<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Frames For</th><th>Frames Against</th><th>+/-</th><th>Bonus</th><th>Points</th></tr></thead><tbody>'+st.standings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.team_name)}</strong><br><small class="muted">${esc(r.club_name)}</small></td><td>${r.played}</td><td>${r.wins}</td><td>${r.losses??'—'}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${Number(r.frame_difference)>0?'+':''}${r.frame_difference}</td><td>${r.bonus_points??'—'}</td><td><strong>${r.total_points??'—'}</strong></td></tr>`).join('')+'</tbody></table></div>'
           : '<div class="empty">No approved results yet.</div>';
         $('#fullPlayerRankings').innerHTML=pr.rankings.length
           ? '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Frames</th><th>Won</th><th>Lost</th><th>Win %</th></tr></thead><tbody>'+pr.rankings.map((r,i)=>`<tr><td class="rank">${i+1}</td><td><strong>${esc(r.player_name)}</strong><br><small class="muted">${esc(r.ncsf_number||'—')}</small></td><td>${esc(r.team_name)}</td><td>${r.frames_played}</td><td><strong>${r.frames_won}</strong></td><td>${r.frames_lost}</td><td>${r.win_percentage}%</td></tr>`).join('')+'</tbody></table></div>'
@@ -1012,7 +1019,7 @@ function formatEventDate(value){
         : Number(match.awayScore)>Number(match.homeScore)
           ? (match.awayTeamName+' WIN')
           : 'DRAW';
-      frame.innerHTML='<small>FINAL • 25/25 FRAMES</small><strong>'+esc(result)+'</strong><span>Official scoresheet result</span>';
+      frame.innerHTML='<small>FINAL • '+(match.raceTo?'RACE TO '+match.raceTo:'25/25 FRAMES')+'</small><strong>'+esc(result)+'</strong><span>Official scoresheet result</span>';
       nextBox.classList.add('hidden');
       overlay.classList.add('is-final');
     }else{
@@ -1025,7 +1032,7 @@ function formatEventDate(value){
             ? current.awayPlayerName
             : '';
         frame.innerHTML=
-          '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+'/25</small>'+
+          '<small>ROUND '+esc(current.roundNo)+' • FRAME '+esc(current.boardNo)+' • '+esc(match.completed+1)+(match.raceTo?' • RACE TO '+match.raceTo:'/25')</small>'+
           '<strong>'+esc(current.homePlayerName)+' <b>vs</b> '+esc(current.awayPlayerName)+'</strong>'+
           '<span>Breaking: '+esc(breakPlayerName||'—')+'</span>';
       }
