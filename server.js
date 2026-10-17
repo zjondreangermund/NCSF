@@ -10,6 +10,7 @@ const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
 const { Pool } = require("pg");
 const officialPlayerLogs = require("./data/official-player-logs-2026-06-09.json");
+const officialCoastalTeamLog = require("./data/official-coastal-team-log-2026-06-09.json");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const helmet = require("helmet");
@@ -208,9 +209,10 @@ async function initDatabase() {
       position INTEGER NOT NULL, played INTEGER NOT NULL, wins INTEGER NOT NULL, losses INTEGER NOT NULL,
       frames_for INTEGER NOT NULL, frames_against INTEGER NOT NULL, frame_difference INTEGER NOT NULL,
       bonus_points INTEGER NOT NULL, total_points INTEGER NOT NULL,
-      source TEXT NOT NULL DEFAULT 'OFFICIAL', updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      source TEXT NOT NULL DEFAULT 'OFFICIAL', source_date DATE, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY(division_id,team_id)
     );
+    ALTER TABLE division_team_standing_snapshots ADD COLUMN IF NOT EXISTS source_date DATE;
     CREATE TABLE IF NOT EXISTS division_player_standing_snapshots (
       division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
       position INTEGER NOT NULL, player_name TEXT NOT NULL, team_name TEXT NOT NULL,
@@ -843,6 +845,60 @@ async function seedOfficialPlayerLogSnapshots() {
 }
 
 
+async function seedOfficialCoastalTeamStandings() {
+  const key = "official-coastal-team-log-2026-06-09-provisional-v1";
+  const already = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [key]);
+  if (already.rowCount) return;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const division = await client.query("SELECT id FROM divisions WHERE LOWER(name)='coastal' ORDER BY active DESC,id LIMIT 1");
+    if (!division.rowCount) throw new Error("Coastal division was not found for the official team log.");
+    const divisionId = division.rows[0].id;
+    await client.query("DELETE FROM division_team_standing_snapshots WHERE division_id=$1", [divisionId]);
+    const { rows: existingTeams } = await client.query("SELECT id,name,club_id FROM teams WHERE division_id=$1", [divisionId]);
+    const normalizeTeam = value => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    for (const item of officialCoastalTeamLog.teams) {
+      let team = existingTeams.find(row => normalizeTeam(row.name) === normalizeTeam(item.name));
+      let clubId = team?.club_id;
+      if (!clubId) {
+        const club = await client.query("SELECT id FROM clubs WHERE LOWER(name)=LOWER($1) LIMIT 1", [item.club_name]);
+        if (club.rowCount) clubId = club.rows[0].id;
+        else {
+          const createdClub = await client.query("INSERT INTO clubs(name,short_name,active) VALUES($1,$1,TRUE) RETURNING id", [item.club_name]);
+          clubId = createdClub.rows[0].id;
+        }
+      }
+      if (!team) {
+        const createdTeam = await client.query("INSERT INTO teams(club_id,division_id,name,short_name,active) VALUES($1,$2,$3,$3,TRUE) RETURNING id,name,club_id", [clubId,divisionId,item.name]);
+        team = createdTeam.rows[0];
+        existingTeams.push(team);
+      } else {
+        await client.query("UPDATE teams SET name=$2,short_name=$2,active=TRUE WHERE id=$1", [team.id,item.name]);
+        team.name = item.name;
+      }
+      await client.query(
+        "INSERT INTO division_team_standing_snapshots " +
+        "(division_id,team_id,position,played,wins,losses,frames_for,frames_against,frame_difference,bonus_points,total_points,source,source_date) " +
+        "VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'PROVISIONAL_COASTAL_TEAM_LOG_2026-06-09',$12) " +
+        "ON CONFLICT(division_id,team_id) DO UPDATE SET position=EXCLUDED.position,played=EXCLUDED.played," +
+        "wins=EXCLUDED.wins,losses=EXCLUDED.losses,frames_for=EXCLUDED.frames_for,frames_against=EXCLUDED.frames_against," +
+        "frame_difference=EXCLUDED.frame_difference,bonus_points=EXCLUDED.bonus_points,total_points=EXCLUDED.total_points," +
+        "source=EXCLUDED.source,source_date=EXCLUDED.source_date,updated_at=NOW()
+      , [divisionId,team.id,item.position,item.played,item.wins,item.losses,item.frames_for,item.frames_against,item.frame_difference,item.bonus_points,item.total_points,officialCoastalTeamLog.asOf]);
+    }
+    await client.query("INSERT INTO app_migrations(key) VALUES($1)", [key]);
+    await client.query("COMMIT");
+    console.log("Imported provisional Coastal team standings from the 2026-06-09 team log.");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 async function seedCentralTop8AndOfficialStandings() {
   const key="central-top8-fixtures-official-log-2026-10-17-v1";
   const seen=await pool.query("SELECT 1 FROM app_migrations WHERE key=$1",[key]);
@@ -1256,7 +1312,7 @@ async function syncDerivedFixtureExtras(fixtureId) {
 
 async function getStandings(divisionId) {
   const official=await pool.query(`
-    SELECT s.position,t.id team_id,t.name team_name,c.name club_name,s.played,s.wins,s.losses,
+    SELECT s.position,t.id team_id,t.name team_name,c.name club_name,s.played,s.wins,s.losses,s.source,s.source_date::text source_date,
            s.frames_for frames_won,s.frames_against frames_lost,s.frame_difference,s.bonus_points,s.total_points,s.source
     FROM division_team_standing_snapshots s JOIN teams t ON t.id=s.team_id JOIN clubs c ON c.id=t.club_id
     WHERE s.division_id=$1 AND t.active=TRUE ORDER BY s.position,s.team_id
@@ -3536,6 +3592,7 @@ initDatabase()
   .then(setupCentralDivisionAndSchedule)
   .then(correctAtomic5AndImportCoastalSchedule)
   .then(seedCentralTop8AndOfficialStandings)
+  .then(seedOfficialCoastalTeamStandings)
   .then(seedOfficialPlayerLogSnapshots)
   .then(() => httpServer.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
