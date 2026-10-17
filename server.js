@@ -851,7 +851,7 @@ async function seedOfficialPlayerTeamAssignments() {
   if (already.rowCount) return;
   const client = await pool.connect();
   let createdCount = 0, matchedCount = 0;
-  const normalize = value => String(value || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalize = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const editDistance = (a,b) => {
     const prev=Array.from({length:b.length+1},(_,i)=>i);
     for(let i=1;i<=a.length;i++){let current=[i];for(let j=1;j<=b.length;j++)current[j]=Math.min(current[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));for(let j=0;j<=b.length;j++)prev[j]=current[j];}
