@@ -1,0 +1,99 @@
+{
+  "division": "Coastal",
+  "asOf": "2026-06-09",
+  "status": "PROVISIONAL",
+  "note": "Older Coastal Zone team log; replace standings when final rankings are received.",
+  "teams": [
+    {
+      "position": 1,
+      "name": "Coastal Waves",
+      "club_name": "Coastal Warriors",
+      "played": 10,
+      "wins": 10,
+      "losses": 0,
+      "frames_for": 166,
+      "frames_against": 84,
+      "frame_difference": 82,
+      "bonus_points": 1,
+      "total_points": 31
+    },
+    {
+      "position": 2,
+      "name": "Coastal Suns",
+      "club_name": "Coastal Warriors",
+      "played": 10,
+      "wins": 7,
+      "losses": 3,
+      "frames_for": 131,
+      "frames_against": 119,
+      "frame_difference": 12,
+      "bonus_points": 0,
+      "total_points": 21
+    },
+    {
+      "position": 3,
+      "name": "Celtic",
+      "club_name": "Celtic",
+      "played": 8,
+      "wins": 5,
+      "losses": 3,
+      "frames_for": 120,
+      "frames_against": 80,
+      "frame_difference": 40,
+      "bonus_points": 3,
+      "total_points": 18
+    },
+    {
+      "position": 4,
+      "name": "Atomic 5",
+      "club_name": "Atomic 5",
+      "played": 7,
+      "wins": 4,
+      "losses": 3,
+      "frames_for": 101,
+      "frames_against": 74,
+      "frame_difference": 27,
+      "bonus_points": 1,
+      "total_points": 13
+    },
+    {
+      "position": 5,
+      "name": "007 - Coastal",
+      "club_name": "007-Coastal",
+      "played": 8,
+      "wins": 2,
+      "losses": 6,
+      "frames_for": 83,
+      "frames_against": 117,
+      "frame_difference": -34,
+      "bonus_points": 0,
+      "total_points": 6
+    },
+    {
+      "position": 6,
+      "name": "Sparta",
+      "club_name": "Sparta",
+      "played": 10,
+      "wins": 2,
+      "losses": 8,
+      "frames_for": 95,
+      "frames_against": 155,
+      "frame_difference": -60,
+      "bonus_points": 0,
+      "total_points": 6
+    },
+    {
+      "position": 7,
+      "name": "West Coast",
+      "club_name": "West Coast",
+      "played": 9,
+      "wins": 1,
+      "losses": 8,
+      "frames_for": 79,
+      "frames_against": 146,
+      "frame_difference": -67,
+      "bonus_points": 0,
+      "total_points": 3
+    }
+  ]
+}
