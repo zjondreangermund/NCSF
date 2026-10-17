@@ -14,6 +14,9 @@ A responsive competition-management platform for the Namibia Cue Sports Federati
 - Club admins can create/manage players and distribute team access
 - Fixture submission, opponent confirmation, club/NCSF approval and audit trail
 - Print/PDF-friendly match sheet
+- NCSF season close/reopen workflow with scored data retained and locked
+- Season PDF report plus separate fixtures, team standings and player ranking CSV exports
+- Double round-robin schedule generation that skips full weeks containing Namibian public holidays
 - PostgreSQL-backed persistent data and uploaded score sheets
 
 ## Railway deployment

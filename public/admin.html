@@ -84,6 +84,11 @@
         </form>
       </div>
     </div>
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head"><div><div class="kicker">Season records</div><h2>Close season & exports</h2></div></div>
+      <p class="muted">Closing freezes scores and fixture edits. Print a styled season PDF, or export fixtures, team standings and player rankings as separate spreadsheet-ready CSV files.</p>
+      <div id="adminSeasons" class="card-list"><div class="empty">Loading seasons…</div></div>
+    </div>
   </section>
 
   <section class="admin-pane" data-pane="clubs">
@@ -147,7 +152,7 @@
           <label class="full">First match date<input name="firstDate" type="date" required></label>
           <button class="btn primary full" type="submit">Generate Full Schedule</button>
         </form>
-        <p class="muted">Creates a double round-robin: every team plays every other team at home and away.</p>
+        <p class="muted">Creates a double round-robin. Match rounds keep the selected weekday and skip any full week containing an official Namibian public holiday.</p>
       </div>
     </div>
     <div class="panel" style="margin-top:18px"><h2>Fixtures</h2><div id="adminFixtures"></div></div>

@@ -114,8 +114,12 @@ async function initDatabase() {
       start_date DATE,
       end_date DATE,
       active BOOLEAN NOT NULL DEFAULT FALSE,
+      closed_at TIMESTAMPTZ,
+      close_note TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE seasons ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
+    ALTER TABLE seasons ADD COLUMN IF NOT EXISTS close_note TEXT;
 
     CREATE TABLE IF NOT EXISTS clubs (
       id SERIAL PRIMARY KEY,
@@ -1308,7 +1312,7 @@ async function audit(userId, fixtureId, action, detail = {}) {
 
 async function fixtureById(id) {
   const { rows } = await pool.query(`
-    SELECT f.*, d.name division_name, s.name season_name,
+    SELECT f.*, d.name division_name, s.name season_name,s.closed_at season_closed_at,
            ht.name home_team_name, at.name away_team_name,
            hc.name home_club_name, ac.name away_club_name,
            ht.club_id home_club_id, at.club_id away_club_id
@@ -1334,6 +1338,12 @@ function canManageFixture(user, fixture) {
     return user.team_id === fixture.home_team_id || user.team_id === fixture.away_team_id;
   }
   return false;
+}
+
+function rejectClosedSeason(fixture,res){
+  if(!fixture?.season_closed_at)return false;
+  res.status(409).json({error:"This season is closed. Ask an NCSF administrator to reopen it before making changes."});
+  return true;
 }
 
 function sideForUser(user, fixture) {
@@ -2790,6 +2800,135 @@ app.post("/api/admin/seasons", requireRoles(ROLE.NCSF), async (req, res) => {
   res.status(201).json({ season: rows[0] });
 });
 
+app.post("/api/admin/seasons/:id/close", requireRoles(ROLE.NCSF), async (req,res) => {
+  const id=Number(req.params.id);
+  const result=await pool.query("SELECT * FROM seasons WHERE id=$1",[id]);
+  if(!result.rowCount)return res.status(404).json({error:"Season not found."});
+  if(result.rows[0].closed_at)return res.json({season:result.rows[0],alreadyClosed:true});
+  const pending=await pool.query(`
+    SELECT COUNT(*) FILTER(WHERE f.status IN ('IN_PROGRESS','SUBMITTED','CONFIRMED'))::int pending,
+           COUNT(*) FILTER(WHERE f.status IN ('SCHEDULED','POSTPONED'))::int unplayed
+    FROM fixtures f JOIN divisions d ON d.id=f.division_id WHERE d.season_id=$1
+  `,[id]);
+  const counts=pending.rows[0];
+  if((counts.pending||counts.unplayed)&&!req.body.force){
+    return res.status(409).json({error:`There are ${counts.pending} matches awaiting completion or review and ${counts.unplayed} unplayed fixtures. Close anyway to freeze this season?`,counts});
+  }
+  const note=String(req.body.note||"").trim().slice(0,500)||null;
+  const {rows}=await pool.query("UPDATE seasons SET closed_at=NOW(),close_note=$2,active=FALSE WHERE id=$1 RETURNING *",[id,note]);
+  await audit(req.user.id,null,"SEASON_CLOSED",{seasonId:id,counts,note});
+  res.json({season:rows[0],counts});
+});
+
+app.post("/api/admin/seasons/:id/reopen", requireRoles(ROLE.NCSF), async (req,res) => {
+  const id=Number(req.params.id);
+  const {rows}=await pool.query("UPDATE seasons SET closed_at=NULL,close_note=NULL,active=TRUE WHERE id=$1 RETURNING *",[id]);
+  if(!rows.length)return res.status(404).json({error:"Season not found."});
+  await pool.query("UPDATE seasons SET active=FALSE WHERE id<>$1",[id]);
+  await audit(req.user.id,null,"SEASON_REOPENED",{seasonId:id});
+  res.json({season:rows[0]});
+});
+
+app.get("/api/admin/seasons/:id/export.csv", requireRoles(ROLE.NCSF), async (req,res) => {
+  const id=Number(req.params.id);
+  const season=(await pool.query("SELECT * FROM seasons WHERE id=$1",[id])).rows[0];
+  if(!season)return res.status(404).json({error:"Season not found."});
+  const {rows}=await pool.query(`
+    SELECT d.name division,COALESCE(f.competition_label,'League') competition,f.round_no,
+      f.fixture_date,COALESCE(f.venue,'') venue,ht.name home_team,at.name away_team,
+      COUNT(*) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
+      COUNT(*) FILTER(WHERE fr.winner_side='AWAY')::int away_frames,f.status,
+      COALESCE(f.race_to,25) race_to
+    FROM divisions d JOIN fixtures f ON f.division_id=d.id
+    JOIN teams ht ON ht.id=f.home_team_id JOIN teams at ON at.id=f.away_team_id
+    LEFT JOIN frames fr ON fr.fixture_id=f.id
+    WHERE d.season_id=$1 GROUP BY d.id,f.id,ht.name,at.name
+    ORDER BY d.sort_order,d.name,f.fixture_date NULLS LAST,f.round_no,f.id
+  `,[id]);
+  const csvCell=value=>`"${String(value??"").replaceAll('"','""')}"`;
+  const columns=["Season","Division","Competition","Round","Date","Venue","Home Team","Away Team","Home Frames","Away Frames","Race To","Status"];
+  const lines=[columns,...rows.map(r=>[season.name,r.division,r.competition,r.round_no,r.fixture_date?new Date(r.fixture_date).toISOString():"",r.venue,r.home_team,r.away_team,r.home_frames,r.away_frames,r.race_to,r.status])];
+  res.setHeader("Content-Type","text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition",`attachment; filename="${season.name.replace(/[^a-z0-9_-]+/gi,"-")}-fixtures.csv"`);
+  res.send("\uFEFF"+lines.map(row=>row.map(csvCell).join(",")).join("\r\n"));
+});
+
+app.get("/api/admin/seasons/:id/export-standings.csv", requireRoles(ROLE.NCSF), async (req,res) => {
+  const id=Number(req.params.id),season=(await pool.query("SELECT * FROM seasons WHERE id=$1",[id])).rows[0];
+  if(!season)return res.status(404).json({error:"Season not found."});
+  const divisions=(await pool.query("SELECT * FROM divisions WHERE season_id=$1 ORDER BY sort_order,name",[id])).rows;
+  const rows=[];
+  for(const d of divisions)for(const [index,r] of (await getStandings(d.id)).entries())rows.push([season.name,d.name,r.position||index+1,r.team_name,r.played,r.wins,r.losses,r.frames_won,r.frames_lost,r.frame_difference,r.bonus_points??0,r.total_points??""]);
+  const csvCell=value=>`"${String(value??"").replaceAll('"','""')}"`;
+  res.setHeader("Content-Type","text/csv; charset=utf-8");res.setHeader("Content-Disposition",`attachment; filename="${season.name.replace(/[^a-z0-9_-]+/gi,"-")}-standings.csv"`);
+  res.send("\uFEFF"+[["Season","Division","Position","Team","Played","Won","Lost","Frames For","Frames Against","Difference","Bonus Points","Points"],...rows].map(row=>row.map(csvCell).join(",")).join("\r\n"));
+});
+
+app.get("/api/admin/seasons/:id/export-players.csv", requireRoles(ROLE.NCSF), async (req,res) => {
+  const id=Number(req.params.id),season=(await pool.query("SELECT * FROM seasons WHERE id=$1",[id])).rows[0];
+  if(!season)return res.status(404).json({error:"Season not found."});
+  const divisions=(await pool.query("SELECT * FROM divisions WHERE season_id=$1 ORDER BY sort_order,name",[id])).rows;
+  const rows=[];
+  for(const d of divisions)for(const [index,r] of (await getIndividualRankings(d.id)).entries())rows.push([season.name,d.name,r.position||index+1,r.player_name,r.ncsf_number||"",r.team_name,r.frames_played,r.frames_won,r.frames_lost,Number(r.win_percentage||0).toFixed(1),Number(r.matches_played_percentage||0).toFixed(1)]);
+  const csvCell=value=>`"${String(value??"").replaceAll('"','""')}"`;
+  res.setHeader("Content-Type","text/csv; charset=utf-8");res.setHeader("Content-Disposition",`attachment; filename="${season.name.replace(/[^a-z0-9_-]+/gi,"-")}-players.csv"`);
+  res.send("\uFEFF"+[["Season","Division","Position","Player","NCSF Number","Team","Frames Played","Frames Won","Frames Lost","Win %","Matches Played %"],...rows].map(row=>row.map(csvCell).join(",")).join("\r\n"));
+});
+
+app.get("/api/admin/seasons/:id/print.pdf", requireRoles(ROLE.NCSF), async (req,res) => {
+  const id=Number(req.params.id);
+  const season=(await pool.query("SELECT * FROM seasons WHERE id=$1",[id])).rows[0];
+  if(!season)return res.status(404).json({error:"Season not found."});
+  const divisions=(await pool.query("SELECT * FROM divisions WHERE season_id=$1 ORDER BY sort_order,name",[id])).rows;
+  const doc=new PDFDocument({size:"A4",layout:"landscape",margin:30,bufferPages:true});
+  res.setHeader("Content-Type","application/pdf");
+  res.setHeader("Content-Disposition",`inline; filename="${season.name.replace(/[^a-z0-9_-]+/gi,"-")}-season-report.pdf"`);
+  doc.pipe(res);
+  const navy="#0d2945",gold="#c6a45a",pale="#eef3f8",ink="#10243a",muted="#5d6b7b";
+  const pageW=doc.page.width-60;
+  const header=title=>{
+    doc.rect(0,0,doc.page.width,72).fill(navy);
+    doc.rect(0,70,doc.page.width,2).fill(gold);
+    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(17).text("NAMIBIA CUE SPORTS FEDERATION",30,18,{width:pageW,align:"center"});
+    doc.fillColor("#f0d28b").font("Helvetica-Bold").fontSize(10).text(title.toUpperCase(),30,43,{width:pageW,align:"center"});
+    doc.y=88;
+  };
+  const table=(heading,headers,rows,widths)=>{
+    if(doc.y>doc.page.height-92){doc.addPage();header(heading)}
+    doc.fillColor(ink).font("Helvetica-Bold").fontSize(11).text(heading,30,doc.y,{width:pageW});doc.moveDown(.45);
+    const x0=30,rowH=22; let y=doc.y;
+    const draw=(items,fill,bold=false)=>{
+      if(!bold&&y>doc.page.height-55){doc.addPage();header(heading);y=doc.y;draw(headers,navy,true)}
+      doc.rect(x0,y,pageW,rowH).fill(fill);let x=x0;
+      items.forEach((item,i)=>{doc.fillColor(bold?"#ffffff":ink).font(bold?"Helvetica-Bold":"Helvetica").fontSize(bold?7:7.5).text(String(item??""),x+5,y+7,{width:widths[i]-10,height:10,ellipsis:true});x+=widths[i]});
+      y+=rowH;
+    };
+    draw(headers,navy,true);
+    rows.forEach((row,i)=>draw(row,i%2?pale:"#ffffff"));
+    doc.y=y+14;
+  };
+  for(const [divisionIndex,division] of divisions.entries()){
+    if(divisionIndex)doc.addPage();
+    header(season.name+" · "+division.name+" · Official Season Report");
+    const teams=await getStandings(division.id);
+    table("Team standings",["POS","TEAM","P","W","L","FRAMES +","FRAMES -","DIFF","BONUS","PTS"],teams.map((r,i)=>[r.position||i+1,r.team_name,r.played,r.wins,r.losses,r.frames_won,r.frames_lost,r.frame_difference,r.bonus_points??0,r.total_points??""]),[36,260,40,40,40,75,75,64,58,55]);
+    const players=await getIndividualRankings(division.id);
+    table("Player standings",["POS","PLAYER","TEAM","PLAYED","WON","WIN %"],players.map((r,i)=>[r.position||i+1,r.player_name,r.team_name,r.frames_played,r.frames_won,`${Number(r.win_percentage||0).toFixed(1)}%`]),[36,235,245,85,85,62]);
+    const fx=(await pool.query(`SELECT f.*,ht.name home_name,at.name away_name,
+      COUNT(*) FILTER(WHERE fr.winner_side='HOME')::int home_frames,COUNT(*) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+      FROM fixtures f JOIN teams ht ON ht.id=f.home_team_id JOIN teams at ON at.id=f.away_team_id
+      LEFT JOIN frames fr ON fr.fixture_id=f.id WHERE f.division_id=$1
+      GROUP BY f.id,ht.name,at.name ORDER BY f.fixture_date NULLS LAST,f.round_no,f.id`,[division.id])).rows;
+    table("Fixtures and results",["DATE","ROUND","HOME","SCORE","AWAY","STATUS","COMPETITION"],fx.map(f=>[f.fixture_date?new Date(f.fixture_date).toLocaleDateString("en-NA",{timeZone:"Africa/Windhoek"}):"TBA",f.round_no,f.home_name,`${f.home_frames} – ${f.away_frames}`,f.away_name,f.status,(f.competition_label||"League").slice(0,28)]),[70,40,170,60,170,75,150]);
+  }
+  const pages=doc.bufferedPageRange();
+  for(let page=pages.start;page<pages.start+pages.count;page++){
+    doc.switchToPage(page);
+    doc.font("Helvetica").fontSize(7).fillColor(muted).text(`Exported ${new Date().toLocaleDateString("en-NA",{timeZone:"Africa/Windhoek"})} • ${season.closed_at?"Season closed":"Season open"} • Official NCSF League Manager record`,30,doc.page.height-34,{width:pageW,align:"center"});
+  }
+  doc.end();
+});
+
 app.post("/api/admin/divisions", requireRoles(ROLE.NCSF), async (req, res) => {
   const { rows } = await pool.query(
     "INSERT INTO divisions(season_id,name,sort_order) VALUES($1,$2,$3) RETURNING *",
@@ -2898,6 +3037,9 @@ app.post("/api/admin/fixtures", requireRoles(ROLE.NCSF), async (req, res) => {
   const divisionId = Number(req.body.divisionId);
   const homeTeamId = Number(req.body.homeTeamId);
   const awayTeamId = Number(req.body.awayTeamId);
+  const seasonState=await pool.query("SELECT s.closed_at FROM divisions d JOIN seasons s ON s.id=d.season_id WHERE d.id=$1",[divisionId]);
+  if(!seasonState.rowCount)return res.status(404).json({error:"Division not found."});
+  if(seasonState.rows[0].closed_at)return res.status(409).json({error:"Reopen this season before adding fixtures."});
   const valid = await pool.query(
     "SELECT COUNT(*)::int count FROM teams WHERE id IN ($1,$2) AND division_id=$3",
     [homeTeamId, awayTeamId, divisionId]
@@ -2922,6 +3064,7 @@ app.patch("/api/admin/fixtures/:id", requireRoles(ROLE.NCSF), async (req, res) =
   const fixtureId = Number(req.params.id);
   const fixture = await fixtureById(fixtureId);
   if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if(rejectClosedSeason(fixture,res))return;
 
   const roundNo = req.body.roundNo === undefined ? fixture.round_no : Number(req.body.roundNo);
   const fixtureDate = req.body.fixtureDate === undefined ? fixture.fixture_date : (req.body.fixtureDate || null);
@@ -2947,6 +3090,7 @@ app.post("/api/admin/fixtures/:id/postpone", requireRoles(ROLE.NCSF), async (req
   const fixtureId = Number(req.params.id);
   const fixture = await fixtureById(fixtureId);
   if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if(rejectClosedSeason(fixture,res))return;
   if (fixture.status === "APPROVED") return res.status(409).json({ error: "Approved fixtures cannot be postponed." });
   await pool.query("UPDATE fixtures SET status='POSTPONED' WHERE id=$1", [fixtureId]);
   await audit(req.user.id, fixtureId, "FIXTURE_POSTPONED", {});
@@ -2957,6 +3101,7 @@ app.post("/api/admin/fixtures/:id/restore", requireRoles(ROLE.NCSF), async (req,
   const fixtureId = Number(req.params.id);
   const fixture = await fixtureById(fixtureId);
   if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if(rejectClosedSeason(fixture,res))return;
   if (fixture.status !== "POSTPONED") return res.status(409).json({ error: "Only postponed fixtures can be restored." });
   const { rows } = await pool.query("SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND winner_side IS NOT NULL", [fixtureId]);
   const status = rows[0].count > 0 ? "IN_PROGRESS" : "SCHEDULED";
@@ -2969,6 +3114,7 @@ app.delete("/api/admin/fixtures/:id", requireRoles(ROLE.NCSF), async (req, res) 
   const fixtureId = Number(req.params.id);
   const fixture = await fixtureById(fixtureId);
   if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if(rejectClosedSeason(fixture,res))return;
   if (!["SCHEDULED","POSTPONED"].includes(fixture.status)) return res.status(409).json({ error: "Only unplayed scheduled or postponed fixtures can be deleted." });
   const { rows } = await pool.query("SELECT COUNT(*)::int count FROM frames WHERE fixture_id=$1 AND winner_side IS NOT NULL", [fixtureId]);
   if (rows[0].count > 0) return res.status(409).json({ error: "A fixture with scored frames cannot be deleted." });
@@ -3003,8 +3149,37 @@ app.patch("/api/admin/users/:id", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req
   res.json({ user: safeUser(updated.rows[0]) });
 });
 
+function easterSundayUtc(year){
+  const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3);
+  const h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
+  const month=Math.floor((h+l-7*m+114)/31),day=((h+l-7*m+114)%31)+1;
+  return new Date(Date.UTC(year,month-1,day));
+}
+function namibiaPublicHolidays(year){
+  const dates=new Set();
+  const add=(month,day)=>dates.add(`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`);
+  [[1,1],[3,21],[5,1],[5,4],[5,25],[5,28],[8,26],[12,10],[12,25],[12,26]].forEach(([m,d])=>add(m,d));
+  const easter=easterSundayUtc(year);
+  for(const offset of [-2,1,39]){const day=new Date(easter);day.setUTCDate(day.getUTCDate()+offset);add(day.getUTCMonth()+1,day.getUTCDate())}
+  for(const value of [...dates]){
+    const day=new Date(`${value}T00:00:00Z`);
+    if(day.getUTCDay()===0){day.setUTCDate(day.getUTCDate()+1);dates.add(day.toISOString().slice(0,10))}
+  }
+  return dates;
+}
+function isoWeekMonday(date){const day=new Date(date);const weekday=(day.getUTCDay()+6)%7;day.setUTCDate(day.getUTCDate()-weekday);day.setUTCHours(0,0,0,0);return day}
+function isNamibianHolidayWeek(date){
+  const monday=isoWeekMonday(date),year=monday.getUTCFullYear();
+  const dates=new Set([...namibiaPublicHolidays(year),...namibiaPublicHolidays(year+1)]);
+  for(let i=0;i<7;i++){const d=new Date(monday);d.setUTCDate(d.getUTCDate()+i);if(dates.has(d.toISOString().slice(0,10)))return true}
+  return false;
+}
+
 app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF), async (req, res) => {
   const divisionId = Number(req.params.id);
+  const seasonState=await pool.query("SELECT s.end_date,s.closed_at FROM divisions d JOIN seasons s ON s.id=d.season_id WHERE d.id=$1",[divisionId]);
+  if(!seasonState.rowCount)return res.status(404).json({error:"Division not found."});
+  if(seasonState.rows[0].closed_at)return res.status(409).json({error:"Reopen this season before generating fixtures."});
   const { rows: existing } = await pool.query("SELECT COUNT(*)::int count FROM fixtures WHERE division_id=$1", [divisionId]);
   if (existing[0].count > 0 && !req.body.force) {
     return res.status(409).json({ error: "This division already has fixtures. Send force=true only if you intentionally want to add another schedule." });
@@ -3016,9 +3191,19 @@ app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF),
   if (ids.length % 2) ids.push(null);
   const n = ids.length;
   const rounds = n - 1;
-  const firstDate = req.body.firstDate ? new Date(req.body.firstDate) : new Date();
-  const dayMs = 7 * 24 * 60 * 60 * 1000;
-
+  const dateInput=String(req.body.firstDate||new Date().toISOString().slice(0,10));
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(dateInput))return res.status(400).json({error:"Choose a valid first match date."});
+  const firstDate = new Date(`${dateInput}T12:00:00Z`);
+  const scheduledDates=[];
+  let cursor=new Date(firstDate),skippedWeeks=0;
+  for(let i=0;i<rounds*2;i++){
+    while(isNamibianHolidayWeek(cursor)){cursor.setUTCDate(cursor.getUTCDate()+7);skippedWeeks++}
+    scheduledDates.push(new Date(cursor));cursor.setUTCDate(cursor.getUTCDate()+7);
+  }
+  if(seasonState.rows[0].end_date){
+    const beyond=scheduledDates.findIndex(d=>d>new Date(`${String(seasonState.rows[0].end_date).slice(0,10)}T23:59:59Z`));
+    if(beyond>=0)return res.status(400).json({error:`The full schedule needs ${rounds*2} match weeks and would run past this season's end date. Choose an earlier start date or extend the season end date.`});
+  }
   const created = [];
   const client = await pool.connect();
   try {
@@ -3031,14 +3216,14 @@ app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF),
         if (!a || !b) continue;
         const home = r % 2 === 0 ? a : b;
         const away = r % 2 === 0 ? b : a;
-        const d1 = new Date(firstDate.getTime() + r * dayMs);
+        const d1 = scheduledDates[r];
         const q1 = await client.query(`
           INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
           VALUES($1,$2,$3,$4,$5) RETURNING id
         `, [divisionId, r + 1, d1.toISOString(), home, away]);
         created.push(q1.rows[0].id);
 
-        const d2 = new Date(firstDate.getTime() + (r + rounds) * dayMs);
+        const d2 = scheduledDates[r + rounds];
         const q2 = await client.query(`
           INSERT INTO fixtures(division_id,round_no,fixture_date,home_team_id,away_team_id)
           VALUES($1,$2,$3,$4,$5) RETURNING id
@@ -3048,7 +3233,7 @@ app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF),
       rotating = [rotating[0], rotating[n - 1], ...rotating.slice(1, n - 1)];
     }
     await client.query("COMMIT");
-    res.status(201).json({ created: created.length, fixtureIds: created });
+    res.status(201).json({ created: created.length, fixtureIds: created, skippedHolidayWeeks:skippedWeeks, firstScheduledDate:scheduledDates[0].toISOString().slice(0,10),lastScheduledDate:scheduledDates.at(-1).toISOString().slice(0,10) });
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -3061,6 +3246,7 @@ app.put("/api/fixtures/:id/lineup", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if(rejectClosedSeason(fixture,res))return;
   if (["SUBMITTED","CONFIRMED","APPROVED"].includes(fixture.status) && user.role !== ROLE.NCSF) return res.status(409).json({ error: "This score sheet is locked." });
 
   const side = String(req.body.side || "").toUpperCase();
@@ -3121,6 +3307,7 @@ app.post("/api/fixtures/:id/substitutions", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if(rejectClosedSeason(fixture,res))return;
   if (["SUBMITTED","CONFIRMED","APPROVED"].includes(fixture.status) && user.role !== ROLE.NCSF) return res.status(409).json({ error: "This score sheet is locked." });
 
   const side = String(req.body.side || "").toUpperCase();
@@ -3217,6 +3404,7 @@ app.put("/api/fixtures/:id/frames/:frameId", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if(rejectClosedSeason(fixture,res))return;
   if (["SUBMITTED","CONFIRMED","APPROVED"].includes(fixture.status) && user.role !== ROLE.NCSF) return res.status(409).json({ error: "This score sheet is locked." });
 
   const winnerSide = req.body.winnerSide === null ? null : String(req.body.winnerSide || "").toUpperCase();
@@ -3248,6 +3436,7 @@ app.patch("/api/fixtures/:id/extras", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if(rejectClosedSeason(fixture,res))return;
   if (fixture.status === "APPROVED" && user.role !== ROLE.NCSF) return res.status(409).json({ error: "Approved fixtures are locked." });
 
   const idsInput = Array.isArray(req.body.breakRunPlayerIds)
@@ -3321,6 +3510,7 @@ app.post("/api/fixtures/:id/upload", requireAuth, upload.single("scoresheet"), a
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if(rejectClosedSeason(fixture,res))return;
   if (!req.file) return res.status(400).json({ error: "Choose a score sheet image or PDF." });
 
   const { rows } = await pool.query(`
@@ -3336,6 +3526,7 @@ app.post("/api/fixtures/:id/submit", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if(rejectClosedSeason(fixture,res))return;
 
   const submittingSide = sideForUser(user, fixture);
   if (!["HOME","AWAY"].includes(submittingSide)) {
@@ -3373,6 +3564,7 @@ app.post("/api/fixtures/:id/confirm", requireAuth, async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   const user = await currentUserById(req.session.userId);
   if (!fixture || !canManageFixture(user, fixture)) return res.status(403).json({ error: "No access to this fixture." });
+  if(rejectClosedSeason(fixture,res))return;
   if (fixture.status !== "SUBMITTED") return res.status(409).json({ error: "The result is not waiting for opponent confirmation." });
 
   const confirmingSide = sideForUser(user, fixture);
@@ -3402,6 +3594,7 @@ app.post("/api/fixtures/:id/confirm", requireAuth, async (req, res) => {
 app.post("/api/fixtures/:id/approve", requireRoles(ROLE.NCSF), async (req, res) => {
   const fixture = await fixtureById(Number(req.params.id));
   if (!fixture) return res.status(404).json({ error: "Fixture not found." });
+  if(rejectClosedSeason(fixture,res))return;
   if (fixture.status !== "CONFIRMED") return res.status(409).json({ error: "The opposing team must confirm the submitted result before NCSF approval." });
 
   const payload = await fixturePayload(fixture);
