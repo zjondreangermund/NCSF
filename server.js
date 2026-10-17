@@ -886,7 +886,7 @@ async function seedOfficialCoastalTeamStandings() {
         "ON CONFLICT(division_id,team_id) DO UPDATE SET position=EXCLUDED.position,played=EXCLUDED.played," +
         "wins=EXCLUDED.wins,losses=EXCLUDED.losses,frames_for=EXCLUDED.frames_for,frames_against=EXCLUDED.frames_against," +
         "frame_difference=EXCLUDED.frame_difference,bonus_points=EXCLUDED.bonus_points,total_points=EXCLUDED.total_points," +
-        "source=EXCLUDED.source,source_date=EXCLUDED.source_date,updated_at=NOW()
+        "source=EXCLUDED.source,source_date=EXCLUDED.source_date,updated_at=NOW()"
       , [divisionId,team.id,item.position,item.played,item.wins,item.losses,item.frames_for,item.frames_against,item.frame_difference,item.bonus_points,item.total_points,officialCoastalTeamLog.asOf]);
     }
     await client.query("INSERT INTO app_migrations(key) VALUES($1)", [key]);
