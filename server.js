@@ -845,6 +845,73 @@ async function seedOfficialPlayerLogSnapshots() {
 }
 
 
+async function seedOfficialPlayerTeamAssignments() {
+  const key = "official-player-team-assignments-2026-06-09-v1";
+  const already = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [key]);
+  if (already.rowCount) return;
+  const client = await pool.connect();
+  let createdCount = 0, matchedCount = 0;
+  const normalize = value => String(value || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const editDistance = (a,b) => {
+    const prev=Array.from({length:b.length+1},(_,i)=>i);
+    for(let i=1;i<=a.length;i++){let current=[i];for(let j=1;j<=b.length;j++)current[j]=Math.min(current[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));for(let j=0;j<=b.length;j++)prev[j]=current[j];}
+    return prev[b.length];
+  };
+  try {
+    await client.query("BEGIN");
+    for (const divisionLog of officialPlayerLogs.divisions) {
+      const divisionResult = await client.query("SELECT id FROM divisions WHERE LOWER(name)=LOWER($1) ORDER BY active DESC,id LIMIT 1", [divisionLog.division]);
+      if (!divisionResult.rowCount) throw new Error("Division not found while assigning players: " + divisionLog.division);
+      const divisionId = divisionResult.rows[0].id;
+      const { rows: teams } = await client.query("SELECT id,name,club_id FROM teams WHERE division_id=$1 AND active=TRUE", [divisionId]);
+      const { rows: players } = await client.query("SELECT p.id,p.ncsf_number,p.first_name,p.last_name,p.team_id,p.club_id FROM players p JOIN teams t ON t.id=p.team_id WHERE t.division_id=$1", [divisionId]);
+      const teamKey = value => normalize(value).replace(/pc$/, "");
+      for (const official of divisionLog.players) {
+        const requestedTeam = teamKey(official.team_name);
+        const team = teams.find(row => teamKey(row.name)===requestedTeam);
+        if (!team) throw new Error("Team not found for official player " + official.player_name + " (" + official.team_name + ").");
+        const parts=String(official.player_name||"").trim().split(/\\s+/);
+        const firstName=parts.shift()||"Unknown";
+        const lastName=parts.join(" ");
+        const fullKey=normalize(firstName+" "+lastName);
+        const firstKey=normalize(firstName), lastKey=normalize(lastName);
+        const exact=players.filter(row=>normalize(row.first_name+" "+row.last_name)===fullKey);
+        let player=exact.find(row=>Number(row.team_id)===Number(team.id))||(exact.length===1?exact[0]:null);
+        if (!player) {
+          const sameTeam=players.filter(row=>Number(row.team_id)===Number(team.id));
+          const incomplete=sameTeam.filter(row=>!String(row.last_name||"").trim() && normalize(row.first_name)===firstKey);
+          if (incomplete.length===1) player=incomplete[0];
+          if (!player) {
+            const near=sameTeam.filter(row=>normalize(row.first_name)===firstKey && String(row.last_name||"").trim() && editDistance(normalize(row.last_name),lastKey)===1);
+            if (near.length===1) player=near[0];
+          }
+          if (!player) {
+            const incompleteNear=sameTeam.filter(row=>!String(row.last_name||"").trim() && editDistance(normalize(row.first_name),firstKey)===1);
+            if (incompleteNear.length===1) player=incompleteNear[0];
+          }
+        }
+        if (player) {
+          await client.query("UPDATE players SET club_id=$2,team_id=$3,first_name=$4,last_name=$5,active=TRUE WHERE id=$1", [player.id,team.club_id,team.id,firstName,lastName]);
+          player.club_id=team.club_id; player.team_id=team.id; player.first_name=firstName; player.last_name=lastName;
+          matchedCount++;
+        } else {
+          const ncsfNumber=await generateNcsfNumber(client);
+          const inserted=await client.query("INSERT INTO players(club_id,team_id,ncsf_number,first_name,last_name,active,suspended) VALUES($1,$2,$3,$4,$5,TRUE,FALSE) RETURNING id,ncsf_number,first_name,last_name,team_id,club_id", [team.club_id,team.id,ncsfNumber,firstName,lastName]);
+          players.push(inserted.rows[0]);
+          createdCount++;
+        }
+      }
+    }
+    await client.query("INSERT INTO app_migrations(key) VALUES($1)", [key]);
+    await client.query("COMMIT");
+    console.log("Assigned official Central and Coastal PDF players to teams; created " + createdCount + " and matched " + matchedCount + " existing players.");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 async function seedOfficialCoastalTeamStandings() {
   const key = "official-coastal-team-log-2026-06-09-provisional-v1";
   const already = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [key]);
@@ -3594,6 +3661,7 @@ initDatabase()
   .then(seedCentralTop8AndOfficialStandings)
   .then(seedOfficialCoastalTeamStandings)
   .then(seedOfficialPlayerLogSnapshots)
+  .then(seedOfficialPlayerTeamAssignments)
   .then(() => httpServer.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);
