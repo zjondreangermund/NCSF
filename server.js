@@ -881,6 +881,10 @@ async function seedOfficialPlayerTeamAssignments() {
           const sameTeam=players.filter(row=>Number(row.team_id)===Number(team.id));
           const incomplete=sameTeam.filter(row=>!String(row.last_name||"").trim() && normalize(row.first_name)===firstKey);
           if (incomplete.length===1) player=incomplete[0];
+          if (!player && !lastName) {
+            const shortNameMatch=sameTeam.filter(row=>normalize(row.first_name)===firstKey);
+            if (shortNameMatch.length===1) player=shortNameMatch[0];
+          }
           if (!player) {
             const near=sameTeam.filter(row=>normalize(row.first_name)===firstKey && String(row.last_name||"").trim() && editDistance(normalize(row.last_name),lastKey)===1);
             if (near.length===1) player=near[0];
@@ -891,8 +895,9 @@ async function seedOfficialPlayerTeamAssignments() {
           }
         }
         if (player) {
-          await client.query("UPDATE players SET club_id=$2,team_id=$3,first_name=$4,last_name=$5,active=TRUE WHERE id=$1", [player.id,team.club_id,team.id,firstName,lastName]);
-          player.club_id=team.club_id; player.team_id=team.id; player.first_name=firstName; player.last_name=lastName;
+          const assignedLastName=lastName || String(player.last_name||"").trim();
+          await client.query("UPDATE players SET club_id=$2,team_id=$3,first_name=$4,last_name=$5,active=TRUE WHERE id=$1", [player.id,team.club_id,team.id,firstName,assignedLastName]);
+          player.club_id=team.club_id; player.team_id=team.id; player.first_name=firstName; player.last_name=assignedLastName;
           matchedCount++;
         } else {
           const ncsfNumber=await generateNcsfNumber(client);
@@ -2210,7 +2215,11 @@ app.get("/api/public/players", async (req, res) => {
       const used=new Set();
       const officialPlayers=officialRows.map(log=>{
         const key=normalize(log.player_name)+"|"+normalize(log.team_name);
-        const roster=rosterByKey.get(key)||null;
+        let roster=rosterByKey.get(key)||null;
+        if(!roster && !String(log.player_name||"").trim().includes(" ")){
+          const shortMatches=rows.filter(player=>normalize(player.first_name)===normalize(log.player_name)&&normalize(player.team_name)===normalize(log.team_name));
+          if(shortMatches.length===1)roster=shortMatches[0];
+        }
         if(roster)used.add(roster.id);
         return {
           id:roster?.id??null,
