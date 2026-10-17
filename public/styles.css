@@ -4213,3 +4213,42 @@ body.ncsf-live-fullscreen-active{
 .admin-edit-dialog{border:0;border-radius:14px;max-width:580px;width:calc(100% - 32px);max-height:85vh;overflow:auto;padding:24px;color:#17314e;background:#fff;box-shadow:0 20px 90px #0005}
 .admin-edit-dialog::backdrop{background:#071b35aa}.admin-edit-dialog .edit-error{color:#ac2525;margin:0}
 .schedule-preview .table-wrap{max-height:65vh;overflow:auto}.draft-table th{position:sticky;top:0;z-index:1}.draft-table input[data-date]{min-width:205px}.draft-table input[data-venue]{min-width:150px}.season-admin-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Keep wide content inside its own scroller on every page. Grid/flex items
+   otherwise retain the table's intrinsic width and widen the document. */
+@media screen{
+  html,body{
+    max-width:100%;
+    overflow-x:hidden;
+    overflow-x:clip;
+  }
+  body{width:100%;min-width:0}
+  .page{width:100%;min-width:0}
+  .topbar-inner,.hero,.grid,.panel,.hero-card,.empty,.form-grid,
+  .card-list,.admin-pane,.filters,.section-title,.panel-head,.app-download-card{
+    min-width:0;
+    max-width:100%;
+  }
+  .page > *,.grid > *,.hero > *,.panel > *,.hero-card > *,
+  .form-grid > *,.topbar-inner > *,.filters > *{
+    min-width:0;
+  }
+  .filters > *,input,select,textarea{max-width:100%}
+  .section-title,.panel-head{flex-wrap:wrap}
+  .table-wrap{
+    display:block;
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    contain:inline-size;
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-x pan-y pinch-zoom;
+  }
+  .nav,.admin-tabs{max-width:100%;overscroll-behavior-x:contain}
+  body[data-page="live-page"]:not(.ncsf-live-fullscreen-active),
+  body[data-page="broadcast-page"]:not(.ncsf-live-fullscreen-active){
+    touch-action:pan-x pan-y pinch-zoom!important;
+  }
+}
