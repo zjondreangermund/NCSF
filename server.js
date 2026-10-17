@@ -2,7 +2,7 @@ require("dotenv").config();
 require("express-async-errors");
 
 const path = require("path");
-const {buildSchedule,applyEdits,fingerprint} = require("./schedule");
+const {buildSchedule,applyEdits,fingerprint,buildSeasonSchedule,editSeasonSchedule} = require("./schedule");
 const fs = require("fs");
 const http = require("http");
 const crypto = require("crypto");
@@ -206,6 +206,24 @@ async function initDatabase() {
       CHECK (home_team_id <> away_team_id)
     );
 
+    CREATE TABLE IF NOT EXISTS permanent_divisions (
+      id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE CHECK(name IN ('Central','Coastal'))
+    );
+    INSERT INTO permanent_divisions(name) VALUES('Central'),('Coastal') ON CONFLICT(name) DO NOTHING;
+    ALTER TABLE divisions ADD COLUMN IF NOT EXISTS permanent_division_id INTEGER REFERENCES permanent_divisions(id);
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS permanent_division_id INTEGER REFERENCES permanent_divisions(id);
+    CREATE TABLE IF NOT EXISTS division_teams (
+      division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
+      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      PRIMARY KEY(division_id,team_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_division_teams_team ON division_teams(team_id);
+    CREATE INDEX IF NOT EXISTS idx_teams_permanent_division ON teams(permanent_division_id);
+    CREATE TABLE IF NOT EXISTS season_schedule_drafts (
+      token TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      plan JSONB NOT NULL,roster_hash TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()+INTERVAL '2 hours'
+    );
     CREATE TABLE IF NOT EXISTS schedule_drafts (
       token TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
@@ -1558,7 +1576,7 @@ async function getStandings(divisionId) {
     FROM teams t
     JOIN clubs c ON c.id=t.club_id
     LEFT JOIN team_rows tr ON tr.team_id=t.id
-    WHERE t.division_id=$1 AND t.active=TRUE
+    WHERE (t.division_id=$1 OR EXISTS(SELECT 1 FROM division_teams dt WHERE dt.division_id=$1 AND dt.team_id=t.id)) AND t.active=TRUE
     GROUP BY t.id,c.name
     ORDER BY frames_won DESC, frame_difference DESC, wins DESC, team_name ASC
   `, [divisionId]);
@@ -1597,7 +1615,7 @@ async function getIndividualRankings(divisionId) {
     JOIN clubs c ON c.id=p.club_id
     LEFT JOIN frames fr ON (fr.home_player_id=p.id OR fr.away_player_id=p.id)
     LEFT JOIN fixtures f ON f.id=fr.fixture_id AND f.status='APPROVED' AND f.division_id=$1 AND f.competition_label IS NULL
-    WHERE t.division_id=$1 AND p.active=TRUE
+    WHERE (t.division_id=$1 OR EXISTS(SELECT 1 FROM division_teams dt WHERE dt.division_id=$1 AND dt.team_id=t.id)) AND p.active=TRUE
     GROUP BY p.id,t.name,c.name
     HAVING COUNT(f.id) > 0
     ORDER BY frames_won DESC, win_percentage DESC, frames_played DESC, player_name ASC
@@ -2286,14 +2304,14 @@ app.get("/api/public/teams", async (req, res) => {
   const where = ["t.active=TRUE"];
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
-    where.push(`t.division_id=$${args.length}`);
+    where.push(`(t.division_id=$${args.length} OR EXISTS(SELECT 1 FROM division_teams dt WHERE dt.division_id=$${args.length} AND dt.team_id=t.id))`);
   }
   const { rows } = await pool.query(`
-    SELECT t.id,t.name,t.short_name,t.division_id,c.name club_name,d.name division_name,s.name season_name,
+    SELECT t.id,t.name,t.short_name,d.id division_id,c.name club_name,d.name division_name,s.name season_name,
            COUNT(p.id) FILTER (WHERE p.active=TRUE)::int player_count
     FROM teams t
     JOIN clubs c ON c.id=t.club_id
-    LEFT JOIN divisions d ON d.id=t.division_id
+    LEFT JOIN divisions d ON d.id=${req.query.divisionId?"$1":"t.division_id"}
     LEFT JOIN seasons s ON s.id=d.season_id
     LEFT JOIN players p ON p.team_id=t.id
     WHERE ${where.join(" AND ")}
@@ -2308,7 +2326,7 @@ app.get("/api/public/players", async (req, res) => {
   const where = ["p.active=TRUE","t.active=TRUE"];
   if (req.query.divisionId) {
     args.push(Number(req.query.divisionId));
-    where.push(`t.division_id=$${args.length}`);
+    where.push(`(t.division_id=$${args.length} OR EXISTS(SELECT 1 FROM division_teams dt WHERE dt.division_id=$${args.length} AND dt.team_id=t.id))`);
   }
   if (req.query.teamId) {
     args.push(Number(req.query.teamId));
@@ -2326,9 +2344,9 @@ app.get("/api/public/players", async (req, res) => {
     FROM players p
     JOIN teams t ON t.id=p.team_id
     JOIN clubs c ON c.id=p.club_id
-    LEFT JOIN divisions d ON d.id=t.division_id
+    LEFT JOIN divisions d ON d.id=${req.query.divisionId?"$1":"t.division_id"}
     LEFT JOIN frames fr ON (fr.home_player_id=p.id OR fr.away_player_id=p.id)
-    LEFT JOIN fixtures f ON f.id=fr.fixture_id AND f.status='APPROVED'
+    LEFT JOIN fixtures f ON f.id=fr.fixture_id AND f.status='APPROVED' ${req.query.divisionId?"AND f.division_id=$1 AND f.competition_label IS NULL":""}
     WHERE ${where.join(" AND ")}
     GROUP BY p.id,t.id,t.name,c.name,d.id,d.name
     ORDER BY p.last_name,p.first_name
@@ -2633,18 +2651,18 @@ app.get("/api/admin/meta", requireRoles(ROLE.NCSF, ROLE.CLUB, ROLE.TEAM), async 
       pool.query("SELECT * FROM seasons ORDER BY id DESC"),
       pool.query("SELECT d.*,s.name season_name FROM divisions d JOIN seasons s ON s.id=d.season_id ORDER BY d.id DESC"),
       pool.query("SELECT * FROM clubs ORDER BY name"),
-      pool.query("SELECT t.*,c.name club_name,d.name division_name FROM teams t JOIN clubs c ON c.id=t.club_id LEFT JOIN divisions d ON d.id=t.division_id ORDER BY t.name"),
+      pool.query("SELECT t.*,ARRAY(SELECT dt.division_id FROM division_teams dt WHERE dt.team_id=t.id) division_ids,c.name club_name,COALESCE(pd.name,d.name) division_name FROM teams t JOIN clubs c ON c.id=t.club_id LEFT JOIN divisions d ON d.id=t.division_id LEFT JOIN permanent_divisions pd ON pd.id=t.permanent_division_id ORDER BY t.name"),
       pool.query("SELECT p.*,c.name club_name,t.name team_name FROM players p JOIN clubs c ON c.id=p.club_id LEFT JOIN teams t ON t.id=p.team_id ORDER BY p.last_name,p.first_name"),
       pool.query("SELECT u.id,u.email,u.display_name,u.role,u.club_id,u.team_id,u.active,c.name club_name,t.name team_name FROM users u LEFT JOIN clubs c ON c.id=u.club_id LEFT JOIN teams t ON t.id=u.team_id ORDER BY u.display_name")
     ]);
-    return res.json({ seasons: seasons.rows, divisions: divisions.rows, clubs: clubs.rows, teams: teams.rows, players: players.rows, users: users.rows });
+    return res.json({ seasons: seasons.rows, divisions: divisions.rows, permanentDivisions:(await pool.query("SELECT * FROM permanent_divisions ORDER BY name")).rows, clubs: clubs.rows, teams: teams.rows, players: players.rows, users: users.rows });
   }
 
   const clubId = user.club_id;
   const [divisions, clubs, teams, players, users] = await Promise.all([
     pool.query("SELECT d.*,s.name season_name FROM divisions d JOIN seasons s ON s.id=d.season_id WHERE d.active=TRUE ORDER BY d.name"),
     pool.query("SELECT * FROM clubs WHERE id=$1", [clubId]),
-    pool.query("SELECT t.*,c.name club_name,d.name division_name FROM teams t JOIN clubs c ON c.id=t.club_id LEFT JOIN divisions d ON d.id=t.division_id WHERE t.club_id=$1 ORDER BY t.name", [clubId]),
+    pool.query("SELECT t.*,ARRAY(SELECT dt.division_id FROM division_teams dt WHERE dt.team_id=t.id) division_ids,c.name club_name,COALESCE(pd.name,d.name) division_name FROM teams t JOIN clubs c ON c.id=t.club_id LEFT JOIN divisions d ON d.id=t.division_id LEFT JOIN permanent_divisions pd ON pd.id=t.permanent_division_id WHERE t.club_id=$1 ORDER BY t.name", [clubId]),
     pool.query("SELECT p.*,c.name club_name,t.name team_name FROM players p JOIN clubs c ON c.id=p.club_id LEFT JOIN teams t ON t.id=p.team_id WHERE p.club_id=$1 ORDER BY p.last_name,p.first_name", [clubId]),
     pool.query("SELECT u.id,u.email,u.display_name,u.role,u.club_id,u.team_id,u.active,c.name club_name,t.name team_name FROM users u LEFT JOIN clubs c ON c.id=u.club_id LEFT JOIN teams t ON t.id=u.team_id WHERE u.club_id=$1 ORDER BY u.display_name", [clubId])
   ]);
@@ -2805,16 +2823,7 @@ app.delete("/api/admin/opportunities/:id", requireRoles(ROLE.NCSF), async (req,r
   res.json({ok:true});
 });
 
-app.post("/api/admin/seasons", requireRoles(ROLE.NCSF), async (req, res) => {
-  const name = String(req.body.name || "").trim();
-  if (!name) return res.status(400).json({ error: "Season name is required." });
-  if (req.body.active) await pool.query("UPDATE seasons SET active=FALSE");
-  const { rows } = await pool.query(
-    "INSERT INTO seasons(name,start_date,end_date,active) VALUES($1,$2,$3,$4) RETURNING *",
-    [name, req.body.startDate || null, req.body.endDate || null, Boolean(req.body.active)]
-  );
-  res.status(201).json({ season: rows[0] });
-});
+app.post("/api/admin/seasons",requireRoles(ROLE.NCSF),async(req,res)=>res.status(409).json({error:'Preview and approve the whole season in Fixtures. Approval creates the season, both divisions and the playoff bracket together.'}));
 
 app.patch('/api/admin/seasons/:id',requireRoles(ROLE.NCSF),async(req,res)=>{
   const id=Number(req.params.id),name=String(req.body.name||'').trim(),start=req.body.startDate||null,end=req.body.endDate||null;
@@ -2983,13 +2992,7 @@ app.get("/api/admin/seasons/:id/print.pdf", requireRoles(ROLE.NCSF), async (req,
   doc.end();
 });
 
-app.post("/api/admin/divisions", requireRoles(ROLE.NCSF), async (req, res) => {
-  const { rows } = await pool.query(
-    "INSERT INTO divisions(season_id,name,sort_order) VALUES($1,$2,$3) RETURNING *",
-    [Number(req.body.seasonId), String(req.body.name || "").trim(), Number(req.body.sortOrder || 0)]
-  );
-  res.status(201).json({ division: rows[0] });
-});
+app.post("/api/admin/divisions",requireRoles(ROLE.NCSF),async(req,res)=>res.status(409).json({error:'Central and Coastal are permanent divisions. They are included automatically when a season schedule is approved.'}));
 
 app.post("/api/admin/clubs", requireRoles(ROLE.NCSF), async (req, res) => {
   const name = String(req.body.name || "").trim();
@@ -3005,10 +3008,10 @@ app.post("/api/admin/teams", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req, res
   const clubId = req.user.role === ROLE.CLUB ? req.user.club_id : Number(req.body.clubId);
   const name = String(req.body.name || "").trim();
   if (!clubId || !name) return res.status(400).json({ error: "Club and team name are required." });
-  const { rows } = await pool.query(
-    "INSERT INTO teams(club_id,division_id,name,short_name) VALUES($1,$2,$3,$4) RETURNING *",
-    [clubId, req.body.divisionId ? Number(req.body.divisionId) : null, name, String(req.body.shortName || "").trim() || null]
-  );
+  const permanentId=Number(req.body.permanentDivisionId||0);
+  const category=(await pool.query('SELECT id FROM permanent_divisions WHERE id=$1',[permanentId])).rows[0];
+  if(!category)return res.status(400).json({error:'Choose Central or Coastal.'});
+  const {rows}=await pool.query('INSERT INTO teams(club_id,permanent_division_id,name,short_name) VALUES($1,$2,$3,$4) RETURNING *',[clubId,permanentId,name,String(req.body.shortName||'').trim()||null]);
   res.status(201).json({ team: rows[0] });
 });
 
@@ -3095,7 +3098,7 @@ app.post("/api/admin/fixtures", requireRoles(ROLE.NCSF), async (req, res) => {
   if(!seasonState.rowCount)return res.status(404).json({error:"Division not found."});
   if(seasonState.rows[0].closed_at)return res.status(409).json({error:"Reopen this season before adding fixtures."});
   const valid = await pool.query(
-    "SELECT COUNT(*)::int count FROM teams WHERE id IN ($1,$2) AND division_id=$3",
+    "SELECT COUNT(*)::int count FROM teams t WHERE id IN ($1,$2) AND (division_id=$3 OR EXISTS(SELECT 1 FROM division_teams dt WHERE dt.division_id=$3 AND dt.team_id=t.id))",
     [homeTeamId, awayTeamId, divisionId]
   );
   if (valid.rows[0].count !== 2) return res.status(400).json({ error: "Both teams must belong to the selected division." });
@@ -3209,6 +3212,73 @@ app.patch("/api/admin/users/:id", requireRoles(ROLE.NCSF, ROLE.CLUB), async (req
   res.json({ user: safeUser(updated.rows[0]) });
 });
 
+async function ensurePermanentDivisions(){
+  await pool.query(`
+    UPDATE divisions d SET permanent_division_id=p.id FROM permanent_divisions p
+      WHERE d.permanent_division_id IS NULL AND d.name ~* ('(^|[^a-z])'||p.name||'([^a-z]|$)');
+    UPDATE divisions d SET name=p.name FROM permanent_divisions p
+      WHERE d.permanent_division_id=p.id AND d.name<>p.name
+        AND NOT EXISTS(SELECT 1 FROM divisions other WHERE other.season_id=d.season_id AND other.name=p.name AND other.id<>d.id);
+    UPDATE teams t SET permanent_division_id=d.permanent_division_id FROM divisions d
+      WHERE t.division_id=d.id AND t.permanent_division_id IS NULL;
+    INSERT INTO division_teams(division_id,team_id) SELECT division_id,id FROM teams WHERE division_id IS NOT NULL ON CONFLICT DO NOTHING;
+  `);
+}
+async function permanentRosters(db){
+  const categories=(await db.query('SELECT * FROM permanent_divisions ORDER BY name')).rows;
+  const result=[];
+  for(const category of categories)result.push({...category,teams:(await db.query('SELECT id,name FROM teams WHERE permanent_division_id=$1 AND active=TRUE ORDER BY id',[category.id])).rows});
+  return result;
+}
+async function seasonHasRecords(db,id){
+  return (await db.query(`SELECT EXISTS(SELECT 1 FROM fixtures f JOIN divisions d ON d.id=f.division_id WHERE d.season_id=$1) OR EXISTS(SELECT 1 FROM playoff_slots p JOIN divisions d ON d.id=p.division_id WHERE d.season_id=$1) OR EXISTS(SELECT 1 FROM division_team_standing_snapshots p JOIN divisions d ON d.id=p.division_id WHERE d.season_id=$1) OR EXISTS(SELECT 1 FROM division_player_standing_snapshots p JOIN divisions d ON d.id=p.division_id WHERE d.season_id=$1) busy`,[id])).rows[0].busy;
+}
+app.post('/api/admin/season-planner',requireRoles(ROLE.NCSF),async(req,res)=>{
+  const client=await pool.connect();try{
+    await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(736128)');
+    // Lock stable division rosters while validating and approving the draft.
+    await client.query('SELECT id FROM permanent_divisions ORDER BY id FOR UPDATE');
+    await client.query('SELECT id FROM teams WHERE permanent_division_id IS NOT NULL ORDER BY id FOR UPDATE');
+    const rosters=await permanentRosters(client),central=rosters.find(r=>r.name==='Central'),coastal=rosters.find(r=>r.name==='Coastal');
+    if(req.body.preview){
+      const plan=buildSeasonSchedule(req.body,central,coastal,central.teams,coastal.teams);
+      const duplicate=await client.query('SELECT id,closed_at FROM seasons WHERE LOWER(TRIM(name))=LOWER($1)',[plan.name]);
+      if(duplicate.rowCount>1)throw Error('Several seasons have this name. Rename the duplicates before planning.');
+      if(duplicate.rowCount){if(duplicate.rows[0].closed_at)throw Error('This season is closed. Choose a new season name.');if(await seasonHasRecords(client,duplicate.rows[0].id))throw Error('This season already has fixtures or standings. Choose a new season name.');plan.reuseSeasonId=duplicate.rows[0].id;}
+      const token=crypto.randomBytes(24).toString('hex');await client.query('DELETE FROM season_schedule_drafts WHERE expires_at<NOW()');
+      await client.query('INSERT INTO season_schedule_drafts(token,user_id,plan,roster_hash) VALUES($1,$2,$3,$4)',[token,req.user.id,JSON.stringify(plan),fingerprint(rosters)]);
+      await client.query('COMMIT');return res.json({preview:true,token,plan});
+    }
+    if(req.body.approve!==true||!req.body.token)throw Error('Preview the whole season first, then approve it.');
+    const draft=(await client.query('SELECT * FROM season_schedule_drafts WHERE token=$1 AND user_id=$2 AND expires_at>NOW() FOR UPDATE',[req.body.token,req.user.id])).rows[0];
+    if(!draft)throw Error('This season preview expired or was already approved. Preview again.');
+    if(draft.roster_hash!==fingerprint(rosters))throw Error('The Central or Coastal team list changed. Preview the season again.');
+    const plan=editSeasonSchedule(draft.plan,req.body.edits);
+    const duplicate=await client.query('SELECT id,closed_at FROM seasons WHERE LOWER(TRIM(name))=LOWER($1)',[plan.name]);
+    if(duplicate.rowCount&&(duplicate.rowCount!==1||duplicate.rows[0].id!==plan.reuseSeasonId||duplicate.rows[0].closed_at||await seasonHasRecords(client,duplicate.rows[0].id)))throw Error('This season now contains records or a duplicate was created. Preview again.');
+    if(plan.reuseSeasonId&&!duplicate.rowCount)throw Error('The unused season was renamed or removed. Preview again.');
+    if(plan.makeActive)await client.query('UPDATE seasons SET active=FALSE WHERE active=TRUE');
+    const season=plan.reuseSeasonId?(await client.query('UPDATE seasons SET start_date=$2,end_date=$3,active=$4 WHERE id=$1 RETURNING *',[plan.reuseSeasonId,plan.startDate,plan.endDate,plan.makeActive])).rows[0]:(await client.query('INSERT INTO seasons(name,start_date,end_date,active) VALUES($1,$2,$3,$4) RETURNING *',[plan.name,plan.startDate,plan.endDate,plan.makeActive])).rows[0];
+    const ids=new Map();
+    for(const d of plan.divisions){
+      let created=(await client.query('SELECT id FROM divisions WHERE season_id=$1 AND name=$2',[season.id,d.divisionName])).rows[0];
+      if(!created)created=(await client.query('INSERT INTO divisions(season_id,name,permanent_division_id) VALUES($1,$2,$3) RETURNING id',[season.id,d.divisionName,d.divisionId])).rows[0];
+      else await client.query('UPDATE divisions SET permanent_division_id=$2 WHERE id=$1',[created.id,d.divisionId]);
+      ids.set(d.divisionId,created.id);
+      for(const t of d.teams)await client.query('INSERT INTO division_teams(division_id,team_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[created.id,t.id]);
+      for(const f of d.fixtures)await client.query('INSERT INTO fixtures(division_id,round_no,fixture_date,venue,home_team_id,away_team_id) VALUES($1,$2,$3,$4,$5,$6)',[created.id,f.roundNo,f.fixtureDate,f.venue||null,f.homeTeamId,f.awayTeamId]);
+    }
+    let playoffs=0;
+    for(const d of plan.divisions)for(const f of d.playoffs){
+      const mapSource=source=>source.rank?{...source,divisionId:ids.get(source.divisionId)}:source;
+      await client.query('INSERT INTO playoff_slots(division_id,slot_key,stage,round_no,home_source,away_source,fixture_date,venue) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[ids.get(d.divisionId),f.key,f.stage,f.roundNo,JSON.stringify(mapSource(f.home)),JSON.stringify(mapSource(f.away)),f.fixtureDate,f.venue||null]);playoffs++;
+    }
+    await client.query('DELETE FROM season_schedule_drafts WHERE token=$1',[req.body.token]);
+    await client.query(`INSERT INTO audit_logs(user_id,action,detail) VALUES($1,'WHOLE_SEASON_APPROVED',$2)`,[req.user.id,JSON.stringify({seasonId:season.id,divisions:[...ids.values()]})]);
+    await client.query('COMMIT');res.status(201).json({season,created:plan.divisions.reduce((n,d)=>n+d.fixtures.length,0),playoffs,divisions:[...ids.values()]});
+  }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}
+});
+
 async function validateFixtureDate(db,divisionId,value,slot=null,fixtureId=null){
   if(!value){if(slot)throw Error('Playoff fixtures need a date and time.');return}
   const date=new Date(value);if(!Number.isFinite(date.getTime()))throw Error('Enter a valid fixture date.');
@@ -3238,7 +3308,7 @@ async function validateFixtureDate(db,divisionId,value,slot=null,fixtureId=null)
   }
 }
 function dateOnly(value){return value ? (typeof value.toISOString==='function'?value.toISOString():String(value)).slice(0,10):null}
-async function scheduleRoster(db,divisionId){return (await db.query("SELECT id,name FROM teams WHERE division_id=$1 AND active=TRUE ORDER BY id",[divisionId])).rows}
+async function scheduleRoster(db,divisionId){return (await db.query("SELECT t.id,t.name FROM teams t WHERE (t.division_id=$1 OR EXISTS(SELECT 1 FROM division_teams dt WHERE dt.division_id=$1 AND dt.team_id=t.id)) AND t.active=TRUE ORDER BY t.id",[divisionId])).rows}
 app.post("/api/admin/divisions/:id/generate-home-away", requireRoles(ROLE.NCSF), async (req,res)=>{
   const id=Number(req.params.id),client=await pool.connect();
   try{
@@ -4076,6 +4146,7 @@ initDatabase()
   .then(seedOfficialPlayerLogSnapshots)
   .then(seedOfficialPlayerTeamAssignments)
   .then(repairOfficialPlayerTeamAssignments)
+  .then(ensurePermanentDivisions)
   .then(() => httpServer.listen(port, () => console.log(`NCSF League Manager listening on port ${port}`)))
   .catch(error => {
     console.error("Database initialization failed:", error);

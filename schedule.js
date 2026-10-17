@@ -72,3 +72,35 @@ function applyEdits(plan,edits,startDate,endDate){
 }
 const fingerprint=teams=>crypto.createHash('sha256').update(JSON.stringify(teams)).digest('hex');
 module.exports={buildSchedule,applyEdits,fingerprint,isNamibianHolidayWeek,namibiaPublicHolidays};
+
+function buildSeasonSchedule({name,startDate,endDate,firstDate,makeActive=false},central,coastal,centralTeams,coastalTeams){
+  name=String(name||'').trim();
+  if(!name)throw Error('Enter the season name.');
+  for(const date of [startDate,endDate])if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw Error('Enter valid season start and end dates.');
+  if(startDate>endDate)throw Error('Season end must follow its start.');
+  if(coastalTeams.length<4)throw Error('Coastal needs at least four active teams for the cross-zone quarter-finals.');
+  if(new Set([...centralTeams,...coastalTeams].map(t=>t.id)).size!==centralTeams.length+coastalTeams.length)throw Error('A team cannot belong to both divisions.');
+  const cp=buildSchedule(centralTeams,central,firstDate,'central-coastal',coastal);
+  const coast=buildSchedule(coastalTeams,coastal,firstDate,'league');
+  const lastCoast=Math.max(...coast.fixtures.map(f=>Date.parse(f.fixtureDate)));
+  // Keep the bracket after both leagues, retaining its weekday and spacing.
+  while(cp.playoffs.some(f=>Date.parse(f.fixtureDate)<=lastCoast)||cp.playoffs.some(f=>isNamibianHolidayWeek(new Date(f.fixtureDate)))){
+    for(const f of cp.playoffs)f.fixtureDate=new Date(Date.parse(f.fixtureDate)+7*86400000).toISOString();
+  }
+  for(const plan of [cp,coast]){
+    const prefix=plan.divisionName.toLowerCase()+'-';
+    for(const row of [...plan.fixtures,...plan.playoffs]){row.key=prefix+row.key;for(const source of [row.home,row.away])if(source?.winner)source.winner=prefix+source.winner;}
+  }
+  return {name,startDate,endDate,makeActive:Boolean(makeActive),divisions:[cp,coast]};
+}
+function editSeasonSchedule(plan,edits){
+  if(!Array.isArray(edits))throw Error('Review the full season before approving it.');
+  const expected=plan.divisions.reduce((n,p)=>n+p.fixtures.length+p.playoffs.length,0);
+  if(edits.length!==expected||new Set(edits.map(e=>e.key)).size!==expected)throw Error('The preview rows changed. Preview the season again.');
+  const divisions=plan.divisions.map(p=>{const keys=new Set([...p.fixtures,...p.playoffs].map(f=>f.key));return applyEdits(p,edits.filter(e=>keys.has(e.key)),plan.startDate,plan.endDate)});
+  const finalLeague=Math.max(...divisions.flatMap(p=>p.fixtures.map(f=>Date.parse(f.fixtureDate))));
+  if(divisions.flatMap(p=>p.playoffs).some(f=>Date.parse(f.fixtureDate)<=finalLeague))throw Error('Playoffs must start after both Central and Coastal have completed their league fixtures.');
+  return {...plan,divisions};
+}
+module.exports.buildSeasonSchedule=buildSeasonSchedule;
+module.exports.editSeasonSchedule=editSeasonSchedule;

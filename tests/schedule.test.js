@@ -50,3 +50,28 @@ test('first match dates are validated and selected weekday is retained',()=>{
   assert.throws(()=>buildSchedule(teams(4),division,'2027-02-30','league'),/valid/);
   const p=buildSchedule(teams(4),division,'2027-04-26','league');assert.ok(p.matchDates.every(d=>new Date(d).getUTCDay()===1));assert.ok(p.skippedHolidayWeeks>0);
 });
+
+const {buildSeasonSchedule,editSeasonSchedule}=require('../schedule');
+const config={name:'2027 NCSF League',startDate:'2027-01-01',endDate:'2027-12-31',firstDate:'2027-01-09',makeActive:false};
+const coastalTeams=n=>teams(n).map(t=>({...t,id:t.id+100}));
+const seasonEdits=p=>p.divisions.flatMap(d=>edits(d));
+test('whole season includes both permanent divisions and the shared knockout bracket',()=>{
+  const p=buildSeasonSchedule(config,division,opponent,teams(16),coastalTeams(7));
+  assert.deepEqual(p.divisions.map(d=>d.divisionName),['Central','Coastal']);
+  assert.equal(p.divisions[0].fixtures.length,240);assert.equal(p.divisions[1].fixtures.length,42);assert.equal(p.divisions.flatMap(d=>d.playoffs).length,11);
+  assert.equal(new Set(seasonEdits(p).map(e=>e.key)).size,293);
+  assert.doesNotThrow(()=>editSeasonSchedule(p,seasonEdits(p)));
+});
+test('playoffs wait for the longer division league and still skip holiday weeks',()=>{
+  const p=buildSeasonSchedule({...config,endDate:'2028-12-31'},division,opponent,teams(8),coastalTeams(16));
+  const last=Math.max(...p.divisions.flatMap(d=>d.fixtures.map(f=>Date.parse(f.fixtureDate))));
+  assert.ok(p.divisions[0].playoffs.every(f=>Date.parse(f.fixtureDate)>last&&!isNamibianHolidayWeek(new Date(f.fixtureDate))));
+  assert.doesNotThrow(()=>editSeasonSchedule(p,seasonEdits(p)));
+});
+test('whole-season approval checks the entire draft and rejects season overflow',()=>{
+  assert.throws(()=>buildSeasonSchedule({...config,name:''},division,opponent,teams(16),coastalTeams(7)),/name/);
+  assert.throws(()=>buildSeasonSchedule(config,division,opponent,teams(16),coastalTeams(3)),/four/);
+  const p=buildSeasonSchedule(config,division,opponent,teams(16),coastalTeams(7));
+  assert.throws(()=>editSeasonSchedule(p,seasonEdits(p).slice(1)),/rows/);
+  assert.throws(()=>editSeasonSchedule({...p,endDate:'2027-02-01'},seasonEdits(p)),/season/);
+});

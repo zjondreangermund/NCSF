@@ -79,8 +79,17 @@
   }
   function setDivisionOptions(select,divisions,seasons,blank,selectCentral=false){
     if(!select)return;
+    const chosen=seasons.find(s=>s.active)||seasons[0];
+    if(chosen)divisions=divisions.filter(d=>Number(d.season_id)===Number(chosen.id));
     select.innerHTML=options(divisions,'id',divisionLabel,null,blank);
     if(selectCentral){const id=defaultCentralDivisionId(divisions,seasons);if(id)select.value=String(id)}
+  }
+  function publicSeasonChoices(select){
+    const seasons=state.meta.seasons,divisions=state.meta.divisions;
+    let seasonSelect=$('#publicSeason');if(!seasonSelect){seasonSelect=document.createElement('select');seasonSelect.id='publicSeason';seasonSelect.setAttribute('aria-label','Season');select.before(seasonSelect);}
+    const current=seasons.find(s=>s.active)||seasons[0];seasonSelect.innerHTML=options(seasons,'id',s=>s.name,current?.id,'Choose season');
+    const sync=()=>{const selected=seasons.find(s=>Number(s.id)===Number(seasonSelect.value));setDivisionOptions(select,divisions,selected?[selected]:[],'Choose division',true)};
+    sync();seasonSelect.onchange=()=>{sync();select.dispatchEvent(new Event('change'))};
   }
   function formObject(form){
     const fd=new FormData(form),o={};
@@ -156,7 +165,7 @@
     if(new URLSearchParams(location.search).get('login')==='1')openAuth();
     state.meta=await api('/api/public/meta');
     const select=$('#divisionSelect');
-    setDivisionOptions(select,state.meta.divisions,state.meta.seasons,'Choose division',true);
+    publicSeasonChoices(select);
     select.addEventListener('change',loadPublicDivision);
     $('#refreshPublic')?.addEventListener('click',loadPublicDivision);
     await loadPublicDivision();
@@ -595,7 +604,7 @@
     state.meta=await api('/api/public/meta');
     const select=$('#publicDivision');
     if(!select)return null;
-    setDivisionOptions(select,state.meta.divisions,state.meta.seasons,'Choose division',true);
+    publicSeasonChoices(select);
     return select;
   }
 
@@ -2188,15 +2197,11 @@ function formatEventDate(value){
   async function reloadAdmin(){
     state.meta=await api('/api/admin/meta');
     const m=state.meta;
-    $('#divisionSeason').innerHTML=options(m.seasons,'id',s=>s.name,null,'Select season');
-    setDivisionOptions($('#teamDivision'),m.divisions,m.seasons,'Select division',false);
-    setDivisionOptions($('#fixtureDivision'),m.divisions,m.seasons,'Select division',true);
-    $('#scheduleDivision').innerHTML=options(m.divisions,'id',d=>d.season_name+' — '+d.name,null,'Select season / division');
-    $('#scheduleDivision').value=String(defaultCentralDivisionId(m.divisions,m.seasons)||'');
-    $('#scheduleOpponent').innerHTML=options(m.divisions,'id',d=>d.season_name+' — '+d.name,null,'Choose opposing division');
-    $('#playoffDivision').innerHTML=options(m.divisions,'id',d=>d.season_name+' — '+d.name,null,'Choose season / division');
-    $('#playoffDivision').value=$('#scheduleDivision').value;
-    loadAdminPlayoffs();
+    $('#teamDivision').innerHTML=options(m.permanentDivisions||[],'id',d=>d.name,null,'Choose division');
+    const previous=$('#adminViewSeason').value;
+    const selected=m.seasons.find(s=>String(s.id)===previous)||m.seasons.find(s=>s.active)||m.seasons[0];
+    $('#adminViewSeason').innerHTML=options(m.seasons,'id',s=>s.name,selected?.id,'Choose season');
+    syncAdminSeasonChoices();
     ['teamClub','adminUserClub','adminPlayerClub'].forEach(id=>$('#'+id).innerHTML=options(m.clubs,'id',c=>c.name,null,'Select club'));
     $('#adminUserTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Select team');
     $('#adminPlayerTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Unassigned');
@@ -2205,6 +2210,12 @@ function formatEventDate(value){
     loadAdminDashboard();
     loadAdminPosts();
     loadAdminOpportunities();
+  }
+  function syncAdminSeasonChoices(){
+    const season=state.meta.seasons.find(s=>Number(s.id)===Number($('#adminViewSeason').value));
+    const divisions=state.meta.divisions.filter(d=>Number(d.season_id)===Number(season?.id));
+    for(const id of ['fixtureDivision','playoffDivision'])setDivisionOptions($('#'+id),divisions,season?[season]:[],'Choose division',true);
+    syncFixtureTeams();loadAdminPlayoffs();
   }
   async function loadAdminDashboard(){
     try{
@@ -2243,6 +2254,7 @@ function formatEventDate(value){
   }
   function renderAdminFixtures(fixtures){
     const box=$('#adminFixtures'); if(!box)return;
+    const divisionIds=new Set(state.meta.divisions.filter(d=>Number(d.season_id)===Number($('#adminViewSeason')?.value)).map(d=>d.id));fixtures=fixtures.filter(f=>divisionIds.has(f.division_id));
     if(!fixtures.length){box.innerHTML='<div class="empty">No fixtures yet.</div>';return}
     box.innerHTML='<div class="table-wrap"><table><thead><tr><th>Date</th><th>Round</th><th>Fixture</th><th>Score</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
       fixtures.map(f=>`<tr>
@@ -2383,7 +2395,7 @@ async function loadAdminPosts(){
   }
   function syncFixtureTeams(){
     const div=Number($('#fixtureDivision')?.value||0);
-    const teams=state.meta.teams.filter(t=>!div||t.division_id===div);
+    const teams=state.meta.teams.filter(t=>!div||t.division_id===div||t.division_ids?.includes(div));
     $('#fixtureHome').innerHTML=options(teams,'id',t=>t.name,null,'Home team');
     $('#fixtureAway').innerHTML=options(teams,'id',t=>t.name,null,'Away team');
   }
@@ -2420,8 +2432,6 @@ async function loadAdminPosts(){
       finally{if(submit)submit.disabled=false}
     });
     const simple=[
-      ['seasonForm','/api/admin/seasons','Season created'],
-      ['divisionForm','/api/admin/divisions','Division created'],
       ['clubForm','/api/admin/clubs','Club created'],
       ['teamForm','/api/admin/teams','Team created'],
       ['adminPlayerForm','/api/admin/players','Player registered'],
@@ -2448,16 +2458,17 @@ async function loadAdminPosts(){
     }));
     let draft=null,previewBusy=false;
     const invalidate=()=>{draft=null;$('#schedulePreview').style.display='none'};
-    const syncFormat=()=>{$('#scheduleOpponentLabel').style.display=$('#scheduleFormat').value==='central-coastal'?'':'none'};
-    $('#scheduleForm').addEventListener('change',()=>{invalidate();syncFormat()});syncFormat();
+    $('#scheduleForm').addEventListener('change',invalidate);
+    $('#planSeason')?.addEventListener('click',()=>{$('[data-admin-tab="fixtures"]').click();$('#scheduleForm').scrollIntoView({behavior:'smooth',block:'start'})});
+    $('#adminViewSeason').addEventListener('change',async()=>{syncAdminSeasonChoices();const d=await api('/api/fixtures');renderAdminFixtures(d.fixtures)});
     $('#playoffDivision').addEventListener('change',loadAdminPlayoffs);
     $('#scheduleForm')?.addEventListener('submit',async e=>{
       e.preventDefault();if(!draft)return toast('Preview the fixtures first.',true);
       const btn=$('#approveSchedule');if(btn.disabled)return;btn.disabled=true;
       try{
         const edits=$$('.draft-fixture',$('#schedulePreview')).map(row=>({key:row.dataset.key,fixtureDate:row.querySelector('[data-date]').value+':00+02:00',venue:row.querySelector('[data-venue]').value}));
-        const d=await api('/api/admin/divisions/'+draft.plan.divisionId+'/generate-home-away',{method:'POST',body:{approve:true,token:draft.token,edits}});
-        const divisionId=draft.plan.divisionId;invalidate();await reloadAdmin();$('#playoffDivision').value=String(divisionId);await loadAdminPlayoffs();toast(`Schedule approved: ${d.created} league fixtures and ${d.playoffs} playoff matches`);
+        const d=await api('/api/admin/season-planner',{method:'POST',body:{approve:true,token:draft.token,edits}});
+        invalidate();await reloadAdmin();$('#adminViewSeason').value=String(d.season.id);syncAdminSeasonChoices();const fixtures=await api('/api/fixtures');renderAdminFixtures(fixtures.fixtures);toast(`${d.season.name} created: Central, Coastal, ${d.created} league fixtures and ${d.playoffs} playoff matches`);
       }catch(err){toast(err.message,true)}finally{btn.disabled=false}
     });
     $('#previewSchedule')?.addEventListener('click',async()=>{
@@ -2465,14 +2476,14 @@ async function loadAdminPosts(){
       if(!form.reportValidity()||previewBusy)return;
       previewBusy=true;$('#previewSchedule').disabled=true;draft=null;
       try{
-        const d=await api('/api/admin/divisions/'+o.divisionId+'/generate-home-away',{method:'POST',body:{...o,preview:true}});
+        const d=await api('/api/admin/season-planner',{method:'POST',body:{...o,preview:true}});
         // Ignore a response if the options changed while it was loading.
         if(JSON.stringify(o)!==JSON.stringify(formObject(form)))return;
-        draft=d;const p=d.plan,teamName=id=>p.teams.find(t=>t.id===id)?.name||String(id);
-        const rows=[...p.fixtures.map(f=>({...f,stage:'League · Round '+f.roundNo,homeLabel:teamName(f.homeTeamId),awayLabel:teamName(f.awayTeamId)})),...p.playoffs.map(f=>({...f,homeLabel:f.home.label,awayLabel:f.away.label}))];
-        const days=new Set(p.fixtures.map(f=>f.fixtureDate.slice(0,10))).size;
+        draft=d;const p=d.plan;
+        const rows=p.divisions.flatMap(division=>{const teamName=id=>division.teams.find(t=>t.id===id)?.name||String(id);return [...division.fixtures.map(f=>({...f,stage:division.divisionName+' · League · Round '+f.roundNo,homeLabel:teamName(f.homeTeamId),awayLabel:teamName(f.awayTeamId)})),...division.playoffs.map(f=>({...f,stage:f.stage,homeLabel:f.home.label,awayLabel:f.away.label}))]}).sort((a,b)=>new Date(a.fixtureDate)-new Date(b.fixtureDate)||a.stage.localeCompare(b.stage));
+        const leagueCount=p.divisions.reduce((n,x)=>n+x.fixtures.length,0),playoffCount=p.divisions.reduce((n,x)=>n+x.playoffs.length,0);
         box.style.display='block';
-        box.innerHTML=`<h2>Review ${esc(p.divisionName)} fixtures</h2><p><strong>Draft — no fixtures published.</strong> ${p.fixtures.length} league fixtures across ${days} match days, plus ${p.playoffs.length} playoff matches. League starts: 10:30 & 15:00 Namibia time. Skipped ${p.skippedHolidayWeeks} holiday weeks. Edit any date, time or venue below.</p><p>Playoff positions are decided by the final league table. All knockout matches are race to 13. Approving saves this schedule to the selected season; it does not change which season is active.</p><div class="table-wrap"><table class="draft-table"><thead><tr><th>Stage</th><th>Home / qualifier</th><th>Away / qualifier</th><th>Namibia date & time</th><th>Venue</th></tr></thead><tbody>${rows.map(f=>`<tr class="draft-fixture" data-key="${esc(f.key)}"><td>${esc(f.stage)}<br><small>${esc(f.key)}</small></td><td>${esc(f.homeLabel)}</td><td>${esc(f.awayLabel)}</td><td><input data-date type="datetime-local" required value="${namibiaInput(f.fixtureDate)}" aria-label="${esc(f.key)} date and time"></td><td><input data-venue maxlength="200" value="${esc(f.venue)}" placeholder="Venue TBA" aria-label="${esc(f.key)} venue"></td></tr>`).join('')}</tbody></table></div><p><button id="approveSchedule" class="btn primary" type="submit" form="scheduleForm">Approve schedule & save to season</button> <button id="cancelSchedule" class="btn" type="button">Discard preview</button></p>`;
+        box.innerHTML=`<h2>Review ${esc(p.name)}</h2><p><strong>Draft — no season fixtures have been published.</strong> Central: ${p.divisions[0].teams.length} teams. Coastal: ${p.divisions[1].teams.length} teams. ${leagueCount} league fixtures and ${playoffCount} playoff matches. Two daily league starts: 10:30 & 15:00 Namibia time.</p><p>Approval creates this whole season with both permanent divisions and the playoff bracket. ${p.makeActive?'It will become the active season.':'The current active season stays selected until you activate this season.'} Edit dates and venues below before approving.</p><div class="table-wrap"><table class="draft-table"><thead><tr><th>Division / stage</th><th>Home / qualifier</th><th>Away / qualifier</th><th>Namibia date & time</th><th>Venue</th></tr></thead><tbody>${rows.map(f=>`<tr class="draft-fixture" data-key="${esc(f.key)}"><td>${esc(f.stage)}<br><small>${esc(f.key)}</small></td><td>${esc(f.homeLabel)}</td><td>${esc(f.awayLabel)}</td><td><input data-date type="datetime-local" required value="${namibiaInput(f.fixtureDate)}" aria-label="${esc(f.key)} date and time"></td><td><input data-venue maxlength="200" value="${esc(f.venue)}" placeholder="Venue TBA" aria-label="${esc(f.key)} venue"></td></tr>`).join('')}</tbody></table></div><p><button id="approveSchedule" class="btn primary" type="submit" form="scheduleForm">Approve & create whole season</button> <button id="cancelSchedule" class="btn" type="button">Discard preview</button></p>`;
         $('#cancelSchedule').onclick=invalidate;box.scrollIntoView({behavior:'smooth',block:'start'});
       }catch(err){box.style.display='none';toast(err.message,true)}finally{previewBusy=false;$('#previewSchedule').disabled=false}
     });

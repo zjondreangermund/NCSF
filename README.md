@@ -40,14 +40,16 @@ Open http://localhost:3000.
 ## Ranking rule
 Both team and individual leaderboards use **frames won** as the primary ranking value. Ties are displayed with frame difference / win percentage as secondary ordering only so the primary NCSF rule remains frames won.
 
-### Preview and approve a season schedule
+### Preview and approve a whole season
 
-In Administration → Fixtures, select the season/division and first match date. Choose the current Central/Coastal format (Central Top 8 qualifiers, cross-zone quarter-finals, semi-finals and final), a single-division Top 8 bracket, or league only. The opposing division must belong to the same season.
+Administration → Fixtures → Plan a complete season collects the season name, date range and first match day. Preview shows both Central and Coastal league schedules and the shared bracket: Central Top 8 qualifiers, cross-zone quarter-finals, semi-finals and final. Edit dates/times or venues, then select **Approve & create whole season**.
 
-Preview shows every league pairing and playoff slot. Edit dates/times and venues directly in the draft, then select **Approve schedule & save to season**. Preview does not publish fixtures. Approval saves exactly the reviewed draft and rejects duplicate or expired approvals, changed rosters, conflicting starts and dates outside the season. League fixtures use two starts per day, 10:30 and 15:00 Namibia time, and skip public-holiday weeks.
+Preview does not create a season or publish fixtures. Approval atomically saves the season, both division memberships, league fixtures and playoff slots. A matching unused season created accidentally can be completed instead of duplicated. Changed rosters, expired/repeated approvals, conflicting starts, holiday weeks and dates outside the season are rejected. League fixtures use two daily starts, 10:30 and 15:00 Namibia time.
+
+Central and Coastal have permanent identities and team assignments. Each approved season records its own participation without moving teams out of historical seasons or cloning teams, players and logins. Division names stay Central and Coastal; select the season separately to view its fixtures and standings. Creating new annual divisions or an empty season is no longer part of setup. New teams choose their permanent division when registered and are included in subsequent season previews.
 
 The saved playoff bracket retains date/venue editing and fills opponents from final league positions and approved knockout winners. Every knockout is race to 13 with no league bonus. A refresh/advance button retries qualification after results are approved. Unresolved playoff slots appear on the public fixture page and in season exports.
 
-League Setup has season name/date/active editing and deletion for unused seasons. Seasons with match activity or official standings must be closed rather than deleted; deleting an unused season keeps its clubs, teams, players and logins. Schedule approval does not switch the active season—use the season editor when ready to make the next season active.
+League Setup has season name/date/active editing and deletion for unused seasons. Seasons with match activity or official standings must be closed rather than deleted. Deletion keeps permanent divisions, clubs, teams, players and logins. The planner offers an explicit option to make the approved season active.
 
 Run schedule checks with `npm test`.
