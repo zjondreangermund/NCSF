@@ -62,6 +62,18 @@
   function options(items,valueKey,labelFn,selected,blank='— Select —'){
     return '<option value="">'+esc(blank)+'</option>'+items.map(x=>'<option value="'+esc(x[valueKey])+'" '+(String(x[valueKey])===String(selected)?'selected':'')+'>'+esc(labelFn(x))+'</option>').join('');
   }
+  function divisionLabel(d){return d.name}
+  function defaultCentralDivisionId(divisions,seasons=[]){
+    const activeSeason=seasons.find(s=>s.active);
+    return divisions.find(d=>String(d.name||'').trim().toLowerCase()==='central'&&(!activeSeason||Number(d.season_id)===Number(activeSeason.id)))?.id
+      ?? divisions.find(d=>String(d.name||'').trim().toLowerCase()==='central')?.id
+      ?? '';
+  }
+  function setDivisionOptions(select,divisions,seasons,blank,selectCentral=false){
+    if(!select)return;
+    select.innerHTML=options(divisions,'id',divisionLabel,null,blank);
+    if(selectCentral){const id=defaultCentralDivisionId(divisions,seasons);if(id)select.value=String(id)}
+  }
   function formObject(form){
     const fd=new FormData(form),o={};
     for(const [k,v] of fd.entries())o[k]=v;
@@ -136,8 +148,7 @@
     if(new URLSearchParams(location.search).get('login')==='1')openAuth();
     state.meta=await api('/api/public/meta');
     const select=$('#divisionSelect');
-    select.innerHTML=options(state.meta.divisions,'id',d=>d.season_name+' — '+d.name,null,'Choose division');
-    if(state.meta.divisions[0])select.value=state.meta.divisions[0].id;
+    setDivisionOptions(select,state.meta.divisions,state.meta.seasons,'Choose division',true);
     select.addEventListener('change',loadPublicDivision);
     $('#refreshPublic')?.addEventListener('click',loadPublicDivision);
     await loadPublicDivision();
@@ -576,8 +587,7 @@
     state.meta=await api('/api/public/meta');
     const select=$('#publicDivision');
     if(!select)return null;
-    select.innerHTML=options(state.meta.divisions,'id',d=>d.season_name+' — '+d.name,null,'Choose division');
-    if(state.meta.divisions[0])select.value=state.meta.divisions[0].id;
+    setDivisionOptions(select,state.meta.divisions,state.meta.seasons,'Choose division',true);
     return select;
   }
 
@@ -2169,7 +2179,9 @@ function formatEventDate(value){
     state.meta=await api('/api/admin/meta');
     const m=state.meta;
     $('#divisionSeason').innerHTML=options(m.seasons,'id',s=>s.name,null,'Select season');
-    ['teamDivision','fixtureDivision','scheduleDivision'].forEach(id=>$('#'+id).innerHTML=options(m.divisions,'id',d=>d.season_name+' — '+d.name,null,'Select division'));
+    setDivisionOptions($('#teamDivision'),m.divisions,m.seasons,'Select division',false);
+    setDivisionOptions($('#fixtureDivision'),m.divisions,m.seasons,'Select division',true);
+    setDivisionOptions($('#scheduleDivision'),m.divisions,m.seasons,'Select division',true);
     ['teamClub','adminUserClub','adminPlayerClub'].forEach(id=>$('#'+id).innerHTML=options(m.clubs,'id',c=>c.name,null,'Select club'));
     $('#adminUserTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Select team');
     $('#adminPlayerTeam').innerHTML=options(m.teams,'id',t=>t.club_name+' — '+t.name,null,'Unassigned');
