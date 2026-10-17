@@ -150,8 +150,10 @@
         <form id="scheduleForm" class="form-grid">
           <label class="full">Division<select name="divisionId" id="scheduleDivision" required></select></label>
           <label class="full">First match date<input name="firstDate" type="date" required></label>
+          <button class="btn secondary full" type="button" id="previewSchedule">Preview Schedule</button>
           <button class="btn primary full" type="submit">Generate Full Schedule</button>
         </form>
+        <div id="schedulePreview" class="notice" style="display:none;margin-top:12px"></div>
         <p class="muted">Creates a double round-robin. Match rounds keep the selected weekday and skip any full week containing an official Namibian public holiday.</p>
       </div>
     </div>

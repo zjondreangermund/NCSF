@@ -2409,6 +2409,15 @@ async function loadAdminPosts(){
         await reloadAdmin();toast(`${d.created} fixtures created${d.skippedHolidayWeeks?` • skipped ${d.skippedHolidayWeeks} Namibia holiday week${d.skippedHolidayWeeks===1?'':'s'}`:''} • ${d.firstScheduledDate} to ${d.lastScheduledDate}`);
       }catch(err){toast(err.message,true)}
     });
+    $('#previewSchedule')?.addEventListener('click',async()=>{
+      const form=$('#scheduleForm'),o=formObject(form),box=$('#schedulePreview');
+      if(!o.divisionId||!o.firstDate){toast('Choose a division and first match date to preview.',true);return}
+      try{
+        const d=await api('/api/admin/divisions/'+o.divisionId+'/generate-home-away',{method:'POST',body:{firstDate:o.firstDate,preview:true}});
+        box.style.display='block';box.classList.toggle('warn',d.exceedsSeasonEndDate);
+        box.innerHTML=`Preview only — no fixtures saved. ${d.fixtureCount} fixtures across ${d.matchWeeks} match weeks for ${d.teamCount} teams. Skipped ${d.skippedHolidayWeeks} holiday week${d.skippedHolidayWeeks===1?'':'s'}.<br>Round dates: ${d.roundDates.map(esc).join(' • ')}${d.exceedsSeasonEndDate?'<br><strong>These dates run past the selected season end date.</strong>':''}`;
+      }catch(err){toast(err.message,true)}
+    });
   }
 
   await loadUser();
