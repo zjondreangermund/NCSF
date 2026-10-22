@@ -1785,6 +1785,7 @@ async function fixturePayload(fixture) {
       venue: fixture.venue,
       competitionLabel: fixture.competition_label || null,
       raceTo: fixtureRaceTo(fixture),
+      officialSummaryOnly: fixture.official_home_frames != null && fixture.official_away_frames != null,
       isKnockout: knockout,
       competitionStage: fixtureStageLabel(fixture),
       homeTeamId: fixture.home_team_id,
@@ -1831,7 +1832,7 @@ async function fixturePayload(fixture) {
     substitutions: subs,
     attachments,
     totals: {
-      completed: scored.length,
+      completed: homeFrames + awayFrames,
       home: homeFrames,
       away: awayFrames,
       remaining: Math.max(0, 25 - homeFrames - awayFrames)
