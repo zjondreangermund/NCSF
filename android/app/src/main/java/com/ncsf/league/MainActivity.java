@@ -2,8 +2,13 @@ package com.ncsf.league;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.Context;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.content.ClipData;
+import android.database.Cursor;
 import android.content.pm.PackageManager;
 import android.content.pm.ActivityInfo;
 import android.content.Intent;
@@ -12,6 +17,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Build;
 import android.provider.Settings;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
@@ -29,11 +35,14 @@ import android.webkit.WebViewClient;
 import android.webkit.URLUtil;
 import android.widget.FrameLayout;
 import android.widget.Toast;
+import java.util.HashMap;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final String HOME_URL = "https://ncsf-production.up.railway.app/";
     private static final int FILE_CHOOSER_REQUEST = 501;
     private static final int MEDIA_PERMISSION_REQUEST = 502;
+    private static final int STORAGE_PERMISSION_REQUEST = 503;
     private static final String PREFS_NAME = "ncsf_permissions";
     private static final String PREF_CAMERA_ASKED = "camera_asked";
     private static final String PREF_MIC_ASKED = "mic_asked";
@@ -45,6 +54,54 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingMediaPermission;
     private boolean liveFullscreen = false;
+    private boolean downloadReceiverRegistered = false;
+    private final HashMap<Long, String> activeDownloads = new HashMap<>();
+    private PendingDownload pendingDownload;
+
+    private static class PendingDownload {
+        final String url, userAgent, disposition, mimeType;
+
+        PendingDownload(String url, String userAgent, String disposition, String mimeType) {
+            this.url = url;
+            this.userAgent = userAgent;
+            this.disposition = disposition;
+            this.mimeType = mimeType;
+        }
+    }
+
+    // The system DownloadManager delivers completion notifications even when NCSF is closed.
+    // While this activity is visible, offer Open / Share immediately as well.
+    private final BroadcastReceiver downloadReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) return;
+            long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+            String name = activeDownloads.remove(downloadId);
+            if (name == null) return; // Ignore downloads from other apps.
+
+            DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            DownloadManager.Query query = new DownloadManager.Query().setFilterById(downloadId);
+            try (Cursor result = manager.query(query)) {
+                if (!result.moveToFirst()) return;
+                int status = result.getInt(result.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                if (status != DownloadManager.STATUS_SUCCESSFUL) {
+                    Toast.makeText(MainActivity.this, "Download failed. Please try again.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                Uri fileUri = manager.getUriForDownloadedFile(downloadId);
+                if (fileUri == null || isFinishing() || isDestroyed()) return;
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("PDF saved to Downloads")
+                        .setMessage(name + "\n\nFind it in My Files > Downloads.")
+                        .setPositiveButton("Open PDF", (dialog, which) -> openDownloadedPdf(fileUri))
+                        .setNeutralButton("Share PDF", (dialog, which) -> shareDownloadedPdf(fileUri, name))
+                        .setNegativeButton("Close", null)
+                        .show();
+            } catch (Exception error) {
+                Toast.makeText(MainActivity.this, "Saved to Downloads. Open My Files to view it.", Toast.LENGTH_LONG).show();
+            }
+        }
+    };
     private boolean broadcastActive = false;
     private int orientationBeforeBroadcast = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
@@ -74,7 +131,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.16");
+        settings.setUserAgentString(settings.getUserAgentString() + " NCSFAndroid/1.17");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -174,23 +231,17 @@ public class MainActivity extends Activity {
         });
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
-            try {
-                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-                String cookies = CookieManager.getInstance().getCookie(url);
-                if (cookies != null) request.addRequestHeader("Cookie", cookies);
-                request.addRequestHeader("User-Agent", userAgent);
-                request.setMimeType(mimeType);
-                String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
-                request.setTitle(fileName);
-                request.setDescription("NCSF document");
-                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                request.setDestinationInExternalFilesDir(MainActivity.this, Environment.DIRECTORY_DOWNLOADS, fileName);
-                DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-                manager.enqueue(request);
-                Toast.makeText(MainActivity.this, "Downloading " + fileName, Toast.LENGTH_SHORT).show();
-            } catch (Exception ex) {
-                Toast.makeText(MainActivity.this, "Unable to download this file.", Toast.LENGTH_SHORT).show();
+            PendingDownload download = new PendingDownload(url, userAgent, contentDisposition, mimeType);
+            // Only Android 9 and older require storage access to use public Downloads.
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                    checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                            != PackageManager.PERMISSION_GRANTED) {
+                pendingDownload = download;
+                requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                        STORAGE_PERMISSION_REQUEST);
+                return;
             }
+            enqueuePublicDownload(download);
         });
 
         if (savedInstanceState == null) {
@@ -198,6 +249,105 @@ public class MainActivity extends Activity {
         } else {
             webView.restoreState(savedInstanceState);
         }
+    }
+
+    private void enqueuePublicDownload(PendingDownload download) {
+        try {
+            Uri downloadUrl = Uri.parse(download.url);
+            String scheme = downloadUrl.getScheme();
+            if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) {
+                Toast.makeText(this, "This file cannot be downloaded.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            String rawName = URLUtil.guessFileName(download.url, download.disposition, download.mimeType);
+            String cleanName = rawName.replaceAll("[^A-Za-z0-9._-]+", "-");
+            if (cleanName.isEmpty() || ".".equals(cleanName)) cleanName = "NCSF-document.pdf";
+
+            String mimeType = download.mimeType == null ? "" : download.mimeType.trim();
+            if (mimeType.isEmpty()) {
+                mimeType = cleanName.toLowerCase(Locale.ROOT).endsWith(".pdf")
+                        ? "application/pdf" : "application/octet-stream";
+            }
+
+            // Unique names prevent a failed second download of the same scoresheet.
+            int dot = cleanName.lastIndexOf('.');
+            String suffix = "-" + System.currentTimeMillis();
+            String fileName = dot > 0
+                    ? cleanName.substring(0, dot) + suffix + cleanName.substring(dot)
+                    : cleanName + suffix;
+
+            DownloadManager.Request request = new DownloadManager.Request(downloadUrl);
+            String cookies = CookieManager.getInstance().getCookie(download.url);
+            if (cookies != null && !cookies.isEmpty()) {
+                request.addRequestHeader("Cookie", cookies);
+            }
+            if (download.userAgent != null && !download.userAgent.isEmpty()) {
+                request.addRequestHeader("User-Agent", download.userAgent);
+            }
+            request.setMimeType(mimeType);
+            request.setTitle(fileName);
+            request.setDescription("NCSF scoresheet / document");
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            // Public Downloads is visible under Samsung My Files > Downloads.
+            // App-specific external files are deliberately NOT used here.
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+            DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            long downloadId = manager.enqueue(request);
+            activeDownloads.put(downloadId, fileName);
+            Toast.makeText(this, "Downloading to My Files > Downloads", Toast.LENGTH_LONG).show();
+        } catch (Exception error) {
+            Toast.makeText(this, "Unable to save file to Downloads.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void openDownloadedPdf(Uri fileUri) {
+        try {
+            Intent open = new Intent(Intent.ACTION_VIEW);
+            open.setDataAndType(fileUri, "application/pdf");
+            open.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            open.setClipData(ClipData.newRawUri("NCSF PDF", fileUri));
+            startActivity(Intent.createChooser(open, "Open PDF"));
+        } catch (Exception error) {
+            Toast.makeText(this, "No PDF viewer found. Open My Files > Downloads.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void shareDownloadedPdf(Uri fileUri, String fileName) {
+        try {
+            Intent share = new Intent(Intent.ACTION_SEND);
+            share.setType("application/pdf");
+            share.putExtra(Intent.EXTRA_STREAM, fileUri);
+            share.putExtra(Intent.EXTRA_TITLE, fileName);
+            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            share.setClipData(ClipData.newRawUri(fileName, fileUri));
+            startActivity(Intent.createChooser(share, "Share NCSF PDF"));
+        } catch (Exception error) {
+            Toast.makeText(this, "Unable to share PDF. Open it in My Files.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (!downloadReceiverRegistered) {
+            IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // DownloadManager may send completion from the Download Provider process.
+                registerReceiver(downloadReceiver, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(downloadReceiver, filter);
+            }
+            downloadReceiverRegistered = true;
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        if (downloadReceiverRegistered) {
+            unregisterReceiver(downloadReceiver);
+            downloadReceiverRegistered = false;
+        }
+        super.onStop();
     }
 
     private void applyImmersiveMode() {
@@ -459,6 +609,18 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == STORAGE_PERMISSION_REQUEST) {
+            PendingDownload download = pendingDownload;
+            pendingDownload = null;
+            if (download != null && grantResults.length > 0 &&
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                enqueuePublicDownload(download);
+            } else {
+                Toast.makeText(this, "Storage access is required to save to Downloads on this Android version.",
+                        Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (requestCode == MEDIA_PERMISSION_REQUEST) {
             if (pendingMediaPermission != null) {
                 java.util.ArrayList<String> grantedResources = new java.util.ArrayList<>();
