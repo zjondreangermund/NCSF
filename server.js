@@ -240,6 +240,16 @@ async function initDatabase() {
     );
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS competition_label TEXT;
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS race_to INTEGER CHECK (race_to BETWEEN 1 AND 25);
+    -- Official tournament scores are stored without inventing player-by-player frame records.
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS official_home_frames INTEGER;
+    ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS official_away_frames INTEGER;
+    DO $ BEGIN
+      IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='official_scores_nonnegative') THEN
+        ALTER TABLE fixtures ADD CONSTRAINT official_scores_nonnegative
+          CHECK ((official_home_frames IS NULL AND official_away_frames IS NULL)
+            OR (official_home_frames BETWEEN 0 AND 25 AND official_away_frames BETWEEN 0 AND 25));
+      END IF;
+    END $;
     CREATE TABLE IF NOT EXISTS division_team_standing_snapshots (
       division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
       team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
@@ -1135,6 +1145,60 @@ async function seedCentralTop8AndOfficialStandings() {
   }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
 }
 
+// Results supplied by NCSF for the Central Top 8 matches played 17 October 2026.
+// Import team totals only: no individual player results or unplayed frames are fabricated.
+// The four winners advance as Central qualifiers; the Coastal Top 4 are still pending.
+async function importCentralTop8Results2026() {
+  const migrationKey = "central-top8-official-results-2026-10-17-v1";
+  if ((await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [migrationKey])).rowCount) return;
+  const results = [
+    ["Nam Shooters", "RPC", 13, 2],
+    ["Ofifiya", "YOPC 2", 13, 7],
+    ["Tura Boys", "Pool Pirates", 13, 9],
+    ["Pocket Kings NA", "Precision 7", 13, 8]
+  ];
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const [home, away, homeFrames, awayFrames] of results) {
+      const matched = await client.query(`
+        SELECT f.id,f.status,f.official_home_frames,f.official_away_frames,
+          COUNT(fr.id) FILTER (WHERE fr.winner_side='HOME')::int entered_home,
+          COUNT(fr.id) FILTER (WHERE fr.winner_side='AWAY')::int entered_away
+        FROM fixtures f
+        JOIN teams ht ON ht.id=f.home_team_id JOIN teams at ON at.id=f.away_team_id
+        LEFT JOIN frames fr ON fr.fixture_id=f.id
+        WHERE f.competition_label='Central Zone Top 8 Playoffs'
+          AND f.fixture_date::date='2026-10-17'
+          AND ht.name=$1 AND at.name=$2
+        GROUP BY f.id
+      `, [home, away]);
+      if (matched.rowCount!==1) throw new Error("Expected exactly one Central Top 8 fixture: "+home+" vs "+away);
+      const prior=matched.rows[0];
+      await client.query(`
+        UPDATE fixtures
+        SET official_home_frames=$2,official_away_frames=$3,
+            status='APPROVED',approved_at=COALESCE(approved_at,NOW()),
+            bonus_points=0,bonus_side=NULL,race_to=13,
+            notes=CONCAT_WS(E'\\n',NULLIF(notes,''),'Official team result: ' || $4 || '. Central qualifier awaiting Coastal Top 4.')
+        WHERE id=$1
+      `,[prior.id,homeFrames,awayFrames,home+' '+homeFrames+'-'+awayFrames+' '+away]);
+      await client.query(`
+        INSERT INTO audit_logs(user_id,fixture_id,action,detail)
+        VALUES(NULL,$1,'OFFICIAL_CENTRAL_TOP8_RESULT_IMPORTED',$2)
+      `,[prior.id,JSON.stringify({source:"NCSF supplied Central Top 8 results image",playedOn:"2026-10-17",home,away,homeFrames,awayFrames,previous:{status:prior.status,enteredHome:prior.entered_home,enteredAway:prior.entered_away,officialHome:prior.official_home_frames,officialAway:prior.official_away_frames}})]);
+    }
+    await client.query("INSERT INTO app_migrations(key) VALUES($1)",[migrationKey]);
+    await client.query("COMMIT");
+    console.log("Imported four official Central Top 8 results; Coastal Top 4 still awaited.");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function enforceCentralTop8KnockoutRules() {
   const key = "central-top8-race-to-13-no-bonus-2026-10-17-v1";
   const seen = await pool.query("SELECT 1 FROM app_migrations WHERE key=$1", [key]);
@@ -1675,8 +1739,11 @@ async function fixturePayload(fixture) {
   assignBreakOrder(frames);
 
   const scored = frames.filter(f => f.winner_side);
-  const homeFrames = scored.filter(f => f.winner_side === "HOME").length;
-  const awayFrames = scored.filter(f => f.winner_side === "AWAY").length;
+  // Prefer the NCSF-supplied team totals for approved results without full scoresheets.
+  const homeFrames = fixture.status === "APPROVED" && fixture.official_home_frames != null
+    ? Number(fixture.official_home_frames) : scored.filter(f => f.winner_side === "HOME").length;
+  const awayFrames = fixture.status === "APPROVED" && fixture.official_away_frames != null
+    ? Number(fixture.official_away_frames) : scored.filter(f => f.winner_side === "AWAY").length;
 
   const winCounts = new Map();
   for (const fr of scored) {
@@ -1767,7 +1834,7 @@ async function fixturePayload(fixture) {
       completed: scored.length,
       home: homeFrames,
       away: awayFrames,
-      remaining: 25 - scored.length
+      remaining: Math.max(0, 25 - homeFrames - awayFrames)
     }
   };
 }
@@ -2252,8 +2319,8 @@ app.get("/api/public/overview", async (_req, res) => {
   const { rows: fixtures } = await pool.query(`
     SELECT f.id,f.round_no,f.fixture_date,f.status,f.venue,
            ht.name home_team_name,at.name away_team_name,
-           COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
-           COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+           COALESCE(f.official_home_frames,COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME'))::int home_frames,
+           COALESCE(f.official_away_frames,COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY'))::int away_frames
     FROM fixtures f
     JOIN teams ht ON ht.id=f.home_team_id
     JOIN teams at ON at.id=f.away_team_id
@@ -2440,8 +2507,8 @@ app.get("/api/fixtures", async (req, res) => {
            d.name division_name,s.name season_name,
            ht.id home_team_id,ht.name home_team_name,
            at.id away_team_id,at.name away_team_name,
-           COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
-           COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+           COALESCE(f.official_home_frames,COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME'))::int home_frames,
+           COALESCE(f.official_away_frames,COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY'))::int away_frames
     FROM fixtures f
     JOIN divisions d ON d.id=f.division_id
     JOIN seasons s ON s.id=d.season_id
@@ -2589,8 +2656,8 @@ app.get("/api/my/fixtures", requireAuth, async (req, res) => {
     SELECT f.id,f.round_no,f.fixture_date,f.status,f.venue,
            f.stream_url,f.stream_title,f.stream_active,f.competition_label,f.race_to,d.name division_name,
            ht.name home_team_name,at.name away_team_name,
-           COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
-           COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+           COALESCE(f.official_home_frames,COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME'))::int home_frames,
+           COALESCE(f.official_away_frames,COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY'))::int away_frames
     FROM fixtures f
     JOIN divisions d ON d.id=f.division_id
     JOIN teams ht ON ht.id=f.home_team_id
@@ -2617,8 +2684,8 @@ app.get("/api/admin/dashboard", requireRoles(ROLE.NCSF), async (_req, res) => {
     pool.query(`
       SELECT f.id,f.round_no,f.fixture_date,f.status,d.name division_name,
              ht.name home_team_name,at.name away_team_name,
-             COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
-             COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+             COALESCE(f.official_home_frames,COUNT(fr.id) FILTER(WHERE fr.winner_side='HOME'))::int home_frames,
+             COALESCE(f.official_away_frames,COUNT(fr.id) FILTER(WHERE fr.winner_side='AWAY'))::int away_frames
       FROM fixtures f
       JOIN divisions d ON d.id=f.division_id
       JOIN teams ht ON ht.id=f.home_team_id
@@ -2895,8 +2962,8 @@ app.get("/api/admin/seasons/:id/export.csv", requireRoles(ROLE.NCSF), async (req
   const {rows}=await pool.query(`
     SELECT d.name division,COALESCE(f.competition_label,'League') competition,f.round_no,
       f.fixture_date,COALESCE(f.venue,'') venue,ht.name home_team,at.name away_team,
-      COUNT(*) FILTER(WHERE fr.winner_side='HOME')::int home_frames,
-      COUNT(*) FILTER(WHERE fr.winner_side='AWAY')::int away_frames,f.status,
+      COALESCE(f.official_home_frames,COUNT(*) FILTER(WHERE fr.winner_side='HOME'))::int home_frames,
+      COALESCE(f.official_away_frames,COUNT(*) FILTER(WHERE fr.winner_side='AWAY'))::int away_frames,f.status,
       COALESCE(f.race_to,25) race_to
     FROM divisions d JOIN fixtures f ON f.division_id=d.id
     JOIN teams ht ON ht.id=f.home_team_id JOIN teams at ON at.id=f.away_team_id
@@ -2976,7 +3043,7 @@ app.get("/api/admin/seasons/:id/print.pdf", requireRoles(ROLE.NCSF), async (req,
     const players=await getIndividualRankings(division.id);
     table("Player standings",["POS","PLAYER","TEAM","PLAYED","WON","WIN %"],players.map((r,i)=>[r.position||i+1,r.player_name,r.team_name,r.frames_played,r.frames_won,`${Number(r.win_percentage||0).toFixed(1)}%`]),[36,235,245,85,85,62]);
     const fx=(await pool.query(`SELECT f.*,ht.name home_name,at.name away_name,
-      COUNT(*) FILTER(WHERE fr.winner_side='HOME')::int home_frames,COUNT(*) FILTER(WHERE fr.winner_side='AWAY')::int away_frames
+      COALESCE(f.official_home_frames,COUNT(*) FILTER(WHERE fr.winner_side='HOME'))::int home_frames,COALESCE(f.official_away_frames,COUNT(*) FILTER(WHERE fr.winner_side='AWAY'))::int away_frames
       FROM fixtures f JOIN teams ht ON ht.id=f.home_team_id JOIN teams at ON at.id=f.away_team_id
       LEFT JOIN frames fr ON fr.fixture_id=f.id WHERE f.division_id=$1
       GROUP BY f.id,ht.name,at.name ORDER BY f.fixture_date NULLS LAST,f.round_no,f.id`,[division.id])).rows;
@@ -3365,7 +3432,7 @@ async function advancePlayoffs(divisionId){
       }
       const prev=slots.find(s=>s.slot_key===source.winner);
       if(!prev?.fixture_id)return null;
-      const result=(await client.query(`SELECT f.home_team_id,f.away_team_id,f.status,COUNT(*) FILTER(WHERE fr.winner_side='HOME')::int home,COUNT(*) FILTER(WHERE fr.winner_side='AWAY')::int away FROM fixtures f LEFT JOIN frames fr ON fr.fixture_id=f.id WHERE f.id=$1 GROUP BY f.id`,[prev.fixture_id])).rows[0];
+      const result=(await client.query(`SELECT f.home_team_id,f.away_team_id,f.status,COALESCE(f.official_home_frames,COUNT(*) FILTER(WHERE fr.winner_side='HOME'))::int home,COALESCE(f.official_away_frames,COUNT(*) FILTER(WHERE fr.winner_side='AWAY'))::int away FROM fixtures f LEFT JOIN frames fr ON fr.fixture_id=f.id WHERE f.id=$1 GROUP BY f.id`,[prev.fixture_id])).rows[0];
       if(result?.status!=='APPROVED'||Math.max(result.home,result.away)<13||result.home===result.away)return null;
       return result.home>result.away?result.home_team_id:result.away_team_id;
     };
@@ -4142,6 +4209,7 @@ initDatabase()
   .then(correctAtomic5AndImportCoastalSchedule)
   .then(seedCentralTop8AndOfficialStandings)
   .then(enforceCentralTop8KnockoutRules)
+  .then(importCentralTop8Results2026)
   .then(seedOfficialCoastalTeamStandings)
   .then(seedOfficialPlayerLogSnapshots)
   .then(seedOfficialPlayerTeamAssignments)
