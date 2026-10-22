@@ -243,13 +243,13 @@ async function initDatabase() {
     -- Official tournament scores are stored without inventing player-by-player frame records.
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS official_home_frames INTEGER;
     ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS official_away_frames INTEGER;
-    DO $ BEGIN
+    DO $$ BEGIN
       IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='official_scores_nonnegative') THEN
         ALTER TABLE fixtures ADD CONSTRAINT official_scores_nonnegative
           CHECK ((official_home_frames IS NULL AND official_away_frames IS NULL)
             OR (official_home_frames BETWEEN 0 AND 25 AND official_away_frames BETWEEN 0 AND 25));
       END IF;
-    END $;
+    END $$;
     CREATE TABLE IF NOT EXISTS division_team_standing_snapshots (
       division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
       team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
