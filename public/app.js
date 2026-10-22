@@ -409,6 +409,7 @@
         <div class="fixture-live-score"><strong>${t.home}</strong><span>VS</span><strong>${t.away}</strong><small>${f.raceTo?t.completed+' frames • Race to '+f.raceTo:t.completed+'/25 frames'}</small></div>
         <div class="away"><span class="eyebrow">AWAY TEAM</span><h2>${esc(f.awayTeamName)}</h2><small>${esc(f.awayClubName)}</small></div>
       </section>
+      ${f.officialSummaryOnly?'<p class="playoff-qualifier-note"><strong>Official NCSF team result.</strong> Player-by-player frame details were not supplied; the displayed final score is the confirmed tournament result.</p>':''}
       <div class="score-progress"><span style="width:${progress}%"></span></div>
       <div class="match-rosters">${lineupEditor('HOME')}${lineupEditor('AWAY')}</div>
       ${data.frames.length===25?'<div class="score-rounds-grid">'+[1,2,3,4,5].map(roundHtml).join('')+'</div>':'<div class="notice warn">Save both starting fives to generate the official 25-frame rotation.</div>'}
@@ -670,7 +671,13 @@
       if(!id){$('#publicResults').innerHTML='<div class="empty">No division configured yet.</div>';return}
       try{
         const d=await api('/api/fixtures?divisionId='+id+'&status=APPROVED');
-        $('#publicResults').innerHTML=fixtureCards(d.fixtures.filter(f=>!f.competition_label),true);
+        const approved=d.fixtures||[];
+        const centralTop8=approved.filter(f=>/central zone top 8 playoffs/i.test(String(f.competition_label||'')) && Math.max(Number(f.home_frames||0),Number(f.away_frames||0))===13);
+        const qualifiers=centralTop8.map(f=>Number(f.home_frames)>Number(f.away_frames)?f.home_team_name:f.away_team_name);
+        const note=qualifiers.length===4
+          ? '<div class="playoff-qualifier-note"><strong>Central Top 4 qualified:</strong> '+qualifiers.map(esc).join(' • ')+'. <strong>Awaiting the Coastal Top 4</strong> before the next stage.</div>'
+          : '';
+        $('#publicResults').innerHTML=note+fixtureCards(approved,true);
       }catch(err){toast(err.message,true)}
     };
     select.addEventListener('change',load);
